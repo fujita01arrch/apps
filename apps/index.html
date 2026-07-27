@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HTML Apps</title>
+<style>
+  :root {
+    --accent: #4f46e5;
+    --bg: #ffffff;
+    --text: #1f2937;
+    --border: #e5e7eb;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", Meiryo, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+  }
+  main {
+    max-width: 720px;
+    margin: 0 auto;
+    padding: 48px 24px;
+  }
+  h1 {
+    font-size: 1.5rem;
+    margin-bottom: 8px;
+  }
+  p.desc {
+    color: #6b7280;
+    margin-top: 0;
+    margin-bottom: 32px;
+  }
+  ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  li + li {
+    margin-top: 12px;
+  }
+  a.app-link {
+    display: block;
+    padding: 16px 20px;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    text-decoration: none;
+    color: var(--text);
+    transition: border-color 0.15s ease;
+  }
+  a.app-link:hover {
+    border-color: var(--accent);
+  }
+  a.app-link span {
+    color: var(--accent);
+    font-weight: 600;
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>HTML Apps</h1>
+  <p class="desc">公開中のアプリ一覧</p>
+  <ul>
+    <li><a class="app-link" href="sample/"><span>sample</span> — 動作確認用サンプル</a></li>
+  </ul>
+</main>
+</body>
+</html>
