@@ -1,0 +1,1303 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ARRCH 顧客引継ぎマネージャー</title>
+  
+  <!-- Tailwind CSS -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  
+  <!-- React & ReactDOM -->
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  
+  <!-- Babel -->
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  
+  <style>
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    .animate-fade-in { animation: fadeIn 0.3s ease-in-out; }
+    
+    /* スクロールバーを完全に隠す設定（機能は維持） */
+    .no-scrollbar::-webkit-scrollbar {
+        display: none;
+    }
+    .no-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+    }
+  </style>
+</head>
+<body class="selection:bg-gray-200">
+  <!-- Loading Placeholder -->
+  <div id="root">
+    <div style="display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 100vh; background-color: #f9f9f9; font-family: serif; color: #6b7280; letter-spacing: 0.15em;">
+      <div style="width: 40px; height: 40px; border: 3px solid #e5e7eb; border-top-color: #1f2937; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 16px;"></div>
+      <p style="font-size: 14px; text-transform: uppercase;">Loading System...</p>
+    </div>
+  </div>
+
+  <script type="text/babel" data-type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+    import { getAuth, signInWithCustomToken, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
+    import { getFirestore, collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+
+    const { useState, useEffect, useMemo, useRef } = React;
+
+    const isPreviewEnv = typeof __firebase_config !== 'undefined' && typeof __initial_auth_token !== 'undefined';
+    const firebaseConfig = isPreviewEnv ? JSON.parse(__firebase_config) : {
+      apiKey: "AIzaSyBCBgmi5yXVndOA6lMxlWmrHszuy8sMgxM",
+      authDomain: "hikitugi-539c8.firebaseapp.com",
+      projectId: "hikitugi-539c8",
+      storageBucket: "hikitugi-539c8.firebasestorage.app",
+      messagingSenderId: "311077792020",
+      appId: "1:311077792020:web:c737c622e09d42d3447a01"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    const db = getFirestore(app);
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'arrch-handover-app';
+
+    const BoardIcon = ({ className = "w-5 h-5" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="3" x2="9" y2="21"></line></svg>;
+    const ListIcon = ({ className = "w-5 h-5" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>;
+    const PlusIcon = ({ className = "w-5 h-5" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="12" x2="12" y1="5" y2="19"/><line x1="5" x2="19" y1="12" y2="12"/></svg>;
+    const TrashIcon = ({ className = "w-5 h-5" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>;
+    const LinkIcon = ({ className = "w-5 h-5" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>;
+    const EditIcon = ({ className = "w-5 h-5" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"></path></svg>;
+    const BellIcon = ({ className = "w-5 h-5" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>;
+    const SettingsIcon = ({ className = "w-5 h-5" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>;
+    const ChevronDownIcon = ({ className = "w-5 h-5" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="6 9 12 15 18 9"></polyline></svg>;
+    const ChevronUpIcon = ({ className = "w-5 h-5" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="18 15 12 9 6 15"></polyline></svg>;
+
+    const STAGES = [
+      { id: '全体', label: '全体' },
+      { id: '来場前', label: '来場前' },
+      { id: '初回', label: '初回' },
+      { id: 'おうちカフェ', label: 'おうちカフェ' },
+      { id: 'HB・SB', label: 'HB・SB' },
+      { id: '資金計画', label: '資金計画' },
+      { id: 'P申込後', label: 'P申込後' },
+      { id: '送客後', label: '送客後' }
+    ];
+    
+    const UI_STAGES = STAGES.filter(s => s.id !== '全体');
+    const ARCHIVE_STAGES = [
+      { id: '引継ぎ完了済', label: '引継ぎ完了済' },
+      { id: '離脱', label: '離脱' }
+    ];
+
+    const CONTENT_OPTIONS = ['おうちカフェ', 'ライフプラン', 'ヒアリングブック', '資金計画'];
+    const HURDLE_OPTIONS = ['資金', '土地', '時期', 'デザイン', '会社選び', '建物サイズ', '相談者', '性能/構造'];
+    const ASSIGNEE_OPTIONS = ['藤田', '橋本', '市川', '寺田', '小林', '田中', '大峰', '白栁', '乗松', '藤原'];
+
+    const isOverdue = (dateString) => {
+      if (!dateString) return false;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const targetDate = new Date(dateString.split('T')[0]);
+      targetDate.setHours(0, 0, 0, 0);
+      return targetDate.getTime() < today.getTime();
+    };
+
+    const isDeadlineNear = (dateString) => {
+      if (!dateString) return false;
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const targetDate = new Date(dateString.split('T')[0]);
+      targetDate.setHours(0, 0, 0, 0);
+      const diffDays = Math.ceil((targetDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+      return diffDays <= 3;
+    };
+
+    const formatDateTime = (dateTimeStr) => {
+      if (!dateTimeStr) return '未定';
+      const d = new Date(dateTimeStr);
+      const datePart = d.toLocaleDateString('ja-JP', { year: 'numeric', month: 'short', day: 'numeric', weekday: 'short' });
+      const timePart = dateTimeStr.includes('T') ? d.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }) : '';
+      return timePart ? `${datePart} ${timePart}` : datePart;
+    };
+
+    const getTodayString = () => new Date().toISOString().split('T')[0];
+
+    
+    // カスタムポップアップ (alert/confirm の代替)
+    const CustomDialog = ({ isOpen, message, type, onConfirm, onCancel }) => {
+      if (!isOpen) return null;
+      return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-fade-in">
+          <div className="bg-white max-w-sm w-full p-8 shadow-xl text-center border border-gray-200">
+            <p className="text-sm text-gray-700 mb-8 whitespace-pre-wrap leading-relaxed">{message}</p>
+            <div className="flex justify-center gap-4">
+              {type === 'confirm' && (
+                <button onClick={onCancel} className="px-6 py-2 text-xs tracking-widest text-gray-500 hover:bg-gray-50 transition-colors border border-transparent">キャンセル</button>
+              )}
+              <button onClick={onConfirm} className="px-8 py-2 text-xs tracking-widest text-white bg-gray-800 hover:bg-gray-900 transition-colors shadow-sm">OK</button>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    // 上品で点灯式のメータードット（重要度）
+    const PriorityMeter = ({ priority = 2, onChange, readOnly = false }) => {
+      return (
+        <div className="flex items-center gap-[4px] shrink-0 pt-0.5">
+          {[1, 2, 3].map((level) => {
+            const isActive = level <= priority;
+            // 非点灯時は枠線のみの白抜き
+            let dotClass = 'w-1.5 h-1.5 rounded-full border border-gray-200 bg-transparent transition-colors duration-200';
+            
+            if (isActive) {
+              if (priority === 3) {
+                // 高のときは点灯している丸すべてが上品なローズ色
+                dotClass = 'w-1.5 h-1.5 rounded-full bg-rose-400 border border-rose-400 transition-colors duration-200';
+              } else {
+                // 中・低のときは点灯している丸が柔らかいグレー
+                dotClass = 'w-1.5 h-1.5 rounded-full bg-gray-400 border border-gray-400 transition-colors duration-200';
+              }
+            }
+            
+            return (
+              <button
+                key={level}
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (!readOnly && onChange) onChange(level);
+                }}
+                disabled={readOnly}
+                title={level === 1 ? '低' : level === 2 ? '中' : '高'}
+                className={`${dotClass} ${readOnly ? 'cursor-default' : 'cursor-pointer hover:opacity-70'}`}
+              />
+            );
+          })}
+        </div>
+      );
+    };
+
+    // タスク入力コンポーネント
+    const TaskItem = ({ task, customer, isWarning, isPastDue, onUpdateLocal, onCommit, onToggleDone, onDelete }) => {
+      const [localTitle, setLocalTitle] = useState(task.title);
+
+      useEffect(() => {
+        setLocalTitle(task.title);
+      }, [task.title]);
+
+      const handleChange = (e) => {
+        setLocalTitle(e.target.value);
+        onUpdateLocal(customer.id, task.id, 'title', e.target.value);
+      };
+
+      const handleBlur = () => {
+        if (localTitle !== task.title) {
+           onCommit(customer.id);
+        }
+      };
+
+      const handleKeyDown = (e) => {
+        if (e.key === 'Enter') {
+          e.target.blur();
+        }
+      };
+
+      return (
+        <div className={`flex items-start gap-2 p-2 bg-white border ${task.isDone ? 'border-gray-200 bg-gray-50' : (isPastDue ? 'border-rose-300 bg-rose-50/30' : (isWarning ? 'border-amber-200 shadow-sm' : 'border-gray-200'))} ${task.priority === 3 && !task.isDone ? 'border-l-[3px] border-l-rose-300 pl-[5px]' : ''}`}>
+          <input type="checkbox" checked={task.isDone} onChange={() => onToggleDone(customer.id, task.id)} className="mt-1 w-3.5 h-3.5 text-gray-800 border-gray-300 rounded-sm cursor-pointer accent-gray-800 flex-shrink-0" />
+          <div className="flex-1 min-w-0 flex flex-col gap-1">
+            <input 
+               type="text" 
+               value={localTitle} 
+               onChange={handleChange} 
+               onBlur={handleBlur}
+               onKeyDown={handleKeyDown}
+               placeholder="タスク内容" 
+               className={`text-sm bg-transparent outline-none w-full ${task.isDone ? 'line-through text-gray-400' : (isPastDue ? 'text-rose-700 font-medium' : 'text-gray-700')}`} 
+            />
+            <div className="flex items-center gap-2 mt-0.5">
+               <PriorityMeter priority={task.priority || 2} onChange={(val) => { onUpdateLocal(customer.id, task.id, 'priority', val); onCommit(customer.id); }} readOnly={task.isDone} />
+               <input 
+                 type="date" 
+                 value={task.dueDate} 
+                 onChange={(e) => { onUpdateLocal(customer.id, task.id, 'dueDate', e.target.value); onCommit(customer.id); }} 
+                 className={`text-[10px] outline-none bg-transparent w-24 ml-2 ${task.isDone ? 'text-gray-400' : (isPastDue ? 'text-rose-600' : 'text-gray-400')}`} 
+               />
+               <button onClick={() => onDelete(customer.id, task.id)} className="text-gray-300 hover:text-rose-500 text-[10px] px-1 ml-auto">削除</button>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    const SettingsView = ({ templates, setTemplates, showConfirm, showAlert }) => {
+      const [selectedStage, setSelectedStage] = useState(UI_STAGES[0].id);
+      const [newTaskTitle, setNewTaskTitle] = useState('');
+      const [newDaysOffset, setNewDaysOffset] = useState(0);
+      const [newTaskPriority, setNewTaskPriority] = useState(2);
+
+      const handleAddTemplate = async () => {
+        if (!newTaskTitle) return;
+        const newTemplate = {
+          id: Date.now().toString(),
+          stageId: selectedStage,
+          title: newTaskTitle,
+          daysOffset: parseInt(newDaysOffset, 10) || 0,
+          priority: newTaskPriority
+        };
+
+        const newDocRef = doc(collection(db, 'artifacts', appId, 'public', 'data', 'task_templates'));
+        try {
+          await setDoc(newDocRef, newTemplate);
+          setNewTaskTitle('');
+          setNewDaysOffset(0);
+          setNewTaskPriority(2);
+        } catch (error) {
+          console.error("Error adding template:", error);
+          showAlert("テンプレートの保存に失敗しました。");
+        }
+      };
+
+      const handleDeleteTemplate = (templateId) => {
+        showConfirm('このテンプレートを削除しますか？\n（すでに顧客に割り当て済みのタスクは消えません）', async () => {
+          const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'task_templates', templateId);
+          await deleteDoc(docRef).catch(e => console.error(e));
+        });
+      };
+
+      const currentStageTemplates = templates.filter(t => t.stageId === selectedStage).sort((a,b) => a.daysOffset - b.daysOffset);
+
+      return (
+        <div className="bg-white border border-gray-200 shadow-sm animate-fade-in max-w-4xl mx-auto mt-8">
+          <div className="p-6 border-b border-gray-200 bg-gray-50 flex items-center gap-2">
+            <SettingsIcon className="w-5 h-5 text-gray-800" />
+            <h2 className="text-lg font-serif tracking-[0.2em] text-gray-800">自動タスク テンプレート設定</h2>
+          </div>
+          
+          <div className="flex flex-col md:flex-row">
+            {/* Sidebar (Stages) */}
+            <div className="w-full md:w-64 border-r border-gray-200 bg-gray-50/30">
+              {UI_STAGES.map(stage => (
+                <button
+                  key={stage.id}
+                  onClick={() => setSelectedStage(stage.id)}
+                  className={`w-full text-left px-6 py-4 text-sm tracking-wider transition-colors border-b border-gray-100 ${selectedStage === stage.id ? 'bg-white border-l-4 border-l-gray-800 font-medium text-gray-900 shadow-sm' : 'text-gray-500 hover:bg-gray-100'}`}
+                >
+                  {stage.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Main Content (Templates) */}
+            <div className="flex-1 p-8">
+              <h3 className="text-lg font-medium text-gray-800 mb-2">「{selectedStage}」への移行時</h3>
+              <p className="text-xs text-gray-500 tracking-wider mb-8 leading-relaxed">このステージに移行した際、またはこのステージで新規登録した際に、以下のタスクが自動的に追加されます。</p>
+
+              {/* Add New Template */}
+              <div className="bg-gray-50 p-6 border border-gray-200 mb-8">
+                <h4 className="text-xs font-bold text-gray-600 tracking-widest uppercase mb-4">新しいタスクを追加</h4>
+                <div className="flex flex-col sm:flex-row gap-4 items-end">
+                  <div className="flex-1 w-full">
+                    <label className="block text-[10px] text-gray-500 tracking-widest uppercase mb-1">タスク名</label>
+                    <input 
+                      type="text" 
+                      value={newTaskTitle} 
+                      onChange={(e) => setNewTaskTitle(e.target.value)}
+                      placeholder="例: サンクスLINE" 
+                      className="w-full border-b border-gray-300 py-1.5 focus:border-gray-800 outline-none bg-transparent text-sm" 
+                    />
+                  </div>
+                  <div className="w-full sm:w-32">
+                    <label className="block text-[10px] text-gray-500 tracking-widest uppercase mb-1">期日（次回予定日から）</label>
+                    <div className="flex items-center gap-2">
+                      <input 
+                        type="number" 
+                        value={newDaysOffset} 
+                        onChange={(e) => setNewDaysOffset(e.target.value)}
+                        className="w-16 border-b border-gray-300 py-1.5 focus:border-gray-800 outline-none bg-transparent text-sm text-center" 
+                      />
+                      <span className="text-xs text-gray-600 whitespace-nowrap">日後</span>
+                    </div>
+                    <div className="text-[9px] text-gray-400 mt-1">※マイナスで〇日前</div>
+                  </div>
+                  <div className="w-full sm:w-20">
+                    <label className="block text-[10px] text-gray-500 tracking-widest uppercase mb-2">重要度</label>
+                    <div className="pb-1">
+                       <PriorityMeter priority={newTaskPriority} onChange={setNewTaskPriority} />
+                    </div>
+                  </div>
+                  <button onClick={handleAddTemplate} className="bg-gray-800 text-white px-6 py-2 text-xs tracking-widest hover:bg-gray-900 transition-colors whitespace-nowrap w-full sm:w-auto mb-1">
+                    追加
+                  </button>
+                </div>
+              </div>
+
+              {/* Template List */}
+              <div>
+                <h4 className="text-xs font-bold text-gray-600 tracking-widest uppercase mb-4 border-b border-gray-200 pb-2">設定済みタスク ({currentStageTemplates.length})</h4>
+                <div className="space-y-3">
+                  {currentStageTemplates.length === 0 ? (
+                    <div className="text-center py-8 border border-dashed border-gray-300 text-gray-400 text-xs tracking-wider">
+                      自動追加されるタスクはありません。
+                    </div>
+                  ) : (
+                    currentStageTemplates.map(template => (
+                      <div key={template.id} className="flex justify-between items-center bg-white border border-gray-200 p-4 hover:border-gray-300 transition-colors group">
+                        <div>
+                          <div className="flex items-center gap-3 mb-1">
+                             <div className="text-sm text-gray-800 font-medium">{template.title}</div>
+                             <PriorityMeter priority={template.priority || 2} readOnly={true} />
+                          </div>
+                          <div className="text-[11px] text-gray-500 tracking-wider">期日: 次回予定日の <span className="font-bold text-gray-700">{template.daysOffset}</span> 日後</div>
+                        </div>
+                        <button onClick={() => handleDeleteTemplate(template.id)} className="text-gray-300 hover:text-rose-500 p-2 transition-colors opacity-0 group-hover:opacity-100">
+                          <TrashIcon className="w-4 h-4" />
+                        </button>
+                      </div>
+                    ))
+                  )}
+                </div>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    function App() {
+      const [user, setUser] = useState(null);
+      const [authChecking, setAuthChecking] = useState(true);
+      const [customers, setCustomers] = useState([]);
+      const [templates, setTemplates] = useState([]);
+      const [isLoading, setIsLoading] = useState(true);
+
+      const [currentView, setCurrentView] = useState('board');
+      const [boardTab, setBoardTab] = useState('全体');
+      const [sortOrder, setSortOrder] = useState('nextDateAsc');
+      const [taskListSort, setTaskListSort] = useState('dueDateAsc');
+      
+      const [showFormModal, setShowFormModal] = useState(false);
+      const [isEditing, setIsEditing] = useState(false);
+      const [editingId, setEditingId] = useState(null);
+
+      // ダイアログ状態管理
+      const [dialog, setDialog] = useState({ isOpen: false, message: '', type: 'alert', onConfirm: null });
+
+      const showAlert = (message) => setDialog({ isOpen: true, message, type: 'alert', onConfirm: () => setDialog({ ...dialog, isOpen: false }) });
+      const showConfirm = (message, onConfirm) => setDialog({ isOpen: true, message, type: 'confirm', onConfirm: () => { onConfirm(); setDialog({ ...dialog, isOpen: false }); } });
+
+      const [showCompletedTasks, setShowCompletedTasks] = useState({});
+      
+      const [showStageModal, setShowStageModal] = useState(false);
+      const [stageModalData, setStageModalData] = useState(null);
+
+      const initialFormState = {
+        name: '', nextDateDay: '', nextDateTimeSelect: '10:00', customNextDateTime: '', nextContentSelect: '来場前', customNextContent: '',
+        hurdles: [], hasCustomHurdle: false, customHurdle: '', summary: '',
+        assignee: ASSIGNEE_OPTIONS[0], customAssignee: '', meetingUrl: '',
+        currentStage: '来場前'
+      };
+      const [formData, setFormData] = useState(initialFormState);
+
+      useEffect(() => {
+        const initAuth = async () => {
+          try {
+            if (isPreviewEnv) {
+              await signInWithCustomToken(auth, __initial_auth_token);
+            }
+          } catch (error) {
+            console.error("Auth error:", error);
+          }
+        };
+        initAuth();
+        const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
+          setUser(currentUser);
+          setAuthChecking(false);
+        });
+        return () => unsubscribe();
+      }, []);
+
+      useEffect(() => {
+        if (!user) return;
+        
+        const customersRef = collection(db, 'artifacts', appId, 'public', 'data', 'customers');
+        const unsubCustomers = onSnapshot(customersRef, (snapshot) => {
+          const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          const mappedData = data.map(d => ({
+             ...d, 
+             currentStage: d.currentStage || '来場前' 
+          }));
+          setCustomers(mappedData);
+          setIsLoading(false);
+        }, (error) => {
+          console.error("Firestore Error:", error);
+          setIsLoading(false);
+        });
+
+        const templatesRef = collection(db, 'artifacts', appId, 'public', 'data', 'task_templates');
+        const unsubTemplates = onSnapshot(templatesRef, (snapshot) => {
+          const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+          setTemplates(data);
+        }, (error) => {
+          console.error("Firestore Error (Templates):", error);
+        });
+
+        return () => {
+          unsubCustomers();
+          unsubTemplates();
+        };
+      }, [user]);
+
+      // リマインドバッジ用の件数計算
+      const activeRemindersCount = useMemo(() => {
+        let count = 0;
+        customers.forEach(c => {
+          if (!ARCHIVE_STAGES.some(s => s.id === c.currentStage)) {
+            (c.tasks || []).forEach(t => {
+              if (t.title.includes('リマインド') && !t.isDone && t.dueDate) {
+                 if (isOverdue(t.dueDate) || t.dueDate === getTodayString()) {
+                    count++;
+                 }
+              }
+            });
+          }
+        });
+        return count;
+      }, [customers]);
+
+      // タスク一覧用の全タスク抽出
+      const allTasksList = useMemo(() => {
+        const list = [];
+        customers.forEach(c => {
+          if (!ARCHIVE_STAGES.some(s => s.id === c.currentStage)) {
+            (c.tasks || []).forEach(t => {
+              if (!t.title.includes('リマインド') && !t.isDone) {
+                list.push({ ...t, customerId: c.id, customerName: c.name, customerStage: c.currentStage, assignee: c.assignee });
+              }
+            });
+          }
+        });
+        return list.sort((a, b) => {
+          if (taskListSort === 'priorityDesc') {
+             const pA = a.priority || 2;
+             const pB = b.priority || 2;
+             if (pB !== pA) return pB - pA;
+          }
+          const da = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
+          const db = b.dueDate ? new Date(b.dueDate).getTime() : Infinity;
+          return da - db;
+        });
+      }, [customers, taskListSort]);
+
+      const handleGoogleLogin = async () => {
+        const provider = new GoogleAuthProvider();
+        try {
+          await signInWithPopup(auth, provider);
+        } catch (error) {
+          console.error("Google Login Error:", error);
+          if (error.code === 'auth/unauthorized-domain') {
+            showAlert(`【ドメイン未承認エラー】\nこのURL (${window.location.hostname}) からのログインが許可されていません。\n\nFirebaseコンソールの「Authentication」＞「設定」タブ＞「承認済みドメイン」に、\n${window.location.hostname}\nを追加してください。`);
+          } else {
+            showAlert(`ログインに失敗しました。\nエラー: ${error.message}`);
+          }
+        }
+      };
+
+      const handleLogout = async () => {
+        try { await signOut(auth); } catch (error) { console.error("Logout Error:", error); }
+      };
+
+      const handleInputChange = (e) => {
+        const { name, value } = e.target;
+        setFormData(prev => ({ ...prev, [name]: value }));
+      };
+
+      const handleHurdleChange = (option) => {
+        setFormData(prev => {
+          const newHurdles = prev.hurdles.includes(option)
+            ? prev.hurdles.filter(h => h !== option) : [...prev.hurdles, option];
+          return { ...prev, hurdles: newHurdles };
+        });
+      };
+
+      const openAddModal = () => {
+        setFormData(initialFormState);
+        setIsEditing(false);
+        setEditingId(null);
+        setShowFormModal(true);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      };
+
+      const openEditModal = (customer) => {
+        const standardHurdles = (customer.hurdles || []).filter(h => HURDLE_OPTIONS.includes(h));
+        const customHurdlesArr = (customer.hurdles || []).filter(h => !HURDLE_OPTIONS.includes(h));
+        const hasCustom = customHurdlesArr.length > 0;
+        const isStandardContent = CONTENT_OPTIONS.includes(customer.nextContent);
+        const isStandardAssignee = ASSIGNEE_OPTIONS.includes(customer.assignee);
+
+        const dateParts = customer.nextDate ? customer.nextDate.split('T') : ['', ''];
+        const dayPart = dateParts[0];
+        const timePart = dateParts[1] || '10:00';
+        const isStandardTime = ['09:00', '10:00', '13:00', '16:00', '17:00', '18:00', '19:00'].includes(timePart);
+
+        setFormData({
+          name: customer.name,
+          nextDateDay: dayPart,
+          nextDateTimeSelect: isStandardTime ? timePart : 'other',
+          customNextDateTime: isStandardTime ? '' : timePart,
+          nextContentSelect: isStandardContent ? customer.nextContent : 'other',
+          customNextContent: isStandardContent ? '' : (customer.nextContent || ''),
+          hurdles: standardHurdles,
+          hasCustomHurdle: hasCustom,
+          customHurdle: hasCustom ? customHurdlesArr[0] : '',
+          summary: customer.summary || '',
+          assignee: isStandardAssignee ? customer.assignee : 'other',
+          customAssignee: isStandardAssignee ? '' : customer.assignee,
+          meetingUrl: customer.meetingUrl || '',
+          currentStage: customer.currentStage || '来場前'
+        });
+        setIsEditing(true);
+        setEditingId(customer.id);
+        setShowFormModal(true);
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+      };
+
+      const generateTasksForStage = (stageId, baseDateStr) => {
+        const stageTemplates = templates.filter(t => t.stageId === stageId);
+        let baseDate = new Date(baseDateStr);
+        if(isNaN(baseDate.getTime())){
+             baseDate = new Date();
+        }
+
+        return stageTemplates.map(template => {
+          const dueDateObj = new Date(baseDate);
+          dueDateObj.setDate(dueDateObj.getDate() + template.daysOffset);
+          return {
+            id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+            title: template.title,
+            dueDate: dueDateObj.toISOString().split('T')[0],
+            isDone: false,
+            priority: template.priority || 2
+          };
+        });
+      };
+
+      const handleSubmit = async (e) => {
+        e.preventDefault();
+        
+        if (!formData.name) {
+          showAlert("顧客名は必須です。"); 
+          return;
+        }
+
+        setShowFormModal(false);
+
+        try {
+          const finalTime = formData.nextDateTimeSelect === 'other' ? formData.customNextDateTime : formData.nextDateTimeSelect;
+          const finalNextDate = formData.nextDateDay ? `${formData.nextDateDay}T${finalTime || '00:00'}` : '';
+
+          const finalNextContent = formData.nextContentSelect === 'other' ? formData.customNextContent : formData.nextContentSelect;
+          const finalAssignee = formData.assignee === 'other' ? formData.customAssignee : formData.assignee;
+          const finalHurdles = [...formData.hurdles];
+          if (formData.hasCustomHurdle && formData.customHurdle.trim() !== '') {
+            finalHurdles.push(formData.customHurdle.trim());
+          }
+
+          const payload = {
+            name: formData.name,
+            nextDate: finalNextDate,
+            nextContent: finalNextContent,
+            hurdles: finalHurdles,
+            summary: formData.summary,
+            assignee: finalAssignee,
+            meetingUrl: formData.meetingUrl,
+            currentStage: formData.currentStage,
+            updatedAt: new Date().toISOString()
+          };
+
+          if (isEditing) {
+            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'customers', editingId);
+            updateDoc(docRef, payload).catch(err => console.error(err));
+          } else {
+            let initialTasks = [];
+            if(finalNextDate){
+                initialTasks = generateTasksForStage(formData.currentStage, finalNextDate.split('T')[0]);
+            }
+            
+            const newDocRef = doc(collection(db, 'artifacts', appId, 'public', 'data', 'customers'));
+            setDoc(newDocRef, {
+              ...payload,
+              tasks: initialTasks,
+              createdAt: new Date().toISOString()
+            }).catch(err => console.error(err));
+          }
+          
+          setFormData(initialFormState);
+
+        } catch (error) {
+          console.error("Error processing data:", error);
+          showAlert("保存中にエラーが発生しました。");
+        }
+      };
+
+      const changeCustomerStage = (id, newStage, newNextDateStr) => {
+        const customer = customers.find(c => c.id === id);
+        if (!customer) return;
+
+        const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'customers', id);
+        let payload = { currentStage: newStage, updatedAt: new Date().toISOString() };
+        
+        if(newNextDateStr !== undefined && newNextDateStr !== null){
+            payload.nextDate = newNextDateStr;
+        }
+
+        if (!ARCHIVE_STAGES.some(s => s.id === newStage)) {
+           const baseDateStr = newNextDateStr ? newNextDateStr.split('T')[0] : (customer.nextDate ? customer.nextDate.split('T')[0] : getTodayString());
+           const newTasks = generateTasksForStage(newStage, baseDateStr);
+           
+           const existingTasks = customer.tasks || [];
+           payload.tasks = [...existingTasks, ...newTasks];
+        }
+
+        updateDoc(docRef, payload).catch(e => console.error(e));
+      };
+
+      const deleteCustomer = (id) => {
+        showConfirm('この顧客データを削除してもよろしいですか？', () => {
+          const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'customers', id);
+          deleteDoc(docRef).catch(e => console.error(e));
+        });
+      };
+
+      const updateCustomerTasksInDB = (customerId, updatedTasks) => {
+        const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'customers', customerId);
+        updateDoc(docRef, { tasks: updatedTasks }).catch(e => console.error(e));
+      };
+
+      const toggleTaskDone = (customerId, taskId) => {
+        const customer = customers.find(c => c.id === customerId);
+        if (!customer) return;
+        const updatedTasks = customer.tasks.map(t => t.id === taskId ? { ...t, isDone: !t.isDone } : t);
+        updateCustomerTasksInDB(customerId, updatedTasks);
+      };
+
+      const updateTaskLocal = (customerId, taskId, field, value) => {
+        setCustomers(prevCustomers => {
+          return prevCustomers.map(customer => {
+            if (customer.id !== customerId) return customer;
+            const updatedTasks = customer.tasks.map(t => t.id === taskId ? { ...t, [field]: value } : t);
+            return { ...customer, tasks: updatedTasks };
+          });
+        });
+      };
+
+      const commitTaskUpdate = (customerId) => {
+         const customer = customers.find(c => c.id === customerId);
+         if (!customer) return;
+         updateCustomerTasksInDB(customerId, customer.tasks);
+      };
+
+      const addTask = (customerId) => {
+        const customer = customers.find(c => c.id === customerId);
+        if (!customer) return;
+        const taskDate = customer.nextDate ? customer.nextDate.split('T')[0] : getTodayString();
+        const updatedTasks = [...(customer.tasks || []), { id: Date.now().toString(), title: '', dueDate: taskDate, isDone: false, priority: 2 }];
+        updateCustomerTasksInDB(customerId, updatedTasks);
+      };
+
+      const deleteTask = (customerId, taskId) => {
+        const customer = customers.find(c => c.id === customerId);
+        if (!customer) return;
+        const updatedTasks = customer.tasks.filter(t => t.id !== taskId);
+        updateCustomerTasksInDB(customerId, updatedTasks);
+      };
+
+      const sortCustomers = (customersArray) => {
+        return [...customersArray].sort((a, b) => {
+          if (sortOrder === 'nextDateAsc') {
+             if(!a.nextDate) return 1;
+             if(!b.nextDate) return -1;
+             return new Date(a.nextDate) - new Date(b.nextDate);
+          } else if (sortOrder === 'taskDueDateAsc') {
+             const getEarliestTaskDate = (cust) => {
+                if(!cust.tasks || cust.tasks.length === 0) return Infinity;
+                const undoneTasks = cust.tasks.filter(t => !t.isDone && t.dueDate);
+                if(undoneTasks.length === 0) return Infinity;
+                return Math.min(...undoneTasks.map(t => new Date(t.dueDate).getTime()));
+             };
+             const aDate = getEarliestTaskDate(a);
+             const bDate = getEarliestTaskDate(b);
+             return aDate - bDate;
+          }
+          return 0;
+        });
+      };
+
+      const boardFilteredCustomers = useMemo(() => {
+        let filtered = customers;
+        
+        if (boardTab !== '全体') {
+           filtered = customers.filter(c => c.currentStage === boardTab);
+        } else {
+           filtered = customers.filter(c => !ARCHIVE_STAGES.some(s => s.id === c.currentStage));
+        }
+
+        return sortCustomers(filtered);
+      }, [customers, boardTab, sortOrder]);
+
+
+      const StageModal = () => {
+        if (!showStageModal || !stageModalData) return null;
+        
+        const customer = stageModalData.customer;
+        const isArchive = ARCHIVE_STAGES.some(s => s.id === stageModalData.targetStage);
+        const [modalDate, setModalDate] = useState(customer.nextDate ? customer.nextDate.split('T')[0] : '');
+        const [modalTime, setModalTime] = useState(customer.nextDate && customer.nextDate.includes('T') ? customer.nextDate.split('T')[1] : '10:00');
+        const [isDateUnknown, setIsDateUnknown] = useState(false);
+
+        const handleMigrate = () => {
+           let finalDateStr = '';
+           if(!isArchive && !isDateUnknown){
+              if(!modalDate) { showAlert('次回予定日を入力してください'); return; }
+              finalDateStr = `${modalDate}T${modalTime}`;
+           }
+           changeCustomerStage(customer.id, stageModalData.targetStage, finalDateStr);
+           setShowStageModal(false);
+           setStageModalData(null);
+        };
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-fade-in">
+            <div className="bg-white max-w-md w-full p-8 shadow-xl">
+               <h3 className="text-xl font-serif text-gray-800 mb-6 text-center tracking-widest">ステージ移行</h3>
+               <p className="text-sm text-center mb-6 text-gray-600">
+                 <strong className="text-gray-900">{customer.name}</strong> 様を<br/>
+                 「<span className="font-bold border-b-2 border-gray-800">{stageModalData.targetStage}</span>」へ移行しますか？
+               </p>
+
+               {!isArchive && (
+                 <div className="bg-gray-50 p-6 border border-gray-200 mb-6">
+                    <label className="block text-xs tracking-widest text-gray-500 mb-4 text-center">次の予定日を設定してください<br/><span className="text-[10px] text-gray-400">（この日を基準にタスクが自動作成されます）</span></label>
+                    <div className="flex gap-2 justify-center mb-4">
+                       <input 
+                         type="date" 
+                         value={modalDate} 
+                         onChange={e => {setModalDate(e.target.value); setIsDateUnknown(false);}} 
+                         disabled={isDateUnknown}
+                         className="border-b border-gray-300 py-1 focus:border-gray-800 outline-none bg-transparent disabled:opacity-50" 
+                       />
+                       <input 
+                         type="time" 
+                         value={modalTime} 
+                         onChange={e => {setModalTime(e.target.value); setIsDateUnknown(false);}} 
+                         disabled={isDateUnknown}
+                         className="border-b border-gray-300 py-1 focus:border-gray-800 outline-none bg-transparent disabled:opacity-50" 
+                       />
+                    </div>
+                    <div className="text-center">
+                      <label className="inline-flex items-center gap-2 cursor-pointer">
+                        <input type="checkbox" checked={isDateUnknown} onChange={e => setIsDateUnknown(e.target.checked)} className="accent-gray-800" />
+                        <span className="text-xs text-gray-600 tracking-wider">今は未定にする（後で設定）</span>
+                      </label>
+                    </div>
+                 </div>
+               )}
+
+               {isArchive && (
+                  <div className="text-center text-xs text-rose-500 mb-6 p-3 bg-rose-50 border border-rose-100">
+                    アーカイブ処理を行うと、一覧から非表示になります。
+                  </div>
+               )}
+
+               <div className="flex justify-center gap-4">
+                 <button onClick={() => setShowStageModal(false)} className="px-6 py-2 text-xs tracking-widest text-gray-500 hover:bg-gray-100 transition-colors border border-transparent">キャンセル</button>
+                 <button onClick={handleMigrate} className="px-8 py-2 text-xs tracking-widest text-white bg-gray-800 hover:bg-gray-900 transition-colors shadow-sm">実行する</button>
+               </div>
+            </div>
+          </div>
+        );
+      };
+
+
+      if (authChecking) {
+        return (
+          <div className="min-h-screen bg-[#f9f9f9] flex flex-col items-center justify-center font-serif tracking-widest text-gray-500">
+            <div className="w-10 h-10 border-4 border-gray-200 border-t-gray-800 rounded-full animate-spin mb-4"></div>
+            Checking Auth...
+          </div>
+        );
+      }
+
+      if (!user) {
+        return (
+          <div className="min-h-screen bg-[#f9f9f9] flex items-center justify-center font-sans">
+            <div className="bg-white p-10 shadow-sm border border-gray-200 text-center max-w-md w-full mx-4">
+              <h1 className="text-2xl font-serif tracking-[0.15em] text-gray-800 mb-2">ARRCH</h1>
+              <p className="text-gray-400 text-xs tracking-widest uppercase mb-8">Pipeline Manager</p>
+              <button onClick={handleGoogleLogin} className="bg-white border border-gray-300 text-gray-700 px-6 py-3 text-sm tracking-wider hover:bg-gray-50 transition-colors w-full flex items-center justify-center gap-3">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="18px" height="18px"><path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"/><path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"/><path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36c-5.202,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44z"/><path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.571c0.001-0.001,0.002-0.001,0.003-0.002l6.19,5.238C36.971,39.205,44,34,44,24C44,22.659,43.862,21.35,43.611,20.083z"/></svg>
+                Googleでログイン
+              </button>
+            </div>
+          </div>
+        );
+      }
+
+      if (isLoading) {
+        return (
+           <div className="min-h-screen bg-[#f9f9f9] flex flex-col items-center justify-center font-serif tracking-widest text-gray-500">
+             <div className="w-10 h-10 border-4 border-gray-200 border-t-gray-800 rounded-full animate-spin mb-4"></div>
+             Loading Data...
+           </div>
+        );
+      }
+
+      return (
+        <div className="min-h-screen bg-[#f9f9f9] text-gray-800 font-sans pb-20 selection:bg-gray-200">
+          <CustomDialog {...dialog} onCancel={() => setDialog({ ...dialog, isOpen: false })} />
+          <StageModal />
+          
+          {/* Header */}
+          <header className="bg-white border-b border-gray-200 sticky top-0 z-20 shadow-sm">
+            <div className="max-w-7xl mx-auto px-4 py-3 flex flex-col xl:flex-row xl:justify-between xl:items-center gap-4">
+              <div className="flex justify-between items-center w-full xl:w-auto">
+                <div>
+                  <h1 className="text-xl font-serif tracking-[0.15em] text-gray-800">ARRCH</h1>
+                  <p className="text-gray-400 text-[9px] tracking-widest uppercase mt-0.5">Pipeline Manager</p>
+                </div>
+                <button onClick={handleLogout} className="xl:hidden text-gray-400 hover:text-gray-800 text-[10px] tracking-widest uppercase transition-colors underline">Logout</button>
+              </div>
+              <div className="flex items-center gap-2 flex-wrap justify-start">
+                <div className="flex border border-gray-200 p-1 bg-gray-50 overflow-x-auto no-scrollbar [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                  <button onClick={() => {setCurrentView('board'); setShowFormModal(false);}} className={`flex items-center gap-1 px-3 py-1.5 text-[10px] sm:text-xs tracking-wider transition-colors whitespace-nowrap ${currentView === 'board' ? 'bg-white text-gray-900 shadow-sm border border-gray-200' : 'text-gray-500 hover:text-gray-900'}`}>
+                    <BoardIcon className="w-3.5 h-3.5" /> タスクボード
+                  </button>
+                  <button onClick={() => {setCurrentView('taskList'); setShowFormModal(false);}} className={`flex items-center gap-1 px-3 py-1.5 text-[10px] sm:text-xs tracking-wider transition-colors whitespace-nowrap ${currentView === 'taskList' ? 'bg-white text-gray-900 shadow-sm border border-gray-200' : 'text-gray-500 hover:text-gray-900'}`}>
+                    <ListIcon className="w-3.5 h-3.5" /> タスク一覧
+                  </button>
+                  <button onClick={() => {setCurrentView('remind'); setShowFormModal(false);}} className={`flex items-center gap-1 px-3 py-1.5 text-[10px] sm:text-xs tracking-wider transition-colors whitespace-nowrap relative ${currentView === 'remind' ? 'bg-white text-gray-900 shadow-sm border border-gray-200' : 'text-gray-500 hover:text-gray-900'}`}>
+                    <BellIcon className="w-3.5 h-3.5" /> リマインド
+                    {activeRemindersCount > 0 && (
+                      <span className="ml-1 bg-rose-500 text-white text-[9px] px-1.5 py-0.5 rounded-full leading-none">{activeRemindersCount}</span>
+                    )}
+                  </button>
+                  <button onClick={() => {setCurrentView('settings'); setShowFormModal(false);}} className={`flex items-center gap-1 px-3 py-1.5 text-[10px] sm:text-xs tracking-wider transition-colors whitespace-nowrap ${currentView === 'settings' ? 'bg-white text-gray-900 shadow-sm border border-gray-200' : 'text-gray-500 hover:text-gray-900'}`}>
+                    <SettingsIcon className="w-3.5 h-3.5" /> 設定
+                  </button>
+                </div>
+                <button onClick={openAddModal} className="flex items-center gap-1.5 bg-gray-800 text-white px-4 py-2 text-[10px] sm:text-xs tracking-wider hover:bg-gray-900 transition-colors shadow-sm ml-auto xl:ml-2 whitespace-nowrap">
+                  <PlusIcon className="w-4 h-4" /> 新規登録
+                </button>
+                <button onClick={handleLogout} className="hidden xl:block text-gray-400 hover:text-gray-800 text-[10px] tracking-widest uppercase transition-colors underline ml-4">Logout</button>
+              </div>
+            </div>
+          </header>
+
+          <main className="max-w-7xl mx-auto px-4 mt-8 relative">
+            
+            {/* --- VIEW: TASK LIST --- */}
+            {currentView === 'taskList' && !showFormModal && (
+              <div className="bg-white border border-gray-200 overflow-hidden shadow-sm animate-fade-in">
+                <div className="p-6 border-b border-gray-200 bg-white flex flex-col md:flex-row md:items-center justify-between gap-4">
+                  <div className="flex items-center gap-2">
+                    <ListIcon className="w-5 h-5 text-gray-800" />
+                    <h2 className="text-lg font-serif tracking-[0.2em] text-gray-800">タスク一覧</h2>
+                  </div>
+                  
+                  {/* Task Summary (Minimalist Typography) */}
+                  <div className="flex items-center gap-4 text-[10px] tracking-widest font-serif">
+                     <span className="text-gray-500">TOTAL <strong className="text-gray-800 text-sm ml-1 font-normal">{allTasksList.length}</strong></span>
+                     <span className="text-gray-300">/</span>
+                     <span className={allTasksList.filter(t => t.dueDate === getTodayString()).length > 0 ? 'text-gray-700' : 'text-gray-400'}>TODAY <strong className="text-sm ml-1 font-normal">{allTasksList.filter(t => t.dueDate === getTodayString()).length}</strong></span>
+                     <span className="text-gray-300">/</span>
+                     <span className={allTasksList.filter(t => isOverdue(t.dueDate)).length > 0 ? 'text-rose-600' : 'text-gray-400'}>OVERDUE <strong className="text-sm ml-1 font-normal">{allTasksList.filter(t => isOverdue(t.dueDate)).length}</strong></span>
+                  </div>
+
+                  <div>
+                    <select 
+                      value={taskListSort}
+                      onChange={(e) => setTaskListSort(e.target.value)}
+                      className="text-xs tracking-widest text-gray-600 bg-gray-50 border border-gray-200 p-2 outline-none cursor-pointer hover:bg-gray-100 transition-colors w-full md:w-auto"
+                    >
+                      <option value="dueDateAsc">期日が近い順</option>
+                      <option value="priorityDesc">重要度が高い順</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="overflow-x-auto">
+                   <table className="w-full text-left border-collapse min-w-[800px]">
+                      <thead>
+                        <tr className="border-b border-gray-200 text-[10px] text-gray-400 uppercase tracking-widest bg-gray-50/50">
+                           <th className="p-4 font-normal w-12 text-center">Done</th>
+                           <th className="p-4 font-normal w-32">期日</th>
+                           <th className="p-4 font-normal">タスク内容</th>
+                           <th className="p-4 font-normal">お客様</th>
+                           <th className="p-4 font-normal">担当</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {allTasksList.map((task) => (
+                           <tr key={task.id} className={`hover:bg-gray-50 transition-colors ${task.priority === 3 ? 'border-l-[3px] border-l-rose-300' : 'border-l-[3px] border-l-transparent'}`}>
+                             <td className="p-4 text-center">
+                               <input type="checkbox" checked={task.isDone} onChange={() => toggleTaskDone(task.customerId, task.id)} className="accent-gray-800 cursor-pointer"/>
+                             </td>
+                             <td className={`p-4 text-sm ${!task.isDone && isOverdue(task.dueDate) ? 'text-rose-600' : 'text-gray-600'}`}>
+                               {task.dueDate}
+                             </td>
+                             <td className="p-4">
+                                <div className="text-sm text-gray-700 font-medium mb-1">{task.title}</div>
+                                <PriorityMeter priority={task.priority || 2} readOnly={true} />
+                             </td>
+                             <td className="p-4">
+                                <div className="font-medium text-gray-800 font-serif tracking-wider cursor-pointer hover:underline" onClick={() => {
+                                   const cust = customers.find(c => c.id === task.customerId);
+                                   if(cust) openEditModal(cust);
+                                }}>{task.customerName}</div>
+                                <div className="text-[10px] text-gray-400 mt-0.5">{task.customerStage}</div>
+                             </td>
+                             <td className="p-4 text-xs text-gray-500">{task.assignee}</td>
+                           </tr>
+                        ))}
+                        {allTasksList.length === 0 && (
+                          <tr><td colSpan="5" className="p-8 text-center text-gray-400 text-xs tracking-widest">未完了の通常タスクはありません</td></tr>
+                        )}
+                      </tbody>
+                   </table>
+                </div>
+              </div>
+            )}
+
+            {/* Settings View */}
+            {currentView === 'settings' && !showFormModal && (
+               <SettingsView templates={templates} setTemplates={setTemplates} showConfirm={showConfirm} showAlert={showAlert} />
+            )}
+
+            {/* Registration/Edit Form */}
+            {showFormModal && (
+              <div className="bg-white border border-gray-200 p-8 mb-12 relative shadow-sm animate-fade-in max-w-4xl mx-auto">
+                <button onClick={() => setShowFormModal(false)} className="absolute top-6 right-6 text-gray-400 hover:text-gray-800 transition-colors">
+                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
+                </button>
+                
+                <div className="text-center mb-8">
+                  <h2 className="text-xl font-serif tracking-[0.2em] text-gray-800">
+                    {isEditing ? '顧客情報の編集' : '新規登録'}
+                  </h2>
+                </div>
+
+                <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-8">
+                  <div className="space-y-6">
+                    <div>
+                      <label className="block text-xs tracking-widest text-gray-500 mb-2">顧客名 <span className="text-rose-500">*</span></label>
+                      <input required type="text" name="name" value={formData.name} onChange={handleInputChange} className="w-full border-b border-gray-300 py-2 focus:border-gray-800 outline-none bg-transparent text-sm" placeholder="例: 山田 太郎 様" />
+                    </div>
+                    
+                    <div>
+                      <label className="block text-xs tracking-widest text-gray-500 mb-2">現在のステージ</label>
+                      <select name="currentStage" value={formData.currentStage} onChange={handleInputChange} className="w-full border-b border-gray-300 py-2 focus:border-gray-800 outline-none bg-transparent text-sm">
+                        {UI_STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                      </select>
+                    </div>
+
+                    <div className="flex gap-4">
+                      <div className="flex-1">
+                        <label className="block text-xs tracking-widest text-gray-500 mb-2">次回予定日</label>
+                        <input type="date" name="nextDateDay" value={formData.nextDateDay} onChange={handleInputChange} className="w-full border-b border-gray-300 py-2 focus:border-gray-800 outline-none bg-transparent text-sm" />
+                      </div>
+                      <div className="flex-1">
+                        <label className="block text-xs tracking-widest text-gray-500 mb-2">時間</label>
+                        <div className="flex gap-2">
+                           <select name="nextDateTimeSelect" value={formData.nextDateTimeSelect} onChange={handleInputChange} className="w-full border-b border-gray-300 py-2 focus:border-gray-800 outline-none bg-transparent text-sm">
+                            <option value="09:00">09:00</option><option value="10:00">10:00</option><option value="13:00">13:00</option>
+                            <option value="16:00">16:00</option><option value="17:00">17:00</option><option value="18:00">18:00</option>
+                            <option value="19:00">19:00</option><option value="other">その他</option>
+                          </select>
+                          {formData.nextDateTimeSelect === 'other' && (
+                            <input required type="time" name="customNextDateTime" value={formData.customNextDateTime} onChange={handleInputChange} className="w-full border-b border-gray-300 py-2 focus:border-gray-800 outline-none bg-transparent text-sm" />
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-6">
+                    <div>
+                      <label className="block text-xs tracking-widest text-gray-500 mb-2">担当アドバイザー</label>
+                      <div className="flex gap-4">
+                        <select name="assignee" value={formData.assignee} onChange={handleInputChange} className="w-1/2 border-b border-gray-300 py-2 focus:border-gray-800 outline-none bg-transparent text-sm">
+                          {ASSIGNEE_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                          <option value="other">その他</option>
+                        </select>
+                        {formData.assignee === 'other' && (
+                          <input type="text" name="customAssignee" value={formData.customAssignee} onChange={handleInputChange} placeholder="氏名" className="w-1/2 border-b border-gray-300 py-2 focus:border-gray-800 outline-none bg-transparent text-sm" />
+                        )}
+                      </div>
+                    </div>
+                    
+                    <div>
+                      <label className="block text-xs tracking-widest text-gray-500 mb-2">議事録URL (任意)</label>
+                      <input type="url" name="meetingUrl" value={formData.meetingUrl} onChange={handleInputChange} className="w-full border-b border-gray-300 py-2 focus:border-gray-800 outline-none bg-transparent text-sm" placeholder="https://docs.google.com/..." />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs tracking-widest text-gray-500 mb-2">お客様の概要・備考</label>
+                      <textarea name="summary" value={formData.summary} onChange={handleInputChange} rows="2" className="w-full border border-gray-300 p-3 focus:border-gray-800 outline-none resize-none bg-transparent text-sm" placeholder="家族構成、予算、要望など"></textarea>
+                    </div>
+                  </div>
+
+                  {/* Hurdles */}
+                  <div className="md:col-span-2 mt-2">
+                    <label className="block text-[10px] tracking-widest text-gray-500 mb-3 text-center uppercase">Hurdles</label>
+                    <div className="flex flex-wrap justify-center gap-2">
+                      {HURDLE_OPTIONS.map(option => (
+                        <label key={option} className={`flex items-center justify-center cursor-pointer px-3 py-1.5 border text-xs tracking-wider transition-all duration-300 ${formData.hurdles.includes(option) ? 'bg-gray-800 border-gray-800 text-white' : 'bg-white border-gray-200 text-gray-500 hover:border-gray-400'}`}>
+                          <input type="checkbox" className="hidden" checked={formData.hurdles.includes(option)} onChange={() => handleHurdleChange(option)} />
+                          {option}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+
+                  {!isEditing && (
+                    <div className="md:col-span-2 text-center text-xs text-amber-700 bg-amber-50 border border-amber-100 p-4 mt-2">
+                      新規登録時、選択したステージ（{formData.currentStage}）の設定に応じたタスクが自動作成されます。
+                    </div>
+                  )}
+
+                  <div className="md:col-span-2 flex justify-center gap-4 mt-4">
+                    <button type="button" onClick={() => setShowFormModal(false)} className="px-8 py-3 text-xs tracking-widest text-gray-500 hover:text-gray-800 transition-colors border border-transparent">キャンセル</button>
+                    <button type="submit" className="bg-gray-800 text-white px-12 py-3 text-xs tracking-widest hover:bg-gray-900 transition-colors shadow-sm">
+                      {isEditing ? '更新する' : '登録する'}
+                    </button>
+                  </div>
+                </form>
+              </div>
+            )}
+
+            {/* --- VIEW: BOARD --- */}
+            {currentView === 'board' && !showFormModal && (
+              <div className="animate-fade-in">
+                
+                {/* Controls (Tabs & Sort) */}
+                <div className="flex flex-col md:flex-row justify-between items-center border-b border-gray-200 mb-8 pb-4 gap-4">
+                   {/* Stage Tabs (Hidden scrollbar) */}
+                   <div className="flex overflow-x-auto no-scrollbar [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] w-full md:w-auto gap-6 md:gap-8 pb-2 md:pb-0">
+                     {STAGES.map(stage => {
+                       const count = customers.filter(c => stage.id === '全体' ? !ARCHIVE_STAGES.some(s=>s.id===c.currentStage) : c.currentStage === stage.id).length;
+                       return (
+                         <button 
+                           key={stage.id}
+                           onClick={() => setBoardTab(stage.id)}
+                           className={`text-sm tracking-widest transition-all whitespace-nowrap ${boardTab === stage.id ? 'text-gray-900 font-bold border-b-2 border-gray-800 pb-1' : 'text-gray-400 hover:text-gray-600'}`}
+                         >
+                           {stage.label} <span className="text-[10px] ml-1 opacity-70">({count})</span>
+                         </button>
+                       )
+                     })}
+                   </div>
+
+                   {/* Sort Options */}
+                   <div className="flex items-center gap-2 self-end md:self-auto bg-white border border-gray-200 p-1">
+                      <select 
+                        value={sortOrder} 
+                        onChange={(e) => setSortOrder(e.target.value)}
+                        className="text-xs tracking-widest text-gray-600 bg-transparent outline-none p-1 cursor-pointer"
+                      >
+                         <option value="nextDateAsc">次回予定日が近い順</option>
+                         <option value="taskDueDateAsc">タスク期日が近い順</option>
+                      </select>
+                   </div>
+                </div>
+
+                {/* Cards Grid */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 items-start">
+                  {boardFilteredCustomers.map(customer => {
+                    const undoneTasks = customer.tasks?.filter(t => !t.isDone) || [];
+                    const doneTasks = customer.tasks?.filter(t => t.isDone) || [];
+                    const isCompletedTasksShown = showCompletedTasks[customer.id];
+
+                    return (
+                    <div key={customer.id} className="bg-white border border-gray-200 hover:border-gray-300 hover:shadow-md transition-all flex flex-col h-full">
+                      
+                      {/* Card Header */}
+                      <div className="p-6 relative">
+                        <button onClick={() => openEditModal(customer)} className="absolute top-4 right-4 text-gray-300 hover:text-gray-800 transition-colors p-2" title="編集">
+                          <EditIcon className="w-4 h-4" />
+                        </button>
+
+                        <div className="mb-4 pr-6">
+                           <div className="inline-block bg-gray-800 text-white text-[9px] px-2 py-0.5 tracking-widest mb-3 uppercase">
+                             STAGE: {customer.currentStage}
+                           </div>
+                           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
+                              <h3 className="text-xl font-serif tracking-wider text-gray-900">{customer.name}</h3>
+                              <span className="text-[10px] text-gray-500 tracking-widest">/ {customer.assignee === 'other' ? customer.customAssignee : customer.assignee}</span>
+                           </div>
+                        </div>
+                        
+                        <div className="bg-gray-50/50 border border-gray-100 p-3 mb-4 flex justify-between items-center">
+                           <div>
+                             <span className="block text-[9px] text-gray-400 tracking-widest uppercase mb-0.5">Next Appt.</span>
+                             <span className="text-sm text-gray-800 font-medium">{formatDateTime(customer.nextDate)}</span>
+                           </div>
+                           {customer.meetingUrl && (
+                             <a href={customer.meetingUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-[10px] bg-white border border-gray-300 text-gray-600 px-2 py-1 hover:bg-gray-100 transition-colors">
+                               <LinkIcon className="w-3 h-3" /> 議事録
+                             </a>
+                           )}
+                        </div>
+
+                        {/* Next Stage Buttons */}
+                        <div className="border-t border-gray-100 pt-4 mt-2">
+                           <p className="text-[9px] text-gray-400 tracking-widest uppercase mb-2 text-center">Actions / Move Stage</p>
+                           <div className="flex justify-center">
+                              <select 
+                                onChange={(e) => {
+                                   if(e.target.value === "") return;
+                                   setStageModalData({ customer, targetStage: e.target.value });
+                                   setShowStageModal(true);
+                                   e.target.value = ""; // Reset
+                                }}
+                                className="bg-white border border-gray-800 text-gray-800 text-xs px-3 py-1.5 outline-none cursor-pointer hover:bg-gray-50 transition-colors text-center w-full"
+                              >
+                                <option value="">ステージを移行する...</option>
+                                <optgroup label="進行中ステージ">
+                                  {UI_STAGES.filter(s => s.id !== customer.currentStage).map(s => <option key={s.id} value={s.id}>{s.label} へ進む</option>)}
+                                </optgroup>
+                                <optgroup label="アーカイブ（終了）">
+                                  {ARCHIVE_STAGES.map(s => <option key={s.id} value={s.id}>{s.label} にする</option>)}
+                                </optgroup>
+                              </select>
+                           </div>
+                        </div>
+                      </div>
+
+                      {/* Tasks Section */}
+                      <div className="p-6 bg-gray-50/50 border-t border-gray-100 flex-grow">
+                        <div className="flex justify-between items-center mb-4">
+                          <h4 className="text-[10px] text-gray-500 tracking-widest uppercase font-bold">Tasks ({undoneTasks.length})</h4>
+                          <button onClick={() => addTask(customer.id)} className="text-[10px] text-gray-500 hover:text-gray-800 tracking-widest uppercase flex items-center gap-0.5">
+                            <PlusIcon className="w-3 h-3"/> Add
+                          </button>
+                        </div>
+
+                        {/* 未完了タスク */}
+                        <div className="space-y-2 mb-4">
+                          {undoneTasks.length === 0 ? (
+                            <p className="text-[10px] text-gray-400 tracking-widest py-6 text-center bg-white border border-dashed border-gray-200">現在タスクはありません</p>
+                          ) : (
+                            undoneTasks.map(task => {
+                              const isWarning = isDeadlineNear(task.dueDate);
+                              const isPastDue = isOverdue(task.dueDate);
+                              return (
+                                <TaskItem 
+                                  key={task.id} 
+                                  task={task} 
+                                  customer={customer}
+                                  isWarning={isWarning}
+                                  isPastDue={isPastDue}
+                                  onUpdateLocal={updateTaskLocal}
+                                  onCommit={commitTaskUpdate}
+                                  onToggleDone={toggleTaskDone}
+                                  onDelete={deleteTask}
+                                />
+                              );
+                            })
+                          )}
+                        </div>
+
+                        {/* 完了済みタスク（折りたたみ） */}
+                        {doneTasks.length > 0 && (
+                          <div>
+                            <button 
+                              onClick={() => setShowCompletedTasks(prev => ({...prev, [customer.id]: !prev[customer.id]}))}
+                              className="text-[10px] text-gray-500 hover:text-gray-800 tracking-widest flex items-center gap-1 mb-2 w-full justify-center py-1.5 bg-white border border-gray-200 transition-colors"
+                            >
+                              完了済みタスク ({doneTasks.length}) {isCompletedTasksShown ? <ChevronUpIcon className="w-3 h-3"/> : <ChevronDownIcon className="w-3 h-3"/>}
+                            </button>
+                            
+                            {isCompletedTasksShown && (
+                              <div className="space-y-1.5 opacity-60">
+                                {doneTasks.map(task => (
+                                  <div key={task.id} className="flex items-center gap-2 p-1.5 bg-gray-100 border border-gray-200">
+                                    <input type="checkbox" checked={true} onChange={() => toggleTaskDone(customer.id, task.id)} className="w-3 h-3 accent-gray-500 cursor-pointer" />
+                                    <span className="flex-1 text-[11px] text-gray-500 line-through truncate">{task.title}</span>
+                                    <button onClick={() => deleteTask(customer.id, task.id)} className="text-gray-400 hover:text-rose-500"><TrashIcon className="w-3 h-3" /></button>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )})}
+                  
+                  {boardFilteredCustomers.length === 0 && (
+                     <div className="col-span-full text-center py-32 text-gray-400 border border-gray-200 bg-white shadow-sm">
+                       <div className="font-serif tracking-widest mb-2 text-lg">NO DATA</div>
+                       <div className="text-xs tracking-wider">該当する顧客データはありません。</div>
+                     </div>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* --- VIEW: REMIND --- */}
+            {currentView === 'remind' && !showFormModal && (
+              <div className="bg-white border border-gray-200 overflow-hidden shadow-sm animate-fade-in">
+                <div className="p-6 border-b border-gray-200 bg-white flex items-center gap-2">
+                  <BellIcon className="w-5 h-5 text-gray-800" />
+                  <h2 className="text-lg font-serif tracking-[0.2em] text-gray-800">リマインドタスク一覧</h2>
+                </div>
+                <div className="overflow-x-auto">
+                   <table className="w-full text-left border-collapse min-w-[800px]">
+                      <thead>
+                        <tr className="border-b border-gray-200 text-[10px] text-gray-400 uppercase tracking-widest bg-gray-50/50">
+                           <th className="p-4 font-normal w-12 text-center">Done</th>
+                           <th className="p-4 font-normal">Due Date</th>
+                           <th className="p-4 font-normal">Customer</th>
+                           <th className="p-4 font-normal">Task Name</th>
+                           <th className="p-4 font-normal">Stage</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {customers.flatMap(c => (c.tasks || []).map(t => ({customer: c, task: t})))
+                          .filter(item => item.task.title.includes('リマインド'))
+                          .sort((a,b) => new Date(a.task.dueDate) - new Date(b.task.dueDate))
+                          .map(({ customer, task }) => (
+                           <tr key={task.id} className={`hover:bg-gray-50 transition-colors ${task.isDone ? 'opacity-50 bg-gray-50' : ''}`}>
+                             <td className="p-4 text-center">
+                               <input type="checkbox" checked={task.isDone} onChange={() => toggleTaskDone(customer.id, task.id)} className="accent-gray-800 cursor-pointer"/>
+                             </td>
+                             <td className={`p-4 text-sm ${!task.isDone && isOverdue(task.dueDate) ? 'text-rose-600 font-bold' : ''}`}>
+                               {task.dueDate}
+                               {!task.isDone && isOverdue(task.dueDate) && <span className="ml-2 text-[9px] bg-rose-100 text-rose-700 px-1 border border-rose-200">期限切れ</span>}
+                             </td>
+                             <td className="p-4 font-medium text-gray-800 font-serif tracking-wider">{customer.name}</td>
+                             <td className="p-4 text-sm text-gray-600">{task.title}</td>
+                             <td className="p-4 text-xs text-gray-500">{customer.currentStage}</td>
+                           </tr>
+                        ))}
+                        {customers.flatMap(c => (c.tasks || []).map(t => ({customer: c, task: t}))).filter(item => item.task.title.includes('リマインド')).length === 0 && (
+                          <tr><td colSpan="5" className="p-8 text-center text-gray-400 text-xs tracking-widest">リマインドタスクはありません</td></tr>
+                        )}
+                      </tbody>
+                   </table>
+                </div>
+              </div>
+            )}
+
+          </main>
+        </div>
+      );
+    }
+
+    const root = ReactDOM.createRoot(document.getElementById('root'));
+    root.render(<App />);
+  </script>
+</body>
+</html>
