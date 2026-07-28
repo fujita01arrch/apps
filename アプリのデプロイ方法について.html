@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>HTML Apps 公開環境 — 使い方</title>
+<style>
+  :root {
+    --accent: #4f46e5;
+    --accent-bg: #eef2ff;
+    --bg: #ffffff;
+    --text: #1f2937;
+    --muted: #6b7280;
+    --border: #e5e7eb;
+    --warn-bg: #fff7ed;
+    --warn-border: #fdba74;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Hiragino Sans", Meiryo, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.7;
+  }
+  main {
+    max-width: 760px;
+    margin: 0 auto;
+    padding: 48px 24px 80px;
+  }
+  h1 {
+    font-size: 1.6rem;
+    margin-bottom: 4px;
+  }
+  p.lead {
+    color: var(--muted);
+    margin-top: 0;
+    margin-bottom: 40px;
+  }
+  h2 {
+    font-size: 1.15rem;
+    margin-top: 48px;
+    margin-bottom: 16px;
+    padding-bottom: 8px;
+    border-bottom: 2px solid var(--accent);
+  }
+  .card {
+    background: var(--accent-bg);
+    border-radius: 10px;
+    padding: 20px 24px;
+    margin-bottom: 8px;
+  }
+  .card dl {
+    margin: 0;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: 8px 16px;
+  }
+  .card dt {
+    color: var(--muted);
+    white-space: nowrap;
+    font-size: 0.9rem;
+  }
+  .card dd {
+    margin: 0;
+    word-break: break-all;
+  }
+  a {
+    color: var(--accent);
+    text-decoration: none;
+  }
+  a:hover {
+    text-decoration: underline;
+  }
+  code {
+    background: #f3f4f6;
+    border-radius: 4px;
+    padding: 2px 6px;
+    font-size: 0.92em;
+  }
+  ol, ul {
+    padding-left: 24px;
+  }
+  ol li, ul li {
+    margin-bottom: 10px;
+  }
+  pre {
+    background: #1f2937;
+    color: #f9fafb;
+    border-radius: 8px;
+    padding: 16px 20px;
+    overflow-x: auto;
+    font-size: 0.9rem;
+    margin: 16px 0 24px;
+  }
+  pre code {
+    background: none;
+    padding: 0;
+    color: inherit;
+  }
+  .steps {
+    counter-reset: step;
+    list-style: none;
+    padding-left: 0;
+  }
+  .steps li {
+    counter-increment: step;
+    position: relative;
+    padding-left: 40px;
+    margin-bottom: 20px;
+  }
+  .steps li::before {
+    content: counter(step);
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    background: var(--accent);
+    color: #fff;
+    font-size: 0.85rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .note {
+    background: var(--warn-bg);
+    border: 1px solid var(--warn-border);
+    border-radius: 8px;
+    padding: 16px 20px;
+    margin-top: 8px;
+  }
+  .note ul {
+    margin: 0;
+  }
+  footer {
+    margin-top: 56px;
+    padding-top: 16px;
+    border-top: 1px solid var(--border);
+    color: var(--muted);
+    font-size: 0.85rem;
+  }
+</style>
+</head>
+<body>
+<main>
+  <h1>HTML Apps 公開環境 — 使い方</h1>
+  <p class="lead">自分たちで作ったHTMLアプリ（社内ツールなど）を、インターネット上で誰でも開けるページとして公開するための仕組みです。プログラミングやコマンド操作の知識は不要で、<strong>Claudeに「このアプリを公開して」と頼むだけ</strong>で使えます。この説明書は <code>Project/_html-apps</code> フォルダの中に置いてあります。</p>
+
+  <h2>これは何のためのもの？</h2>
+  <p>PCの中にあるHTMLファイル（アプリ）は、そのままではPC内でしか開けません。この仕組みを使うと、そのアプリに専用の「URL（インターネット上の住所）」が発行され、スマホやほかのPCからでも開けるようになります。今後アプリを何本作っても、同じ場所に追加していくだけで済むように作られています。</p>
+
+  <h2>できたもの</h2>
+  <div class="card">
+    <dl>
+      <dt>公開URL</dt>
+      <dd><a href="https://fujita01arrch.github.io/apps/" target="_blank" rel="noopener">https://fujita01arrch.github.io/apps/</a><br><span style="color:var(--muted);font-size:0.85em;">↑ここを開くと、公開中のアプリの一覧が見られます</span></dd>
+      <dt>保管場所</dt>
+      <dd><code>Project/_html-apps</code>フォルダ（このPC内）</dd>
+      <dt>公開先</dt>
+      <dd><a href="https://github.com/fujita01arrch/apps" target="_blank" rel="noopener">github.com/fujita01arrch/apps</a><br><span style="color:var(--muted);font-size:0.85em;">↑「GitHub」という、世界中で使われているファイル保管・公開サービス。今回はPublic（誰でも見られる）設定で作成</span></dd>
+    </dl>
+  </div>
+
+  <h2>アプリを追加・更新したいとき</h2>
+  <p>やることはとてもシンプルです。<strong>Claudeとのチャットで、以下のように伝えるだけ</strong>で、あとの作業はClaudeが行います。</p>
+
+  <div class="card">
+    <dl>
+      <dt>新しいアプリを<br>公開したい</dt>
+      <dd>「<code>G:\...\〇〇アプリ.html</code>というアプリを公開して」<br><span style="color:var(--muted);font-size:0.85em;">→ Claudeが内容を確認し、一覧ページにも追加してくれます</span></dd>
+      <dt>すでに公開した<br>アプリを更新したい</dt>
+      <dd>「〇〇アプリを新しいファイル（<code>G:\...\〇〇アプリ_v2.html</code>）に更新して」<br><span style="color:var(--muted);font-size:0.85em;">→ 内容を入れ替えて、同じURLで最新版に更新してくれます</span></dd>
+    </dl>
+  </div>
+
+  <div class="note">
+    <ul>
+      <li>アプリの中に顧客情報や社外秘の情報が含まれていないか、Claudeが公開前に確認します。心配な点があれば先に説明があるので、その指示に従ってください</li>
+      <li>アプリがGoogleログインや外部サービスの設定情報を含む場合、安全のため一部の操作をご自身にお願いすることがあります（その場合も、Claudeが「ここをクリックしてください」と具体的に案内します）</li>
+    </ul>
+  </div>
+
+  <h2>用語かんたん解説</h2>
+  <p style="color:var(--muted);font-size:0.9em;">この説明書や作業中に出てくる言葉の意味です。普段は覚える必要はありません。</p>
+  <div class="card">
+    <dl>
+      <dt>GitHub</dt>
+      <dd>ファイルを保管し、インターネット上に公開できる世界的なサービス（Google DriveのようなもののIT開発者向け版）</dd>
+      <dt>リポジトリ</dt>
+      <dd>GitHub上の「保管フォルダ」のこと。今回は<code>apps</code>という名前で作成</dd>
+      <dt>Public（パブリック）</dt>
+      <dd>「誰でも見られる」設定。無料でアプリを公開するにはこの設定が必要（個人情報・社外秘を置かない前提）</dd>
+      <dt>push（プッシュ）</dt>
+      <dd>PC内の変更をGitHubに送って反映させる操作。これをすると自動的に公開ページが更新される</dd>
+    </dl>
+  </div>
+
+  <h2>運用上の注意</h2>
+  <div class="note">
+    <ul>
+      <li>Public（誰でも見られる）設定のため、<strong>個人情報・社外秘を含むアプリはここに置かない</strong></li>
+      <li>特定のアプリだけ非公開にしたい・別管理にしたい事情が出てきたら、その時点でClaudeに相談して切り出す</li>
+      <li>アプリ自体の制作は普段どおり <code>Project/{日付}_{アプリ名}/00_original〜03_output</code> で行い、完成したものだけをここに公開する</li>
+    </ul>
+  </div>
+
+  <footer>
+    作成日: 2026-07-28（2026-07-29更新） ／ 技術的な詳細は <a href="README.md">README.md</a> を参照
+  </footer>
+</main>
+</body>
+</html>

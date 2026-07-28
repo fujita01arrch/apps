@@ -14,21 +14,6 @@
   
   <!-- Babel -->
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
-  
-  <style>
-    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
-    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-    .animate-fade-in { animation: fadeIn 0.3s ease-in-out; }
-    
-    /* スクロールバーを完全に隠す設定（機能は維持） */
-    .no-scrollbar::-webkit-scrollbar {
-        display: none;
-    }
-    .no-scrollbar {
-        -ms-overflow-style: none;
-        scrollbar-width: none;
-    }
-  </style>
 </head>
 <body class="selection:bg-gray-200">
   <!-- Loading Placeholder -->
@@ -36,17 +21,24 @@
     <div style="display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 100vh; background-color: #f9f9f9; font-family: serif; color: #6b7280; letter-spacing: 0.15em;">
       <div style="width: 40px; height: 40px; border: 3px solid #e5e7eb; border-top-color: #1f2937; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 16px;"></div>
       <p style="font-size: 14px; text-transform: uppercase;">Loading System...</p>
+      <style>
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .animate-fade-in { animation: fadeIn 0.3s ease-in-out; }
+      </style>
     </div>
   </div>
 
   <script type="text/babel" data-type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
     import { getAuth, signInWithCustomToken, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
-    import { getFirestore, collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+    import { getFirestore, collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot, getDoc, getDocs } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
 
     const { useState, useEffect, useMemo, useRef } = React;
 
+    // --- Firebase Initialization ---
     const isPreviewEnv = typeof __firebase_config !== 'undefined' && typeof __initial_auth_token !== 'undefined';
+    
     const firebaseConfig = isPreviewEnv ? JSON.parse(__firebase_config) : {
       apiKey: "AIzaSyBCBgmi5yXVndOA6lMxlWmrHszuy8sMgxM",
       authDomain: "hikitugi-539c8.firebaseapp.com",
@@ -61,6 +53,7 @@
     const db = getFirestore(app);
     const appId = typeof __app_id !== 'undefined' ? __app_id : 'arrch-handover-app';
 
+    // --- Icon Components ---
     const BoardIcon = ({ className = "w-5 h-5" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="3" x2="9" y2="21"></line></svg>;
     const ListIcon = ({ className = "w-5 h-5" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>;
     const PlusIcon = ({ className = "w-5 h-5" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="12" x2="12" y1="5" y2="19"/><line x1="5" x2="19" y1="12" y2="12"/></svg>;
@@ -72,11 +65,13 @@
     const ChevronDownIcon = ({ className = "w-5 h-5" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="6 9 12 15 18 9"></polyline></svg>;
     const ChevronUpIcon = ({ className = "w-5 h-5" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="18 15 12 9 6 15"></polyline></svg>;
 
+    // --- Constants ---
     const STAGES = [
       { id: '全体', label: '全体' },
       { id: '来場前', label: '来場前' },
       { id: '初回', label: '初回' },
       { id: 'おうちカフェ', label: 'おうちカフェ' },
+      { id: 'LP', label: 'LP' }, // 新規追加: LPステージ
       { id: 'HB・SB', label: 'HB・SB' },
       { id: '資金計画', label: '資金計画' },
       { id: 'P申込後', label: 'P申込後' },
@@ -84,6 +79,7 @@
     ];
     
     const UI_STAGES = STAGES.filter(s => s.id !== '全体');
+
     const ARCHIVE_STAGES = [
       { id: '引継ぎ完了済', label: '引継ぎ完了済' },
       { id: '離脱', label: '離脱' }
@@ -93,6 +89,7 @@
     const HURDLE_OPTIONS = ['資金', '土地', '時期', 'デザイン', '会社選び', '建物サイズ', '相談者', '性能/構造'];
     const ASSIGNEE_OPTIONS = ['藤田', '橋本', '市川', '寺田', '小林', '田中', '大峰', '白栁', '乗松', '藤原'];
 
+    // --- Helpers ---
     const isOverdue = (dateString) => {
       if (!dateString) return false;
       const today = new Date();
@@ -122,8 +119,8 @@
 
     const getTodayString = () => new Date().toISOString().split('T')[0];
 
-    
-    // カスタムポップアップ (alert/confirm の代替)
+    // --- UI Components ---
+    // カスタムダイアログ
     const CustomDialog = ({ isOpen, message, type, onConfirm, onCancel }) => {
       if (!isOpen) return null;
       return (
@@ -141,22 +138,19 @@
       );
     };
 
-    // 上品で点灯式のメータードット（重要度）
+    // 上品で点灯式のメータードット
     const PriorityMeter = ({ priority = 2, onChange, readOnly = false }) => {
       return (
-        <div className="flex items-center gap-[4px] shrink-0 pt-0.5">
+        <div className="flex items-center gap-[3px] shrink-0">
           {[1, 2, 3].map((level) => {
             const isActive = level <= priority;
-            // 非点灯時は枠線のみの白抜き
-            let dotClass = 'w-1.5 h-1.5 rounded-full border border-gray-200 bg-transparent transition-colors duration-200';
+            let dotClass = 'w-[5px] h-[5px] rounded-full border border-gray-200 bg-transparent transition-colors duration-200';
             
             if (isActive) {
               if (priority === 3) {
-                // 高のときは点灯している丸すべてが上品なローズ色
-                dotClass = 'w-1.5 h-1.5 rounded-full bg-rose-400 border border-rose-400 transition-colors duration-200';
+                dotClass = 'w-[5px] h-[5px] rounded-full bg-rose-300 border border-rose-300 transition-colors duration-200';
               } else {
-                // 中・低のときは点灯している丸が柔らかいグレー
-                dotClass = 'w-1.5 h-1.5 rounded-full bg-gray-400 border border-gray-400 transition-colors duration-200';
+                dotClass = 'w-[5px] h-[5px] rounded-full bg-gray-400 border border-gray-400 transition-colors duration-200';
               }
             }
             
@@ -178,7 +172,6 @@
       );
     };
 
-    // タスク入力コンポーネント
     const TaskItem = ({ task, customer, isWarning, isPastDue, onUpdateLocal, onCommit, onToggleDone, onDelete }) => {
       const [localTitle, setLocalTitle] = useState(task.title);
 
@@ -204,7 +197,7 @@
       };
 
       return (
-        <div className={`flex items-start gap-2 p-2 bg-white border ${task.isDone ? 'border-gray-200 bg-gray-50' : (isPastDue ? 'border-rose-300 bg-rose-50/30' : (isWarning ? 'border-amber-200 shadow-sm' : 'border-gray-200'))} ${task.priority === 3 && !task.isDone ? 'border-l-[3px] border-l-rose-300 pl-[5px]' : ''}`}>
+        <div className={`flex items-start gap-2 p-2 bg-white border ${task.isDone ? 'border-gray-200 bg-gray-50' : (isPastDue ? 'border-rose-300 bg-rose-50/30' : (isWarning ? 'border-amber-200 shadow-sm' : 'border-gray-200'))}`}>
           <input type="checkbox" checked={task.isDone} onChange={() => onToggleDone(customer.id, task.id)} className="mt-1 w-3.5 h-3.5 text-gray-800 border-gray-300 rounded-sm cursor-pointer accent-gray-800 flex-shrink-0" />
           <div className="flex-1 min-w-0 flex flex-col gap-1">
             <input 
@@ -216,13 +209,13 @@
                placeholder="タスク内容" 
                className={`text-sm bg-transparent outline-none w-full ${task.isDone ? 'line-through text-gray-400' : (isPastDue ? 'text-rose-700 font-medium' : 'text-gray-700')}`} 
             />
-            <div className="flex items-center gap-2 mt-0.5">
+            <div className="flex items-center gap-2">
                <PriorityMeter priority={task.priority || 2} onChange={(val) => { onUpdateLocal(customer.id, task.id, 'priority', val); onCommit(customer.id); }} readOnly={task.isDone} />
                <input 
                  type="date" 
                  value={task.dueDate} 
                  onChange={(e) => { onUpdateLocal(customer.id, task.id, 'dueDate', e.target.value); onCommit(customer.id); }} 
-                 className={`text-[10px] outline-none bg-transparent w-24 ml-2 ${task.isDone ? 'text-gray-400' : (isPastDue ? 'text-rose-600' : 'text-gray-400')}`} 
+                 className={`text-[10px] outline-none bg-transparent w-24 ${task.isDone ? 'text-gray-400' : (isPastDue ? 'text-rose-600' : 'text-gray-400')}`} 
                />
                <button onClick={() => onDelete(customer.id, task.id)} className="text-gray-300 hover:text-rose-500 text-[10px] px-1 ml-auto">削除</button>
             </div>
@@ -236,23 +229,32 @@
       const [newTaskTitle, setNewTaskTitle] = useState('');
       const [newDaysOffset, setNewDaysOffset] = useState(0);
       const [newTaskPriority, setNewTaskPriority] = useState(2);
+      const [newBaseDateType, setNewBaseDateType] = useState('stageDate'); // stageDate or nextDate
+
+      // 編集用のState
+      const [editingTemplateId, setEditingTemplateId] = useState(null);
+      const [editTaskTitle, setEditTaskTitle] = useState('');
+      const [editDaysOffset, setEditDaysOffset] = useState(0);
+      const [editTaskPriority, setEditTaskPriority] = useState(2);
+      const [editBaseDateType, setEditBaseDateType] = useState('stageDate');
 
       const handleAddTemplate = async () => {
         if (!newTaskTitle) return;
         const newTemplate = {
-          id: Date.now().toString(),
           stageId: selectedStage,
           title: newTaskTitle,
           daysOffset: parseInt(newDaysOffset, 10) || 0,
-          priority: newTaskPriority
+          priority: newTaskPriority,
+          baseDateType: newBaseDateType
         };
 
         const newDocRef = doc(collection(db, 'artifacts', appId, 'public', 'data', 'task_templates'));
         try {
-          await setDoc(newDocRef, newTemplate);
+          await setDoc(newDocRef, { id: newDocRef.id, ...newTemplate });
           setNewTaskTitle('');
           setNewDaysOffset(0);
           setNewTaskPriority(2);
+          setNewBaseDateType('stageDate');
         } catch (error) {
           console.error("Error adding template:", error);
           showAlert("テンプレートの保存に失敗しました。");
@@ -266,7 +268,44 @@
         });
       };
 
-      const currentStageTemplates = templates.filter(t => t.stageId === selectedStage).sort((a,b) => a.daysOffset - b.daysOffset);
+      // 編集開始
+      const handleEditClick = (template) => {
+        setEditingTemplateId(template.id);
+        setEditTaskTitle(template.title);
+        setEditDaysOffset(template.daysOffset);
+        setEditTaskPriority(template.priority || 2);
+        setEditBaseDateType(template.baseDateType || 'stageDate');
+      };
+
+      // 編集キャンセル
+      const handleCancelEdit = () => {
+        setEditingTemplateId(null);
+      };
+
+      // 編集内容の保存
+      const handleUpdateTemplate = async () => {
+        if (!editTaskTitle) return;
+        const updatedTemplate = {
+          title: editTaskTitle,
+          daysOffset: parseInt(editDaysOffset, 10) || 0,
+          priority: editTaskPriority,
+          baseDateType: editBaseDateType
+        };
+
+        const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'task_templates', editingTemplateId);
+        try {
+          await updateDoc(docRef, updatedTemplate);
+          setEditingTemplateId(null);
+        } catch (error) {
+          console.error("Error updating template:", error);
+          showAlert("テンプレートの更新に失敗しました。");
+        }
+      };
+
+      const currentStageTemplates = templates.filter(t => t.stageId === selectedStage).sort((a,b) => {
+         if(a.baseDateType !== b.baseDateType) return a.baseDateType === 'stageDate' ? -1 : 1;
+         return a.daysOffset - b.daysOffset;
+      });
 
       return (
         <div className="bg-white border border-gray-200 shadow-sm animate-fade-in max-w-4xl mx-auto mt-8">
@@ -308,18 +347,27 @@
                       className="w-full border-b border-gray-300 py-1.5 focus:border-gray-800 outline-none bg-transparent text-sm" 
                     />
                   </div>
-                  <div className="w-full sm:w-32">
-                    <label className="block text-[10px] text-gray-500 tracking-widest uppercase mb-1">期日（次回予定日から）</label>
+                  <div className="w-full sm:w-56">
+                    <label className="block text-[10px] text-gray-500 tracking-widest uppercase mb-1">期日の基準と日数</label>
                     <div className="flex items-center gap-2">
+                      <select 
+                        value={newBaseDateType} 
+                        onChange={(e) => setNewBaseDateType(e.target.value)}
+                        className="w-28 border-b border-gray-300 py-1.5 focus:border-gray-800 outline-none bg-transparent text-xs"
+                      >
+                        <option value="stageDate">ステージ移行日</option>
+                        <option value="nextDate">次回予定日</option>
+                      </select>
+                      <span className="text-xs text-gray-500">の</span>
                       <input 
                         type="number" 
                         value={newDaysOffset} 
                         onChange={(e) => setNewDaysOffset(e.target.value)}
-                        className="w-16 border-b border-gray-300 py-1.5 focus:border-gray-800 outline-none bg-transparent text-sm text-center" 
+                        className="w-12 border-b border-gray-300 py-1.5 focus:border-gray-800 outline-none bg-transparent text-sm text-center" 
                       />
                       <span className="text-xs text-gray-600 whitespace-nowrap">日後</span>
                     </div>
-                    <div className="text-[9px] text-gray-400 mt-1">※マイナスで〇日前</div>
+                    <div className="text-[9px] text-gray-400 mt-1">※マイナスで〇日前になります</div>
                   </div>
                   <div className="w-full sm:w-20">
                     <label className="block text-[10px] text-gray-500 tracking-widest uppercase mb-2">重要度</label>
@@ -342,30 +390,88 @@
                       自動追加されるタスクはありません。
                     </div>
                   ) : (
-                    currentStageTemplates.map(template => (
-                      <div key={template.id} className="flex justify-between items-center bg-white border border-gray-200 p-4 hover:border-gray-300 transition-colors group">
-                        <div>
-                          <div className="flex items-center gap-3 mb-1">
-                             <div className="text-sm text-gray-800 font-medium">{template.title}</div>
-                             <PriorityMeter priority={template.priority || 2} readOnly={true} />
+                    currentStageTemplates.map(template => {
+                      // ▼ 編集中モードのUI
+                      if (editingTemplateId === template.id) {
+                        return (
+                          <div key={template.id} className="bg-gray-50 border border-gray-300 p-4 shadow-sm animate-fade-in">
+                            <div className="flex flex-col sm:flex-row gap-4 items-end">
+                              <div className="flex-1 w-full">
+                                <label className="block text-[10px] text-gray-500 tracking-widest uppercase mb-1">タスク名</label>
+                                <input 
+                                  type="text" 
+                                  value={editTaskTitle} 
+                                  onChange={(e) => setEditTaskTitle(e.target.value)}
+                                  className="w-full border-b border-gray-400 py-1 focus:border-gray-800 outline-none bg-transparent text-sm font-medium text-gray-900" 
+                                />
+                              </div>
+                              <div className="w-full sm:w-56">
+                                <label className="block text-[10px] text-gray-500 tracking-widest uppercase mb-1">期日の基準と日数</label>
+                                <div className="flex items-center gap-2">
+                                  <select 
+                                    value={editBaseDateType} 
+                                    onChange={(e) => setEditBaseDateType(e.target.value)}
+                                    className="w-28 border-b border-gray-400 py-1 focus:border-gray-800 outline-none bg-transparent text-xs"
+                                  >
+                                    <option value="stageDate">ステージ移行日</option>
+                                    <option value="nextDate">次回予定日</option>
+                                  </select>
+                                  <span className="text-xs text-gray-500">の</span>
+                                  <input 
+                                    type="number" 
+                                    value={editDaysOffset} 
+                                    onChange={(e) => setEditDaysOffset(e.target.value)}
+                                    className="w-12 border-b border-gray-400 py-1 focus:border-gray-800 outline-none bg-transparent text-sm text-center" 
+                                  />
+                                  <span className="text-xs text-gray-600 whitespace-nowrap">日後</span>
+                                </div>
+                              </div>
+                              <div className="w-full sm:w-20">
+                                <label className="block text-[10px] text-gray-500 tracking-widest uppercase mb-2">重要度</label>
+                                <div className="pb-1">
+                                   <PriorityMeter priority={editTaskPriority} onChange={setEditTaskPriority} />
+                                </div>
+                              </div>
+                              <div className="flex gap-2 mb-1 w-full sm:w-auto">
+                                <button onClick={handleCancelEdit} className="px-3 py-2 text-xs tracking-widest text-gray-500 hover:text-gray-800 transition-colors border border-transparent whitespace-nowrap">ｷｬﾝｾﾙ</button>
+                                <button onClick={handleUpdateTemplate} className="bg-gray-800 text-white px-4 py-2 text-xs tracking-widest hover:bg-gray-900 transition-colors shadow-sm whitespace-nowrap">保存</button>
+                              </div>
+                            </div>
                           </div>
-                          <div className="text-[11px] text-gray-500 tracking-wider">期日: 次回予定日の <span className="font-bold text-gray-700">{template.daysOffset}</span> 日後</div>
+                        );
+                      }
+                      
+                      // ▼ 通常表示モードのUI
+                      return (
+                        <div key={template.id} className="flex justify-between items-center bg-white border border-gray-200 p-4 hover:border-gray-300 transition-colors group">
+                          <div>
+                            <div className="flex items-center gap-2 mb-1">
+                               <div className="text-sm text-gray-800 font-medium">{template.title}</div>
+                               <PriorityMeter priority={template.priority || 2} readOnly={true} />
+                            </div>
+                            <div className="text-[11px] text-gray-500 tracking-wider">期日: {template.baseDateType === 'nextDate' ? '次回予定日' : 'ステージ移行日'} の <span className="font-bold text-gray-700">{template.daysOffset}</span> 日後</div>
+                          </div>
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <button onClick={() => handleEditClick(template)} className="text-gray-300 hover:text-gray-800 p-2 transition-colors" title="編集">
+                              <EditIcon className="w-4 h-4" />
+                            </button>
+                            <button onClick={() => handleDeleteTemplate(template.id)} className="text-gray-300 hover:text-rose-500 p-2 transition-colors" title="削除">
+                              <TrashIcon className="w-4 h-4" />
+                            </button>
+                          </div>
                         </div>
-                        <button onClick={() => handleDeleteTemplate(template.id)} className="text-gray-300 hover:text-rose-500 p-2 transition-colors opacity-0 group-hover:opacity-100">
-                          <TrashIcon className="w-4 h-4" />
-                        </button>
-                      </div>
-                    ))
+                      );
+                    })
                   )}
                 </div>
               </div>
-
             </div>
           </div>
         </div>
       );
     };
 
+    // --- Main Application ---
     function App() {
       const [user, setUser] = useState(null);
       const [authChecking, setAuthChecking] = useState(true);
@@ -384,7 +490,6 @@
 
       // ダイアログ状態管理
       const [dialog, setDialog] = useState({ isOpen: false, message: '', type: 'alert', onConfirm: null });
-
       const showAlert = (message) => setDialog({ isOpen: true, message, type: 'alert', onConfirm: () => setDialog({ ...dialog, isOpen: false }) });
       const showConfirm = (message, onConfirm) => setDialog({ isOpen: true, message, type: 'confirm', onConfirm: () => { onConfirm(); setDialog({ ...dialog, isOpen: false }); } });
 
@@ -401,6 +506,7 @@
       };
       const [formData, setFormData] = useState(initialFormState);
 
+      // --- Firebase Auth & Data Fetching ---
       useEffect(() => {
         const initAuth = async () => {
           try {
@@ -422,6 +528,91 @@
       useEffect(() => {
         if (!user) return;
         
+        // テンプレート自動生成（アップデートバージョン管理付き）
+        const seedDefaultTemplates = async () => {
+          try {
+            const configRef = doc(db, 'artifacts', appId, 'public', 'data', 'system_config', 'default');
+            const configSnap = await getDoc(configRef);
+            const currentSeedVersion = configSnap.exists() ? (configSnap.data().seedVersion || 1) : 0;
+            // 今回のアップデートでバージョン3に引き上げ
+            const TARGET_VERSION = 3; 
+
+            if (currentSeedVersion < TARGET_VERSION) {
+              const templatesRef = collection(db, 'artifacts', appId, 'public', 'data', 'task_templates');
+              
+              // バージョンアップ時は古いテンプレートを一旦クリアする
+              if (currentSeedVersion > 0) {
+                 const oldDocs = await getDocs(templatesRef);
+                 oldDocs.forEach(d => deleteDoc(d.ref).catch(e=>console.error(e)));
+              }
+              
+              // 今回一緒に作成した完璧なデフォルトテンプレート群
+              const defaults = [
+                // 【来場前】
+                { stageId: '来場前', title: 'ZOHO,アンケート確認', daysOffset: 0, priority: 2, baseDateType: 'stageDate' },
+                { stageId: '来場前', title: '補足情報がないか集客チャットを確認', daysOffset: -3, priority: 2, baseDateType: 'nextDate' },
+                { stageId: '来場前', title: '0次接客を行う', daysOffset: -3, priority: 2, baseDateType: 'nextDate' },
+                
+                // 【初回】
+                { stageId: '初回', title: 'ZOHO登録', daysOffset: 0, priority: 2, baseDateType: 'stageDate' },
+                { stageId: '初回', title: '未完了の予定追加', daysOffset: 0, priority: 2, baseDateType: 'stageDate' },
+                { stageId: '初回', title: 'Rakumoに設備,LIFEFUNDを追加', daysOffset: 0, priority: 3, baseDateType: 'stageDate' },
+                { stageId: '初回', title: '顧客テーブル追加', daysOffset: 0, priority: 2, baseDateType: 'stageDate' },
+                { stageId: '初回', title: 'サンクスLINE送付', daysOffset: 0, priority: 3, baseDateType: 'stageDate' },
+                { stageId: '初回', title: '議事録作成', daysOffset: 3, priority: 3, baseDateType: 'stageDate' },
+                { stageId: '初回', title: '案件対策タイム（個人）を30分間Rakumoに登録', daysOffset: 3, priority: 2, baseDateType: 'stageDate' },
+                { stageId: '初回', title: '商談レビューを30分間Rakumoに登録', daysOffset: 3, priority: 2, baseDateType: 'stageDate' },
+                { stageId: '初回', title: 'nottaにデータ追加', daysOffset: 5, priority: 1, baseDateType: 'stageDate' },
+                { stageId: '初回', title: 'notebookLMを作成しデータ追加', daysOffset: 5, priority: 1, baseDateType: 'stageDate' },
+                
+                // 【おうちカフェ】
+                { stageId: 'おうちカフェ', title: 'LPヒアリングシートのお渡し', daysOffset: 0, priority: 3, baseDateType: 'stageDate' },
+                { stageId: 'おうちカフェ', title: '未完了の活動追加', daysOffset: 0, priority: 2, baseDateType: 'stageDate' },
+                { stageId: 'おうちカフェ', title: 'Rakumoに設備,和さん,LIFEFUND登録', daysOffset: 0, priority: 3, baseDateType: 'stageDate' },
+                { stageId: 'おうちカフェ', title: 'LP日程調整チャット', daysOffset: 0, priority: 3, baseDateType: 'stageDate' },
+                { stageId: 'おうちカフェ', title: 'サンクスLINE', daysOffset: 0, priority: 2, baseDateType: 'stageDate' },
+                { stageId: 'おうちカフェ', title: '議事録送付', daysOffset: 0, priority: 2, baseDateType: 'stageDate' },
+                { stageId: 'おうちカフェ', title: '顧客テーブル更新', daysOffset: 0, priority: 2, baseDateType: 'stageDate' },
+                { stageId: 'おうちカフェ', title: 'nottaにデータ追加', daysOffset: 5, priority: 1, baseDateType: 'stageDate' },
+                { stageId: 'おうちカフェ', title: 'notebookLMにデータ追加', daysOffset: 5, priority: 1, baseDateType: 'stageDate' },
+                
+                // 【LP】
+                { stageId: 'LP', title: 'ヒアリングブックのお渡し', daysOffset: 0, priority: 3, baseDateType: 'stageDate' },
+                { stageId: 'LP', title: '未完了の活動追加', daysOffset: 0, priority: 2, baseDateType: 'stageDate' },
+                { stageId: 'LP', title: 'Rakumoに設備,LIFEFUND登録', daysOffset: 0, priority: 2, baseDateType: 'stageDate' },
+                { stageId: 'LP', title: 'サンクスLINE', daysOffset: 1, priority: 2, baseDateType: 'stageDate' },
+                { stageId: 'LP', title: 'LP結果シートの送付', daysOffset: 1, priority: 2, baseDateType: 'stageDate' },
+                { stageId: 'LP', title: '顧客テーブル更新', daysOffset: 0, priority: 2, baseDateType: 'stageDate' },
+                { stageId: 'LP', title: 'nottaにデータ追加', daysOffset: 5, priority: 1, baseDateType: 'stageDate' },
+                { stageId: 'LP', title: 'notebookLMにデータ追加', daysOffset: 5, priority: 1, baseDateType: 'stageDate' },
+
+                // 【HB・SB】
+                { stageId: 'HB・SB', title: '未完了の活動追加', daysOffset: 0, priority: 2, baseDateType: 'stageDate' },
+                { stageId: 'HB・SB', title: 'Rakumoに設備,LIFEFUND登録', daysOffset: 0, priority: 2, baseDateType: 'stageDate' },
+                { stageId: 'HB・SB', title: 'サンクスLINE', daysOffset: 1, priority: 2, baseDateType: 'stageDate' },
+                { stageId: 'HB・SB', title: '顧客テーブル更新', daysOffset: 0, priority: 2, baseDateType: 'stageDate' },
+                { stageId: 'HB・SB', title: 'Rakumoに資金計画書確認タイムを追加', daysOffset: 0, priority: 2, baseDateType: 'stageDate' },
+                { stageId: 'HB・SB', title: '資金計画書作成', daysOffset: -10, priority: 3, baseDateType: 'nextDate' },
+                { stageId: 'HB・SB', title: '土地探し①', daysOffset: -11, priority: 3, baseDateType: 'nextDate' },
+                { stageId: 'HB・SB', title: '土地探し②', daysOffset: -3, priority: 3, baseDateType: 'nextDate' },
+                { stageId: 'HB・SB', title: 'nottaにデータ追加', daysOffset: 5, priority: 1, baseDateType: 'stageDate' },
+                { stageId: 'HB・SB', title: 'notebookLMにデータ追加', daysOffset: 5, priority: 1, baseDateType: 'stageDate' }
+              ];
+
+              for (const t of defaults) {
+                const newRef = doc(templatesRef);
+                await setDoc(newRef, { id: newRef.id, ...t });
+              }
+              // シードバージョンを更新して記録
+              await setDoc(configRef, { isTemplatesSeeded: true, seedVersion: TARGET_VERSION }, { merge: true });
+            }
+          } catch (e) {
+            console.error("Failed to seed default templates:", e);
+          }
+        };
+        seedDefaultTemplates();
+
+        // Fetch Customers
         const customersRef = collection(db, 'artifacts', appId, 'public', 'data', 'customers');
         const unsubCustomers = onSnapshot(customersRef, (snapshot) => {
           const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -436,6 +627,7 @@
           setIsLoading(false);
         });
 
+        // Fetch Templates
         const templatesRef = collection(db, 'artifacts', appId, 'public', 'data', 'task_templates');
         const unsubTemplates = onSnapshot(templatesRef, (snapshot) => {
           const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
@@ -491,6 +683,7 @@
         });
       }, [customers, taskListSort]);
 
+      // --- Handlers (Auth & Form) ---
       const handleGoogleLogin = async () => {
         const provider = new GoogleAuthProvider();
         try {
@@ -564,26 +757,36 @@
         window.scrollTo({ top: 0, behavior: 'smooth' });
       };
 
-      const generateTasksForStage = (stageId, baseDateStr) => {
+      // --- Task Generation Logic ---
+      const generateTasksForStage = (stageId, nextDateStr, stageMigrationDateStr = getTodayString()) => {
         const stageTemplates = templates.filter(t => t.stageId === stageId);
-        let baseDate = new Date(baseDateStr);
-        if(isNaN(baseDate.getTime())){
-             baseDate = new Date();
+        
+        let nextDate = new Date(nextDateStr);
+        if(isNaN(nextDate.getTime())){
+             nextDate = new Date();
+        }
+        let stageDate = new Date(stageMigrationDateStr);
+        if(isNaN(stageDate.getTime())){
+             stageDate = new Date();
         }
 
         return stageTemplates.map(template => {
-          const dueDateObj = new Date(baseDate);
-          dueDateObj.setDate(dueDateObj.getDate() + template.daysOffset);
+          const baseType = template.baseDateType || 'nextDate';
+          const baseDateObj = baseType === 'stageDate' ? new Date(stageDate) : new Date(nextDate);
+          
+          baseDateObj.setDate(baseDateObj.getDate() + template.daysOffset);
+          
           return {
             id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
             title: template.title,
-            dueDate: dueDateObj.toISOString().split('T')[0],
+            dueDate: baseDateObj.toISOString().split('T')[0],
             isDone: false,
             priority: template.priority || 2
           };
         });
       };
 
+      // --- CRUD Operations ---
       const handleSubmit = async (e) => {
         e.preventDefault();
         
@@ -622,8 +825,8 @@
             updateDoc(docRef, payload).catch(err => console.error(err));
           } else {
             let initialTasks = [];
-            if(finalNextDate){
-                initialTasks = generateTasksForStage(formData.currentStage, finalNextDate.split('T')[0]);
+            if(finalNextDate || formData.currentStage){
+                initialTasks = generateTasksForStage(formData.currentStage, finalNextDate ? finalNextDate.split('T')[0] : getTodayString(), getTodayString());
             }
             
             const newDocRef = doc(collection(db, 'artifacts', appId, 'public', 'data', 'customers'));
@@ -655,7 +858,7 @@
 
         if (!ARCHIVE_STAGES.some(s => s.id === newStage)) {
            const baseDateStr = newNextDateStr ? newNextDateStr.split('T')[0] : (customer.nextDate ? customer.nextDate.split('T')[0] : getTodayString());
-           const newTasks = generateTasksForStage(newStage, baseDateStr);
+           const newTasks = generateTasksForStage(newStage, baseDateStr, getTodayString());
            
            const existingTasks = customer.tasks || [];
            payload.tasks = [...existingTasks, ...newTasks];
@@ -671,6 +874,7 @@
         });
       };
 
+      // --- Task Operations ---
       const updateCustomerTasksInDB = (customerId, updatedTasks) => {
         const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'customers', customerId);
         updateDoc(docRef, { tasks: updatedTasks }).catch(e => console.error(e));
@@ -714,6 +918,7 @@
         updateCustomerTasksInDB(customerId, updatedTasks);
       };
 
+      // --- Sorting Logic ---
       const sortCustomers = (customersArray) => {
         return [...customersArray].sort((a, b) => {
           if (sortOrder === 'nextDateAsc') {
@@ -738,7 +943,9 @@
       const boardFilteredCustomers = useMemo(() => {
         let filtered = customers;
         
-        if (boardTab !== '全体') {
+        if (boardTab === 'アーカイブ') {
+           filtered = customers.filter(c => ARCHIVE_STAGES.some(s => s.id === c.currentStage));
+        } else if (boardTab !== '全体') {
            filtered = customers.filter(c => c.currentStage === boardTab);
         } else {
            filtered = customers.filter(c => !ARCHIVE_STAGES.some(s => s.id === c.currentStage));
@@ -748,6 +955,7 @@
       }, [customers, boardTab, sortOrder]);
 
 
+      // --- Sub-Components ---
       const StageModal = () => {
         if (!showStageModal || !stageModalData) return null;
         
@@ -770,9 +978,9 @@
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-fade-in">
-            <div className="bg-white max-w-md w-full p-8 shadow-xl">
+            <div className="bg-white max-w-md w-full p-8 shadow-xl border border-gray-200">
                <h3 className="text-xl font-serif text-gray-800 mb-6 text-center tracking-widest">ステージ移行</h3>
-               <p className="text-sm text-center mb-6 text-gray-600">
+               <p className="text-sm text-center mb-6 text-gray-600 leading-relaxed">
                  <strong className="text-gray-900">{customer.name}</strong> 様を<br/>
                  「<span className="font-bold border-b-2 border-gray-800">{stageModalData.targetStage}</span>」へ移行しますか？
                </p>
@@ -786,19 +994,19 @@
                          value={modalDate} 
                          onChange={e => {setModalDate(e.target.value); setIsDateUnknown(false);}} 
                          disabled={isDateUnknown}
-                         className="border-b border-gray-300 py-1 focus:border-gray-800 outline-none bg-transparent disabled:opacity-50" 
+                         className="border-b border-gray-300 py-1 focus:border-gray-800 outline-none bg-transparent disabled:opacity-50 text-sm" 
                        />
                        <input 
                          type="time" 
                          value={modalTime} 
                          onChange={e => {setModalTime(e.target.value); setIsDateUnknown(false);}} 
                          disabled={isDateUnknown}
-                         className="border-b border-gray-300 py-1 focus:border-gray-800 outline-none bg-transparent disabled:opacity-50" 
+                         className="border-b border-gray-300 py-1 focus:border-gray-800 outline-none bg-transparent disabled:opacity-50 text-sm" 
                        />
                     </div>
                     <div className="text-center">
-                      <label className="inline-flex items-center gap-2 cursor-pointer">
-                        <input type="checkbox" checked={isDateUnknown} onChange={e => setIsDateUnknown(e.target.checked)} className="accent-gray-800" />
+                      <label className="inline-flex items-center gap-2 cursor-pointer mt-2">
+                        <input type="checkbox" checked={isDateUnknown} onChange={e => setIsDateUnknown(e.target.checked)} className="accent-gray-800 w-3.5 h-3.5" />
                         <span className="text-xs text-gray-600 tracking-wider">今は未定にする（後で設定）</span>
                       </label>
                     </div>
@@ -806,13 +1014,13 @@
                )}
 
                {isArchive && (
-                  <div className="text-center text-xs text-rose-500 mb-6 p-3 bg-rose-50 border border-rose-100">
-                    アーカイブ処理を行うと、一覧から非表示になります。
+                  <div className="text-center text-xs text-amber-600 mb-6 p-3 bg-amber-50 border border-amber-100">
+                    完了または離脱処理を行うと、「完了・離脱」タブへ移動します。
                   </div>
                )}
 
                <div className="flex justify-center gap-4">
-                 <button onClick={() => setShowStageModal(false)} className="px-6 py-2 text-xs tracking-widest text-gray-500 hover:bg-gray-100 transition-colors border border-transparent">キャンセル</button>
+                 <button onClick={() => setShowStageModal(false)} className="px-6 py-2 text-xs tracking-widest text-gray-500 hover:bg-gray-50 transition-colors border border-transparent">キャンセル</button>
                  <button onClick={handleMigrate} className="px-8 py-2 text-xs tracking-widest text-white bg-gray-800 hover:bg-gray-900 transition-colors shadow-sm">実行する</button>
                </div>
             </div>
@@ -821,6 +1029,7 @@
       };
 
 
+      // --- Views ---
       if (authChecking) {
         return (
           <div className="min-h-screen bg-[#f9f9f9] flex flex-col items-center justify-center font-serif tracking-widest text-gray-500">
@@ -870,7 +1079,7 @@
                 <button onClick={handleLogout} className="xl:hidden text-gray-400 hover:text-gray-800 text-[10px] tracking-widest uppercase transition-colors underline">Logout</button>
               </div>
               <div className="flex items-center gap-2 flex-wrap justify-start">
-                <div className="flex border border-gray-200 p-1 bg-gray-50 overflow-x-auto no-scrollbar [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                <div className="flex border border-gray-200 p-1 bg-gray-50 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                   <button onClick={() => {setCurrentView('board'); setShowFormModal(false);}} className={`flex items-center gap-1 px-3 py-1.5 text-[10px] sm:text-xs tracking-wider transition-colors whitespace-nowrap ${currentView === 'board' ? 'bg-white text-gray-900 shadow-sm border border-gray-200' : 'text-gray-500 hover:text-gray-900'}`}>
                     <BoardIcon className="w-3.5 h-3.5" /> タスクボード
                   </button>
@@ -896,7 +1105,7 @@
           </header>
 
           <main className="max-w-7xl mx-auto px-4 mt-8 relative">
-            
+
             {/* --- VIEW: TASK LIST --- */}
             {currentView === 'taskList' && !showFormModal && (
               <div className="bg-white border border-gray-200 overflow-hidden shadow-sm animate-fade-in">
@@ -927,7 +1136,7 @@
                   </div>
                 </div>
 
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                    <table className="w-full text-left border-collapse min-w-[800px]">
                       <thead>
                         <tr className="border-b border-gray-200 text-[10px] text-gray-400 uppercase tracking-widest bg-gray-50/50">
@@ -940,7 +1149,7 @@
                       </thead>
                       <tbody className="divide-y divide-gray-100">
                         {allTasksList.map((task) => (
-                           <tr key={task.id} className={`hover:bg-gray-50 transition-colors ${task.priority === 3 ? 'border-l-[3px] border-l-rose-300' : 'border-l-[3px] border-l-transparent'}`}>
+                           <tr key={task.id} className="hover:bg-gray-50 transition-colors">
                              <td className="p-4 text-center">
                                <input type="checkbox" checked={task.isDone} onChange={() => toggleTaskDone(task.customerId, task.id)} className="accent-gray-800 cursor-pointer"/>
                              </td>
@@ -969,7 +1178,7 @@
                 </div>
               </div>
             )}
-
+            
             {/* Settings View */}
             {currentView === 'settings' && !showFormModal && (
                <SettingsView templates={templates} setTemplates={setTemplates} showConfirm={showConfirm} showAlert={showAlert} />
@@ -1083,8 +1292,8 @@
                 
                 {/* Controls (Tabs & Sort) */}
                 <div className="flex flex-col md:flex-row justify-between items-center border-b border-gray-200 mb-8 pb-4 gap-4">
-                   {/* Stage Tabs (Hidden scrollbar) */}
-                   <div className="flex overflow-x-auto no-scrollbar [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] w-full md:w-auto gap-6 md:gap-8 pb-2 md:pb-0">
+                   {/* Stage Tabs */}
+                   <div className="flex overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] w-full md:w-auto gap-6 md:gap-8 pb-2 md:pb-0 items-center">
                      {STAGES.map(stage => {
                        const count = customers.filter(c => stage.id === '全体' ? !ARCHIVE_STAGES.some(s=>s.id===c.currentStage) : c.currentStage === stage.id).length;
                        return (
@@ -1097,6 +1306,15 @@
                          </button>
                        )
                      })}
+                     
+                     {/* 完了・離脱タブ（控えめなデザイン） */}
+                     <div className="h-4 w-px bg-gray-200 mx-2 hidden md:block"></div>
+                     <button 
+                       onClick={() => setBoardTab('アーカイブ')}
+                       className={`text-xs tracking-widest transition-all whitespace-nowrap ${boardTab === 'アーカイブ' ? 'text-gray-500 font-bold border-b border-gray-300 pb-1' : 'text-gray-300 hover:text-gray-400 opacity-60'}`}
+                     >
+                       完了・離脱 <span className="text-[10px] ml-1 opacity-70">({customers.filter(c => ARCHIVE_STAGES.some(s=>s.id===c.currentStage)).length})</span>
+                     </button>
                    </div>
 
                    {/* Sort Options */}
@@ -1118,9 +1336,10 @@
                     const undoneTasks = customer.tasks?.filter(t => !t.isDone) || [];
                     const doneTasks = customer.tasks?.filter(t => t.isDone) || [];
                     const isCompletedTasksShown = showCompletedTasks[customer.id];
+                    const isArchivedCard = ARCHIVE_STAGES.some(s => s.id === customer.currentStage);
 
                     return (
-                    <div key={customer.id} className="bg-white border border-gray-200 hover:border-gray-300 hover:shadow-md transition-all flex flex-col h-full">
+                    <div key={customer.id} className={`bg-white border hover:shadow-md transition-all flex flex-col h-full ${isArchivedCard ? 'border-gray-100 opacity-70 grayscale-[0.2]' : 'border-gray-200 hover:border-gray-300'}`}>
                       
                       {/* Card Header */}
                       <div className="p-6 relative">
@@ -1129,7 +1348,7 @@
                         </button>
 
                         <div className="mb-4 pr-6">
-                           <div className="inline-block bg-gray-800 text-white text-[9px] px-2 py-0.5 tracking-widest mb-3 uppercase">
+                           <div className={`inline-block text-white text-[9px] px-2 py-0.5 tracking-widest mb-3 uppercase ${isArchivedCard ? 'bg-gray-400' : 'bg-gray-800'}`}>
                              STAGE: {customer.currentStage}
                            </div>
                            <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -1141,7 +1360,9 @@
                         <div className="bg-gray-50/50 border border-gray-100 p-3 mb-4 flex justify-between items-center">
                            <div>
                              <span className="block text-[9px] text-gray-400 tracking-widest uppercase mb-0.5">Next Appt.</span>
-                             <span className="text-sm text-gray-800 font-medium">{formatDateTime(customer.nextDate)}</span>
+                             <span className={`text-sm font-medium ${isArchivedCard ? 'text-gray-500 line-through' : 'text-gray-800'}`}>
+                               {formatDateTime(customer.nextDate)}
+                             </span>
                            </div>
                            {customer.meetingUrl && (
                              <a href={customer.meetingUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-[10px] bg-white border border-gray-300 text-gray-600 px-2 py-1 hover:bg-gray-100 transition-colors">
@@ -1168,7 +1389,7 @@
                                   {UI_STAGES.filter(s => s.id !== customer.currentStage).map(s => <option key={s.id} value={s.id}>{s.label} へ進む</option>)}
                                 </optgroup>
                                 <optgroup label="アーカイブ（終了）">
-                                  {ARCHIVE_STAGES.map(s => <option key={s.id} value={s.id}>{s.label} にする</option>)}
+                                  {ARCHIVE_STAGES.filter(s => s.id !== customer.currentStage).map(s => <option key={s.id} value={s.id}>{s.label} にする</option>)}
                                 </optgroup>
                               </select>
                            </div>
@@ -1253,7 +1474,7 @@
                   <BellIcon className="w-5 h-5 text-gray-800" />
                   <h2 className="text-lg font-serif tracking-[0.2em] text-gray-800">リマインドタスク一覧</h2>
                 </div>
-                <div className="overflow-x-auto">
+                <div className="overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                    <table className="w-full text-left border-collapse min-w-[800px]">
                       <thead>
                         <tr className="border-b border-gray-200 text-[10px] text-gray-400 uppercase tracking-widest bg-gray-50/50">
@@ -1273,7 +1494,7 @@
                              <td className="p-4 text-center">
                                <input type="checkbox" checked={task.isDone} onChange={() => toggleTaskDone(customer.id, task.id)} className="accent-gray-800 cursor-pointer"/>
                              </td>
-                             <td className={`p-4 text-sm ${!task.isDone && isOverdue(task.dueDate) ? 'text-rose-600 font-bold' : ''}`}>
+                             <td className={`p-4 text-sm ${!task.isDone && isOverdue(task.dueDate) ? 'text-rose-600 font-medium' : 'text-gray-600'}`}>
                                {task.dueDate}
                                {!task.isDone && isOverdue(task.dueDate) && <span className="ml-2 text-[9px] bg-rose-100 text-rose-700 px-1 border border-rose-200">期限切れ</span>}
                              </td>
