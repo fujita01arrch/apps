@@ -65,6 +65,9 @@
     const ChevronDownIcon = ({ className = "w-5 h-5" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="6 9 12 15 18 9"></polyline></svg>;
     const ChevronUpIcon = ({ className = "w-5 h-5" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="18 15 12 9 6 15"></polyline></svg>;
     const FilterIcon = ({ className = "w-5 h-5" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>;
+    const BarChartIcon = ({ className = "w-5 h-5" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="12" y1="20" x2="12" y2="10"></line><line x1="18" y1="20" x2="18" y2="4"></line><line x1="6" y1="20" x2="6" y2="16"></line></svg>;
+    const ClockIcon = ({ className = "w-5 h-5" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>;
+    const InfoIcon = ({ className = "w-5 h-5" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>;
 
     const STAGES = [
       { id: '全体', label: '全体' },
@@ -160,6 +163,22 @@
       );
     };
 
+    const FormulaNote = ({ children }) => {
+      const [isOpen, setIsOpen] = useState(false);
+      return (
+        <span className="inline-flex items-center relative">
+          <button type="button" onClick={() => setIsOpen(!isOpen)} className="text-gray-300 hover:text-gray-600 transition-colors ml-1.5" title="計算方法">
+            <InfoIcon className="w-3.5 h-3.5" />
+          </button>
+          {isOpen && (
+            <div className="absolute left-0 top-6 z-10 w-72 bg-gray-800 text-gray-100 text-[10px] leading-relaxed p-3 shadow-lg tracking-wide whitespace-pre-line normal-case font-sans">
+              {children}
+            </div>
+          )}
+        </span>
+      );
+    };
+
     const TaskItem = ({ task, contextLabel, isWarning, isPastDue, categories, onChange, onCommit, onToggleDone, onDelete }) => {
       const [localTitle, setLocalTitle] = useState(task.title || '');
       const [localMemo, setLocalMemo] = useState(task.memo || '');
@@ -240,6 +259,17 @@
       const [matrixUrgentDays, setMatrixUrgentDays] = useState(systemConfig?.matrixUrgentDays ?? 5);
       const [matrixImportantLevel, setMatrixImportantLevel] = useState(systemConfig?.matrixImportantLevel ?? 3);
 
+      // Conversion Target State（歩留まり目標）
+      const CONVERSION_TARGET_PAIRS = [];
+      for (let i = 0; i < UI_STAGES.length; i++) {
+        for (let j = i + 1; j < UI_STAGES.length; j++) CONVERSION_TARGET_PAIRS.push([UI_STAGES[i], UI_STAGES[j]]);
+      }
+      const [conversionTargetInputs, setConversionTargetInputs] = useState({ ...(systemConfig?.conversionTargets || {}) });
+
+      // P申込目標 State
+      const [targetYear, setTargetYear] = useState(new Date().getFullYear());
+      const [monthlyTargetInputs, setMonthlyTargetInputs] = useState({ ...(systemConfig?.monthlyTargets || {}) });
+
       // Categories State
       const [newCatName, setNewCatName] = useState('');
       const [newCatColor, setNewCatColor] = useState('slate');
@@ -268,6 +298,26 @@
          saveSystemConfig({ matrixUrgentDays: parseInt(matrixUrgentDays, 10) || 0, matrixImportantLevel: parseInt(matrixImportantLevel, 10) || 3 });
       };
 
+      const handleConversionTargetChange = (fromId, toId, value) => {
+         const key = `${fromId}|${toId}`;
+         setConversionTargetInputs(prev => {
+            const next = { ...prev };
+            if (value === '') delete next[key]; else next[key] = parseInt(value, 10) || 0;
+            return next;
+         });
+      };
+      const handleSaveConversionTargets = () => saveSystemConfig({ conversionTargets: conversionTargetInputs });
+
+      const handleMonthlyTargetChange = (monthKey, value) => {
+         setMonthlyTargetInputs(prev => {
+            const next = { ...prev };
+            if (value === '') delete next[monthKey]; else next[monthKey] = parseInt(value, 10) || 0;
+            return next;
+         });
+      };
+      const handleSaveMonthlyTargets = () => saveSystemConfig({ monthlyTargets: monthlyTargetInputs });
+      const annualTotalForYear = Array.from({ length: 12 }, (_, m) => monthlyTargetInputs[`${targetYear}-${String(m + 1).padStart(2, '0')}`] || 0).reduce((a, b) => a + b, 0);
+
       const handleAddTemplate = async () => {
         if (!newTaskTitle) return;
         const newTemplate = { stageId: selectedStage, title: newTaskTitle, daysOffset: parseInt(newDaysOffset, 10) || 0, priority: newTaskPriority, baseDateType: newBaseDateType, categoryId: newTemplateCategory };
@@ -295,6 +345,8 @@
                <button onClick={() => setSelectedTab('templates')} className={`px-4 py-1 text-xs tracking-widest ${selectedTab === 'templates' ? 'bg-gray-800 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}>自動タスク生成</button>
                <button onClick={() => setSelectedTab('matrix')} className={`px-4 py-1 text-xs tracking-widest ${selectedTab === 'matrix' ? 'bg-gray-800 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}>アイゼンハワー基準</button>
                <button onClick={() => setSelectedTab('categories')} className={`px-4 py-1 text-xs tracking-widest ${selectedTab === 'categories' ? 'bg-gray-800 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}>タスク分類（タグ）</button>
+               <button onClick={() => setSelectedTab('conversionTargets')} className={`px-4 py-1 text-xs tracking-widest whitespace-nowrap ${selectedTab === 'conversionTargets' ? 'bg-gray-800 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}>歩留まり目標</button>
+               <button onClick={() => setSelectedTab('salesTargets')} className={`px-4 py-1 text-xs tracking-widest whitespace-nowrap ${selectedTab === 'salesTargets' ? 'bg-gray-800 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}>P申込目標</button>
             </div>
           </div>
           
@@ -495,6 +547,67 @@
                </div>
              </div>
           )}
+
+          {selectedTab === 'conversionTargets' && (
+             <div className="p-8">
+               <h3 className="text-lg font-medium text-gray-800 mb-2">歩留まりの目標値</h3>
+               <p className="text-[11px] text-gray-500 tracking-wider mb-8 leading-relaxed max-w-2xl">「分析」画面の歩留まりマトリクスで、実績と比較して色分け表示するための目標値（%）を設定します。未入力のペアは色分けされません。</p>
+               <div className="max-w-3xl overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                 <table className="w-full text-left border-collapse">
+                   <thead>
+                     <tr className="border-b border-gray-200 text-[10px] text-gray-400 uppercase tracking-widest bg-gray-50/50">
+                       <th className="p-3 font-normal">から</th><th className="p-3 font-normal">へ</th><th className="p-3 font-normal w-32">目標(%)</th>
+                     </tr>
+                   </thead>
+                   <tbody className="divide-y divide-gray-100">
+                     {CONVERSION_TARGET_PAIRS.map(([from, to]) => {
+                       const key = `${from.id}|${to.id}`;
+                       return (
+                         <tr key={key}>
+                           <td className="p-3 text-xs text-gray-700">{from.label}</td>
+                           <td className="p-3 text-xs text-gray-700">{to.label}</td>
+                           <td className="p-3">
+                             <input type="number" min="0" max="100" value={conversionTargetInputs[key] ?? ''} onChange={e => handleConversionTargetChange(from.id, to.id, e.target.value)} placeholder="未設定" className="w-20 border border-gray-300 px-2 py-1.5 outline-none text-center focus:border-gray-800 bg-white text-sm" />
+                           </td>
+                         </tr>
+                       );
+                     })}
+                   </tbody>
+                 </table>
+               </div>
+               <div className="pt-6 max-w-3xl">
+                 <button onClick={handleSaveConversionTargets} className="bg-gray-800 text-white px-8 py-2.5 text-xs tracking-widest hover:bg-gray-900 transition-colors shadow-sm w-full sm:w-auto">設定を保存する</button>
+               </div>
+             </div>
+          )}
+
+          {selectedTab === 'salesTargets' && (
+             <div className="p-8">
+               <h3 className="text-lg font-medium text-gray-800 mb-2">P申込 目標棟数</h3>
+               <p className="text-[11px] text-gray-500 tracking-wider mb-8 leading-relaxed max-w-2xl">月ごとの目標棟数を入力してください。年間目標は12ヶ月分の合計として自動で算出されます（「分析」画面の必要数の逆算に使われます）。</p>
+               <div className="max-w-3xl bg-gray-50 p-6 border border-gray-200">
+                 <div className="flex items-center gap-3 mb-6">
+                   <label className="text-sm font-bold text-gray-700">対象年</label>
+                   <input type="number" value={targetYear} onChange={e => setTargetYear(parseInt(e.target.value, 10) || new Date().getFullYear())} className="w-24 border border-gray-300 px-3 py-2 outline-none text-center focus:border-gray-800 bg-white" />
+                   <span className="ml-auto text-sm text-gray-700">年間目標（自動算出）：<strong className="text-lg font-serif text-gray-900">{annualTotalForYear}</strong> 棟</span>
+                 </div>
+                 <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-3">
+                   {Array.from({ length: 12 }, (_, i) => i + 1).map(m => {
+                     const key = `${targetYear}-${String(m).padStart(2, '0')}`;
+                     return (
+                       <div key={key}>
+                         <label className="block text-[10px] text-gray-500 tracking-widest uppercase mb-1 text-center">{m}月</label>
+                         <input type="number" min="0" value={monthlyTargetInputs[key] ?? ''} onChange={e => handleMonthlyTargetChange(key, e.target.value)} placeholder="0" className="w-full border border-gray-300 px-2 py-2 outline-none text-center focus:border-gray-800 bg-white text-sm" />
+                       </div>
+                     );
+                   })}
+                 </div>
+                 <div className="pt-6 mt-4 border-t border-gray-200">
+                   <button onClick={handleSaveMonthlyTargets} className="bg-gray-800 text-white px-8 py-2.5 text-xs tracking-widest hover:bg-gray-900 transition-colors shadow-sm w-full sm:w-auto">設定を保存する</button>
+                 </div>
+               </div>
+             </div>
+          )}
         </div>
       );
     };
@@ -526,6 +639,14 @@
       const [showCompletedTasks, setShowCompletedTasks] = useState({});
       const [showStageModal, setShowStageModal] = useState(false);
       const [stageModalData, setStageModalData] = useState(null);
+      const [showStageHistoryModal, setShowStageHistoryModal] = useState(false);
+      const [stageHistoryModalData, setStageHistoryModalData] = useState(null);
+
+      // Analytics View State
+      const [analyticsPeriod, setAnalyticsPeriod] = useState('all'); // 'all', 'thisMonth', 'thisYear', 'custom'
+      const [analyticsCustomStart, setAnalyticsCustomStart] = useState('');
+      const [analyticsCustomEnd, setAnalyticsCustomEnd] = useState('');
+      const [forecastTargetStage, setForecastTargetStage] = useState('P申込後');
 
       // General Task Form State
       const [newGenTaskTitle, setNewGenTaskTitle] = useState('');
@@ -641,6 +762,23 @@
         };
         seedDefaultTemplates();
 
+        // Backfill stageHistory for customers created before this feature existed
+        const seedStageHistory = async () => {
+          try {
+            const customersRef = collection(db, 'artifacts', appId, 'public', 'data', 'customers');
+            const custDocs = await getDocs(customersRef);
+            custDocs.forEach(d => {
+              const data = d.data();
+              if (!data.stageHistory) {
+                const fallbackStage = data.currentStage || '来場前';
+                const fallbackDate = (data.createdAt || new Date().toISOString()).split('T')[0];
+                updateDoc(d.ref, { stageHistory: [{ stage: fallbackStage, enteredAt: fallbackDate }] }).catch(e => console.error(e));
+              }
+            });
+          } catch (e) { console.error("StageHistory Seed Error", e); }
+        };
+        seedStageHistory();
+
         const unsubCustomers = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'customers'), (snapshot) => {
           setCustomers(snapshot.docs.map(doc => ({ id: doc.id, currentStage: '来場前', ...doc.data() })));
           setIsLoading(false);
@@ -650,7 +788,7 @@
         const unsubCategories = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'task_categories'), (snapshot) => setCategories(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a,b)=>a.createdAt > b.createdAt ? 1 : -1)));
         const unsubConfig = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'system_config', 'default'), (doc) => {
           const data = doc.exists() ? doc.data() : {};
-          setSystemConfig({ matrixUrgentDays: data.matrixUrgentDays ?? 5, matrixImportantLevel: data.matrixImportantLevel ?? 3 });
+          setSystemConfig({ matrixUrgentDays: data.matrixUrgentDays ?? 5, matrixImportantLevel: data.matrixImportantLevel ?? 3, conversionTargets: data.conversionTargets ?? {}, monthlyTargets: data.monthlyTargets ?? {} });
         });
 
         return () => { unsubCustomers(); unsubTemplates(); unsubGenTasks(); unsubCategories(); unsubConfig(); };
@@ -721,6 +859,131 @@
           return { q1, q2, q3, q4 };
       }, [filteredAllTasksList, systemConfig]);
 
+      // --- Analytics (歩留まり・リードタイム分析) ---
+      const KEY_CONVERSION_PAIRS = [
+        ['初回', 'おうちカフェ'], ['おうちカフェ', 'LP'], ['LP', 'HB・SB'], ['HB・SB', '資金計画'], ['資金計画', 'P申込後'],
+        ['初回', 'P申込後'], ['おうちカフェ', 'P申込後']
+      ];
+      const REVERSE_CALC_STAGES = UI_STAGES.filter(s => ['初回', 'おうちカフェ', 'LP', 'HB・SB', '資金計画'].includes(s.id));
+      const MATRIX_STAGES = [...UI_STAGES, ...ARCHIVE_STAGES];
+
+      const getAnalyticsPeriodRange = () => {
+        const now = new Date();
+        if (analyticsPeriod === 'thisMonth') {
+          const y = now.getFullYear(), m = now.getMonth();
+          return { start: new Date(y, m, 1).toISOString().split('T')[0], end: new Date(y, m + 1, 0).toISOString().split('T')[0] };
+        }
+        if (analyticsPeriod === 'thisYear') return { start: `${now.getFullYear()}-01-01`, end: `${now.getFullYear()}-12-31` };
+        if (analyticsPeriod === 'custom') return { start: analyticsCustomStart || null, end: analyticsCustomEnd || null };
+        return { start: null, end: null };
+      };
+
+      const analyticsData = useMemo(() => {
+        const { start, end } = getAnalyticsPeriodRange();
+        const inRange = (d) => { if (!d) return false; if (start && d < start) return false; if (end && d > end) return false; return true; };
+
+        // Earliest entry date per customer per stage
+        const entryDate = {}; // custId -> stageId -> earliest date
+        customers.forEach(c => {
+          entryDate[c.id] = {};
+          (c.stageHistory || []).forEach(h => {
+            if (!h || !h.stage || !h.enteredAt) return;
+            if (!entryDate[c.id][h.stage] || h.enteredAt < entryDate[c.id][h.stage]) entryDate[c.id][h.stage] = h.enteredAt;
+          });
+        });
+
+        // All-time "ever reached this stage" sets (used for forecast / reverse-calc, period-independent)
+        const reachedAllTime = {};
+        MATRIX_STAGES.forEach(s => { reachedAllTime[s.id] = new Set(customers.filter(c => entryDate[c.id][s.id]).map(c => c.id)); });
+
+        // Period-scoped cohort per stage (used for funnel / matrix / lead-time, based on entry date into that stage)
+        const cohortByStage = {};
+        MATRIX_STAGES.forEach(s => { cohortByStage[s.id] = new Set(customers.filter(c => entryDate[c.id][s.id] && inRange(entryDate[c.id][s.id])).map(c => c.id)); });
+
+        const isActive = (custId) => { const c = customers.find(x => x.id === custId); return c && !ARCHIVE_STAGES.some(a => a.id === c.currentStage); };
+
+        // Generic conversion calculator; useAllTime=true ignores the period filter (forecast/reverse-calc use this)
+        const calcConversion = (fromId, toId, useAllTime) => {
+          const fromSet = useAllTime ? reachedAllTime[fromId] : cohortByStage[fromId];
+          const toSet = reachedAllTime[toId]; // "did they ever reach toId" regardless of date
+          if (!fromSet || fromSet.size === 0) return { fromCount: 0, toCount: 0, inProgress: 0, currentRate: null, confirmedRate: null };
+          let toCount = 0, inProgress = 0;
+          fromSet.forEach(id => {
+            if (toSet && toSet.has(id)) toCount++;
+            else if (isActive(id)) inProgress++;
+          });
+          const decided = fromSet.size - inProgress;
+          return {
+            fromCount: fromSet.size, toCount, inProgress,
+            currentRate: (toCount / fromSet.size) * 100,
+            confirmedRate: decided > 0 ? (toCount / decided) * 100 : null
+          };
+        };
+
+        const calcLeadTime = (fromId, toId, useAllTime) => {
+          const fromSet = useAllTime ? reachedAllTime[fromId] : cohortByStage[fromId];
+          if (!fromSet) return null;
+          const diffs = [];
+          fromSet.forEach(id => {
+            const dFrom = entryDate[id] && entryDate[id][fromId];
+            const dTo = entryDate[id] && entryDate[id][toId];
+            if (dFrom && dTo) {
+              const diff = (new Date(dTo) - new Date(dFrom)) / (1000 * 60 * 60 * 24);
+              if (diff >= 0) diffs.push(diff);
+            }
+          });
+          if (diffs.length === 0) return null;
+          return diffs.reduce((a, b) => a + b, 0) / diffs.length;
+        };
+
+        // 1. Funnel (period-scoped)
+        const funnel = UI_STAGES.map(s => ({ stageId: s.id, label: s.label, count: cohortByStage[s.id] ? cohortByStage[s.id].size : 0 }));
+
+        // 2/3. Full matrix (period-scoped current/confirmed rate + lead time), for every i<j pair
+        const matrixPairs = [];
+        for (let i = 0; i < MATRIX_STAGES.length; i++) {
+          for (let j = i + 1; j < MATRIX_STAGES.length; j++) {
+            const fromS = MATRIX_STAGES[i], toS = MATRIX_STAGES[j];
+            const conv = calcConversion(fromS.id, toS.id, false);
+            const leadTime = calcLeadTime(fromS.id, toS.id, false);
+            matrixPairs.push({ fromId: fromS.id, fromLabel: fromS.label, toId: toS.id, toLabel: toS.label, ...conv, leadTime });
+          }
+        }
+        const keyConversions = KEY_CONVERSION_PAIRS.map(([fromId, toId]) => {
+          const fromS = UI_STAGES.find(s => s.id === fromId), toS = UI_STAGES.find(s => s.id === toId);
+          return { fromId, fromLabel: fromS ? fromS.label : fromId, toId, toLabel: toS ? toS.label : toId, ...calcConversion(fromId, toId, false), leadTime: calcLeadTime(fromId, toId, false) };
+        });
+
+        // 4. Forecast (always all-time, independent of period filter)
+        const forecastChain = UI_STAGES.filter(s => s.id !== forecastTargetStage);
+        const targetIdx = UI_STAGES.findIndex(s => s.id === forecastTargetStage);
+        const forecastReached = reachedAllTime[forecastTargetStage] ? reachedAllTime[forecastTargetStage].size : 0;
+        const forecastBreakdown = UI_STAGES.map((s, idx) => {
+          if (targetIdx === -1 || idx >= targetIdx) return null;
+          const inProgressNow = customers.filter(c => c.currentStage === s.id).length;
+          const conv = calcConversion(s.id, forecastTargetStage, true);
+          const contribution = conv.confirmedRate != null ? inProgressNow * (conv.confirmedRate / 100) : 0;
+          return { stageId: s.id, label: s.label, inProgressNow, confirmedRate: conv.confirmedRate, contribution };
+        }).filter(Boolean);
+        const forecastTotal = forecastReached + forecastBreakdown.reduce((sum, b) => sum + b.contribution, 0);
+
+        // 5. Reverse calc helpers (all-time confirmed rate / lead time to P申込後、予想着地の対象ステージ選択とは独立)
+        const reachedPMoshikomi = reachedAllTime['P申込後'] ? reachedAllTime['P申込後'].size : 0;
+        const reverseRates = REVERSE_CALC_STAGES.map(s => ({
+          stageId: s.id, label: s.label,
+          confirmedRate: calcConversion(s.id, 'P申込後', true).confirmedRate,
+          leadTime: calcLeadTime(s.id, 'P申込後', true),
+          currentReached: reachedAllTime[s.id] ? reachedAllTime[s.id].size : 0
+        }));
+
+        // 6. Archive summary (all-time)
+        const totalCustomers = customers.length;
+        const completedCount = customers.filter(c => c.currentStage === '引継ぎ完了済').length;
+        const droppedCount = customers.filter(c => c.currentStage === '離脱').length;
+
+        return { funnel, matrixPairs, keyConversions, forecastReached, forecastBreakdown, forecastTotal, reverseRates, reachedPMoshikomi, totalCustomers, completedCount, droppedCount };
+      }, [customers, analyticsPeriod, analyticsCustomStart, analyticsCustomEnd, forecastTargetStage]);
+
 
       const handleInputChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
       const handleHurdleChange = (option) => setFormData(prev => ({ ...prev, hurdles: prev.hurdles.includes(option) ? prev.hurdles.filter(h => h !== option) : [...prev.hurdles, option] }));
@@ -775,7 +1038,8 @@
             await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'customers', editingId), payload);
           } else {
             let initialTasks = (finalNextDate || formData.currentStage) ? generateTasksForStage(formData.currentStage, finalNextDate ? finalNextDate.split('T')[0] : getTodayString(), getTodayString()) : [];
-            await setDoc(doc(collection(db, 'artifacts', appId, 'public', 'data', 'customers')), { ...payload, tasks: initialTasks, createdAt: new Date().toISOString() });
+            const initialStageHistory = [{ stage: formData.currentStage, enteredAt: getTodayString() }];
+            await setDoc(doc(collection(db, 'artifacts', appId, 'public', 'data', 'customers')), { ...payload, tasks: initialTasks, stageHistory: initialStageHistory, createdAt: new Date().toISOString() });
           }
           setFormData(initialFormState);
         } catch (error) { showAlert("保存中にエラーが発生しました。"); }
@@ -784,7 +1048,7 @@
       const changeCustomerStage = (id, newStage, newNextDateStr) => {
         const customer = customers.find(c => c.id === id);
         if (!customer) return;
-        let payload = { currentStage: newStage, updatedAt: new Date().toISOString() };
+        let payload = { currentStage: newStage, updatedAt: new Date().toISOString(), stageHistory: [...(customer.stageHistory || []), { stage: newStage, enteredAt: getTodayString() }] };
         if(newNextDateStr !== undefined && newNextDateStr !== null) payload.nextDate = newNextDateStr;
         if (!ARCHIVE_STAGES.some(s => s.id === newStage)) {
            const baseDateStr = newNextDateStr ? newNextDateStr.split('T')[0] : (customer.nextDate ? customer.nextDate.split('T')[0] : getTodayString());
@@ -885,6 +1149,65 @@
         );
       };
 
+      const STAGE_HISTORY_OPTIONS = [...UI_STAGES, ...ARCHIVE_STAGES];
+
+      const StageHistoryModal = () => {
+        if (!showStageHistoryModal || !stageHistoryModalData) return null;
+        const customer = stageHistoryModalData;
+        const [entries, setEntries] = useState([...(customer.stageHistory || [])].sort((a, b) => (a.enteredAt || '') < (b.enteredAt || '') ? -1 : 1));
+        const [newStage, setNewStage] = useState(STAGE_HISTORY_OPTIONS[0].id);
+        const [newDate, setNewDate] = useState(getTodayString());
+
+        const handleAddEntry = () => {
+          const updated = [...entries, { stage: newStage, enteredAt: newDate }].sort((a, b) => (a.enteredAt || '') < (b.enteredAt || '') ? -1 : 1);
+          setEntries(updated);
+        };
+        const handleDeleteEntry = (idx) => setEntries(entries.filter((_, i) => i !== idx));
+        const handleEntryChange = (idx, field, value) => setEntries(entries.map((e, i) => i === idx ? { ...e, [field]: value } : e));
+        const handleClose = () => { setShowStageHistoryModal(false); setStageHistoryModalData(null); };
+        const handleSave = () => {
+          const sorted = [...entries].sort((a, b) => (a.enteredAt || '') < (b.enteredAt || '') ? -1 : 1);
+          updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'customers', customer.id), { stageHistory: sorted }).catch(e => console.error(e));
+          handleClose();
+        };
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-fade-in">
+            <div className="bg-white max-w-lg w-full p-8 shadow-xl border border-gray-200 max-h-[85vh] overflow-y-auto">
+              <div className="flex items-center gap-2 mb-6 justify-center"><ClockIcon className="w-5 h-5 text-gray-800" /><h3 className="text-xl font-serif text-gray-800 tracking-widest">ステージ履歴の編集</h3></div>
+              <p className="text-sm text-center mb-6 text-gray-600"><strong className="text-gray-900">{customer.name}</strong> 様の、各ステージに入った日付</p>
+              <p className="text-[10px] text-gray-400 tracking-wider mb-4 leading-relaxed">歩留まり・リードタイム分析はこの履歴を元に集計されます。過去の分は分かる範囲で入力してください。</p>
+
+              <div className="space-y-2 mb-6">
+                {entries.length === 0 && <p className="text-center text-xs text-gray-400 py-6 border border-dashed border-gray-200">履歴がありません</p>}
+                {entries.map((entry, idx) => (
+                  <div key={idx} className="flex items-center gap-2 bg-gray-50 border border-gray-200 p-2">
+                    <select value={entry.stage} onChange={e => handleEntryChange(idx, 'stage', e.target.value)} className="flex-1 text-xs bg-transparent outline-none border-b border-gray-300 py-1">
+                      {STAGE_HISTORY_OPTIONS.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                    </select>
+                    <input type="date" value={entry.enteredAt || ''} onChange={e => handleEntryChange(idx, 'enteredAt', e.target.value)} className="text-xs bg-transparent outline-none border-b border-gray-300 py-1" />
+                    <button onClick={() => handleDeleteEntry(idx)} className="text-gray-400 hover:text-rose-500 p-1"><TrashIcon className="w-3.5 h-3.5" /></button>
+                  </div>
+                ))}
+              </div>
+
+              <div className="bg-gray-50 p-4 border border-gray-200 mb-6 flex items-end gap-2">
+                <select value={newStage} onChange={e => setNewStage(e.target.value)} className="flex-1 text-xs bg-white border border-gray-300 py-2 px-2 outline-none">
+                  {STAGE_HISTORY_OPTIONS.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                </select>
+                <input type="date" value={newDate} onChange={e => setNewDate(e.target.value)} className="text-xs bg-white border border-gray-300 py-2 px-2 outline-none" />
+                <button onClick={handleAddEntry} className="bg-gray-800 text-white px-4 py-2 text-xs tracking-widest hover:bg-gray-900 transition-colors whitespace-nowrap">追加</button>
+              </div>
+
+              <div className="flex justify-center gap-4">
+                <button onClick={handleClose} className="px-6 py-2 text-xs tracking-widest text-gray-500 hover:bg-gray-50 transition-colors border border-transparent">キャンセル</button>
+                <button onClick={handleSave} className="px-8 py-2 text-xs tracking-widest text-white bg-gray-800 hover:bg-gray-900 transition-colors shadow-sm">保存する</button>
+              </div>
+            </div>
+          </div>
+        );
+      };
+
       if (authChecking) return <div className="min-h-screen bg-[#f9f9f9] flex flex-col items-center justify-center font-serif tracking-widest text-gray-500"><div className="w-10 h-10 border-4 border-gray-200 border-t-gray-800 rounded-full animate-spin mb-4"></div>Loading...</div>;
       if (!user) return (
           <div className="min-h-screen bg-[#f9f9f9] flex items-center justify-center font-sans">
@@ -905,6 +1228,7 @@
         <div className="min-h-screen bg-[#f9f9f9] text-gray-800 font-sans pb-20 selection:bg-gray-200">
           <CustomDialog {...dialog} onCancel={() => setDialog({ ...dialog, isOpen: false })} />
           <StageModal />
+          <StageHistoryModal />
           
           <header className="bg-white border-b border-gray-200 sticky top-0 z-20 shadow-sm">
             <div className="max-w-[1400px] mx-auto px-4 py-3 flex flex-col xl:flex-row xl:justify-between xl:items-center gap-4">
@@ -918,6 +1242,7 @@
                   <button onClick={() => {setCurrentView('matrix'); setShowFormModal(false);}} className={`flex items-center gap-1 px-3 py-1.5 text-[10px] sm:text-xs tracking-wider transition-colors whitespace-nowrap ${currentView === 'matrix' ? 'bg-white text-gray-900 shadow-sm border border-gray-200' : 'text-gray-500 hover:text-gray-900'}`}><GridIcon className="w-3.5 h-3.5" /> タスクボード</button>
                   <button onClick={() => {setCurrentView('taskList'); setShowFormModal(false);}} className={`flex items-center gap-1 px-3 py-1.5 text-[10px] sm:text-xs tracking-wider transition-colors whitespace-nowrap ${currentView === 'taskList' ? 'bg-white text-gray-900 shadow-sm border border-gray-200' : 'text-gray-500 hover:text-gray-900'}`}><ListIcon className="w-3.5 h-3.5" /> タスク一覧</button>
                   <button onClick={() => {setCurrentView('remind'); setShowFormModal(false);}} className={`flex items-center gap-1 px-3 py-1.5 text-[10px] sm:text-xs tracking-wider transition-colors whitespace-nowrap relative ${currentView === 'remind' ? 'bg-white text-gray-900 shadow-sm border border-gray-200' : 'text-gray-500 hover:text-gray-900'}`}><BellIcon className="w-3.5 h-3.5" /> リマインド{activeRemindersCount > 0 && <span className="ml-1 bg-rose-500 text-white text-[9px] px-1.5 py-0.5 rounded-full leading-none">{activeRemindersCount}</span>}</button>
+                  <button onClick={() => {setCurrentView('analytics'); setShowFormModal(false);}} className={`flex items-center gap-1 px-3 py-1.5 text-[10px] sm:text-xs tracking-wider transition-colors whitespace-nowrap ${currentView === 'analytics' ? 'bg-white text-gray-900 shadow-sm border border-gray-200' : 'text-gray-500 hover:text-gray-900'}`}><BarChartIcon className="w-3.5 h-3.5" /> 分析</button>
                   <button onClick={() => {setCurrentView('settings'); setShowFormModal(false);}} className={`flex items-center gap-1 px-3 py-1.5 text-[10px] sm:text-xs tracking-wider transition-colors whitespace-nowrap ${currentView === 'settings' ? 'bg-white text-gray-900 shadow-sm border border-gray-200' : 'text-gray-500 hover:text-gray-900'}`}><SettingsIcon className="w-3.5 h-3.5" /> 設定</button>
                 </div>
                 <button onClick={openAddModal} className="flex items-center gap-1.5 bg-gray-800 text-white px-4 py-2 text-[10px] sm:text-xs tracking-wider hover:bg-gray-900 transition-colors shadow-sm ml-auto xl:ml-2 whitespace-nowrap"><PlusIcon className="w-4 h-4" /> 顧客登録</button>
@@ -995,6 +1320,250 @@
             )}
             
             {}
+            {}
+            {currentView === 'analytics' && !showFormModal && (
+              <div className="space-y-8 animate-fade-in max-w-[1400px] mx-auto">
+
+                {/* 期間フィルター */}
+                <div className="bg-white border border-gray-200 shadow-sm p-4 flex flex-wrap items-center gap-4">
+                  <span className="text-[10px] text-gray-500 tracking-widest uppercase">期間</span>
+                  <select value={analyticsPeriod} onChange={e => setAnalyticsPeriod(e.target.value)} className="text-xs border border-gray-300 bg-white py-2 px-3 outline-none cursor-pointer">
+                    <option value="all">全期間</option>
+                    <option value="thisMonth">今月</option>
+                    <option value="thisYear">今年</option>
+                    <option value="custom">カスタム</option>
+                  </select>
+                  {analyticsPeriod === 'custom' && (
+                    <div className="flex items-center gap-2">
+                      <input type="date" value={analyticsCustomStart} onChange={e => setAnalyticsCustomStart(e.target.value)} className="text-xs border border-gray-300 bg-white py-1.5 px-2 outline-none" />
+                      <span className="text-xs text-gray-400">〜</span>
+                      <input type="date" value={analyticsCustomEnd} onChange={e => setAnalyticsCustomEnd(e.target.value)} className="text-xs border border-gray-300 bg-white py-1.5 px-2 outline-none" />
+                    </div>
+                  )}
+                  <span className="text-[10px] text-gray-400 tracking-wider">※各ステージへ「その期間内に入った顧客」を対象に集計します（予想着地・必要数の逆算は期間の影響を受けません）</span>
+                </div>
+
+                {/* 1. ファネル */}
+                <div className="bg-white border border-gray-200 shadow-sm p-8">
+                  <h2 className="text-lg font-serif tracking-[0.2em] text-gray-800 flex items-center gap-2 mb-6"><BarChartIcon className="w-5 h-5" /> ファネル</h2>
+                  <div className="space-y-2">
+                    {analyticsData.funnel.map((f, idx) => {
+                      const maxCount = analyticsData.funnel[0] ? analyticsData.funnel[0].count : 0;
+                      const pct = maxCount > 0 ? Math.max((f.count / maxCount) * 100, f.count > 0 ? 4 : 0) : 0;
+                      const ratioOfFirst = maxCount > 0 ? Math.round((f.count / maxCount) * 100) : 0;
+                      return (
+                        <div key={f.stageId} className="flex items-center gap-3">
+                          <span className="w-24 text-xs text-gray-600 tracking-wider text-right shrink-0">{f.label}</span>
+                          <div className="flex-1 bg-gray-100 h-6 relative">
+                            <div className="bg-gray-800 h-6 flex items-center justify-end px-2" style={{ width: `${pct}%` }}></div>
+                          </div>
+                          <span className="w-28 text-xs text-gray-700 shrink-0"><strong className="font-serif text-sm">{f.count}</strong> 件（{idx === 0 ? '100' : ratioOfFirst}%）</span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* 2/3. 歩留まり・リードタイム */}
+                <div className="bg-white border border-gray-200 shadow-sm p-8">
+                  <h2 className="text-lg font-serif tracking-[0.2em] text-gray-800 flex items-center gap-2 mb-1">
+                    <GridIcon className="w-5 h-5" /> 歩留まり・リードタイム
+                    <FormulaNote>
+                      {"現状の歩留まり = 到達数(先) ÷ 到達数(元) × 100\n\n確定歩留まり = 到達数(先) ÷ (到達数(元) − 進行中人数)\n※進行中＝元のステージには到達したが、まだ先のステージに到達しておらず、完了・離脱もしていない顧客。まだ結果が決まっていない人を分母から除くことで、進行中の人が多いために低く出過ぎるのを防ぎます。\n\nリードタイム = 先のステージに到達した顧客について、元→先の日数の平均"}
+                    </FormulaNote>
+                  </h2>
+                  <p className="text-[10px] text-gray-400 tracking-wider mb-6">目標値は「設定 &gt; 歩留まり目標」で入力できます。目標未達は赤字、目標達成は緑字で表示されます。</p>
+
+                  <h3 className="text-xs font-bold text-gray-600 tracking-widest uppercase mb-3">主要な歩留まり</h3>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-8">
+                    {analyticsData.keyConversions.map((k) => {
+                      const targetKey = `${k.fromId}|${k.toId}`;
+                      const target = systemConfig?.conversionTargets?.[targetKey];
+                      const rate = k.confirmedRate;
+                      let colorClass = 'text-gray-800';
+                      if (target != null && rate != null) colorClass = rate >= target ? 'text-emerald-600' : 'text-rose-600';
+                      return (
+                        <div key={targetKey} className="bg-gray-50 border border-gray-200 p-4">
+                          <div className="text-[10px] text-gray-500 tracking-wider mb-2">{k.fromLabel} → {k.toLabel}</div>
+                          <div className={`text-2xl font-serif ${colorClass}`}>{rate != null ? rate.toFixed(0) : '−'}<span className="text-xs ml-0.5">%</span></div>
+                          <div className="text-[9px] text-gray-400 mt-1">現状 {k.currentRate != null ? k.currentRate.toFixed(0) : '−'}% ／ 目標 {target != null ? target + '%' : '未設定'}</div>
+                          <div className="text-[9px] text-gray-400">リードタイム平均 {k.leadTime != null ? k.leadTime.toFixed(0) + '日' : '−'}</div>
+                        </div>
+                      );
+                    })}
+                  </div>
+
+                  <h3 className="text-xs font-bold text-gray-600 tracking-widest uppercase mb-3 border-t border-gray-200 pt-6">全ステージ間マトリクス</h3>
+                  <div className="overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                    <table className="w-full text-left border-collapse min-w-[700px]">
+                      <thead>
+                        <tr className="border-b border-gray-200 text-[10px] text-gray-400 uppercase tracking-widest bg-gray-50/50">
+                          <th className="p-3 font-normal">から</th><th className="p-3 font-normal">へ</th>
+                          <th className="p-3 font-normal">現状</th><th className="p-3 font-normal">確定</th>
+                          <th className="p-3 font-normal">目標</th><th className="p-3 font-normal">リードタイム</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-gray-100">
+                        {analyticsData.matrixPairs.map(p => {
+                          const targetKey = `${p.fromId}|${p.toId}`;
+                          const target = systemConfig?.conversionTargets?.[targetKey];
+                          let colorClass = 'text-gray-800';
+                          if (target != null && p.confirmedRate != null) colorClass = p.confirmedRate >= target ? 'text-emerald-600' : 'text-rose-600';
+                          return (
+                            <tr key={targetKey} className="hover:bg-gray-50 transition-colors">
+                              <td className="p-3 text-xs text-gray-700">{p.fromLabel}</td>
+                              <td className="p-3 text-xs text-gray-700">{p.toLabel}</td>
+                              <td className="p-3 text-xs text-gray-500">{p.currentRate != null ? p.currentRate.toFixed(0) + '%' : '−'}</td>
+                              <td className={`p-3 text-xs font-medium ${colorClass}`}>{p.confirmedRate != null ? p.confirmedRate.toFixed(0) + '%' : '−'}</td>
+                              <td className="p-3 text-xs text-gray-400">{target != null ? target + '%' : '−'}</td>
+                              <td className="p-3 text-xs text-gray-500">{p.leadTime != null ? p.leadTime.toFixed(0) + '日' : '−'}</td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+
+                {/* 4. 予想着地 */}
+                <div className="bg-white border border-gray-200 shadow-sm p-8">
+                  <h2 className="text-lg font-serif tracking-[0.2em] text-gray-800 flex items-center gap-2 mb-1">
+                    <ClockIcon className="w-5 h-5" /> 予想着地
+                    <FormulaNote>
+                      {"予想着地数 = 到達済みの人数\n  + Σ [ 対象ステージより手前の各ステージkについて、現在kで進行中の人数 × 確定歩留まり(k→対象ステージ) ]\n\n現在進行中の顧客も、これまでの確定歩留まりの実力値に応じて加算されます（期間フィルターの影響を受けず、常に現在の全データで計算）"}
+                    </FormulaNote>
+                  </h2>
+                  <div className="flex items-center gap-3 mb-6">
+                    <span className="text-[10px] text-gray-500 tracking-widest uppercase">対象ステージ</span>
+                    <select value={forecastTargetStage} onChange={e => setForecastTargetStage(e.target.value)} className="text-xs border border-gray-300 bg-white py-2 px-3 outline-none cursor-pointer">
+                      {UI_STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                    </select>
+                  </div>
+                  <div className="flex flex-wrap items-end gap-8">
+                    <div>
+                      <div className="text-[10px] text-gray-500 tracking-widest uppercase mb-1">到達済み</div>
+                      <div className="text-3xl font-serif text-gray-800">{analyticsData.forecastReached}<span className="text-sm ml-1">件</span></div>
+                    </div>
+                    <div className="text-2xl text-gray-300">+</div>
+                    <div>
+                      <div className="text-[10px] text-gray-500 tracking-widest uppercase mb-1">進行中からの見込み</div>
+                      <div className="text-3xl font-serif text-gray-800">{(analyticsData.forecastTotal - analyticsData.forecastReached).toFixed(1)}<span className="text-sm ml-1">件</span></div>
+                    </div>
+                    <div className="text-2xl text-gray-300">=</div>
+                    <div>
+                      <div className="text-[10px] text-gray-500 tracking-widest uppercase mb-1">予想着地</div>
+                      <div className="text-3xl font-serif text-gray-900 font-bold">{analyticsData.forecastTotal.toFixed(1)}<span className="text-sm ml-1">件</span></div>
+                    </div>
+                  </div>
+                  {analyticsData.forecastBreakdown.length > 0 && (
+                    <div className="mt-6 border-t border-gray-200 pt-4 space-y-1">
+                      {analyticsData.forecastBreakdown.map(b => (
+                        <div key={b.stageId} className="flex justify-between text-[11px] text-gray-500">
+                          <span>{b.label}：進行中 {b.inProgressNow}件 × 確定歩留まり {b.confirmedRate != null ? b.confirmedRate.toFixed(0) + '%' : '−'}</span>
+                          <span className="text-gray-700">{b.contribution.toFixed(1)}件</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* 5. 必要数の逆算 */}
+                <div className="bg-white border border-gray-200 shadow-sm p-8">
+                  <h2 className="text-lg font-serif tracking-[0.2em] text-gray-800 flex items-center gap-2 mb-1">
+                    <FilterIcon className="w-5 h-5" /> 必要数の逆算
+                    <FormulaNote>
+                      {"必要数(ステージk) = 目標棟数 ÷ 確定歩留まり(k→P申込後)\n\n月間の必要月 = 対象月 − 平均リードタイム(k→P申込後)（月単位に換算・四捨五入）\n\n目標棟数は「設定 > P申込目標」で入力します。年間目標は12ヶ月分の合計として自動算出されます。"}
+                    </FormulaNote>
+                  </h2>
+                  <p className="text-[10px] text-gray-400 tracking-wider mb-6">「設定 &gt; P申込目標」で入力した棟数目標を元に、各手前ステージで何件必要かを逆算します。</p>
+
+                  <h3 className="text-xs font-bold text-gray-600 tracking-widest uppercase mb-3">年間ベースの逆ファネル（{new Date().getFullYear()}年）</h3>
+                  {(() => {
+                    const year = new Date().getFullYear();
+                    const annualTarget = Array.from({ length: 12 }, (_, m) => systemConfig?.monthlyTargets?.[`${year}-${String(m + 1).padStart(2, '0')}`] || 0).reduce((a, b) => a + b, 0);
+                    if (annualTarget === 0) return <div className="text-xs text-gray-400 py-6 text-center border border-dashed border-gray-200 mb-8">「設定 &gt; P申込目標」で{year}年の月間目標を入力してください</div>;
+                    const rows = [...analyticsData.reverseRates, { stageId: 'P申込後', label: 'P申込後', confirmedRate: 100, leadTime: 0, currentReached: analyticsData.reachedPMoshikomi }];
+                    return (
+                      <div className="grid grid-cols-1 sm:grid-cols-3 lg:grid-cols-6 gap-3 mb-8">
+                        {rows.map(r => {
+                          const required = r.stageId === 'P申込後' ? annualTarget : (r.confirmedRate ? Math.ceil(annualTarget / (r.confirmedRate / 100)) : null);
+                          const ok = required != null && r.currentReached >= required;
+                          return (
+                            <div key={r.stageId} className="bg-gray-50 border border-gray-200 p-4 text-center">
+                              <div className="text-[10px] text-gray-500 tracking-wider mb-2">{r.label}</div>
+                              <div className={`text-xl font-serif ${required == null ? 'text-gray-400' : (ok ? 'text-emerald-600' : 'text-rose-600')}`}>{required != null ? required : '−'}<span className="text-xs ml-0.5">件必要</span></div>
+                              <div className="text-[9px] text-gray-400 mt-1">現在 {r.currentReached}件</div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    );
+                  })()}
+
+                  <h3 className="text-xs font-bold text-gray-600 tracking-widest uppercase mb-3 border-t border-gray-200 pt-6">月間ベース（リードタイム考慮）</h3>
+                  {(() => {
+                    const year = new Date().getFullYear();
+                    const months = Array.from({ length: 12 }, (_, i) => i + 1);
+                    const hasAnyTarget = months.some(m => (systemConfig?.monthlyTargets?.[`${year}-${String(m).padStart(2, '0')}`] || 0) > 0);
+                    if (!hasAnyTarget) return <div className="text-xs text-gray-400 py-6 text-center border border-dashed border-gray-200">「設定 &gt; P申込目標」で月間目標を入力すると、月別の必要件数がここに表示されます</div>;
+                    return (
+                      <div className="overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
+                        <table className="w-full text-left border-collapse min-w-[900px]">
+                          <thead>
+                            <tr className="border-b border-gray-200 text-[10px] text-gray-400 uppercase tracking-widest bg-gray-50/50">
+                              <th className="p-2 font-normal sticky left-0 bg-gray-50/50">ステージ</th>
+                              {months.map(m => <th key={m} className="p-2 font-normal text-center">{m}月</th>)}
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-gray-100">
+                            <tr className="bg-gray-50/30">
+                              <td className="p-2 text-[10px] text-gray-500 sticky left-0 bg-gray-50/30">P申込後（目標）</td>
+                              {months.map(m => {
+                                const t = systemConfig?.monthlyTargets?.[`${year}-${String(m).padStart(2, '0')}`] || 0;
+                                return <td key={m} className="p-2 text-center text-xs text-gray-700">{t > 0 ? t : ''}</td>;
+                              })}
+                            </tr>
+                            {analyticsData.reverseRates.map(r => {
+                              const shiftMonths = r.leadTime != null ? Math.round(r.leadTime / 30) : 0;
+                              const cellByMonth = {};
+                              months.forEach(m => {
+                                const targetVal = systemConfig?.monthlyTargets?.[`${year}-${String(m).padStart(2, '0')}`] || 0;
+                                if (targetVal > 0 && r.confirmedRate) {
+                                  const requiredCount = Math.ceil(targetVal / (r.confirmedRate / 100));
+                                  let destMonth = m - shiftMonths;
+                                  if (destMonth >= 1 && destMonth <= 12) cellByMonth[destMonth] = (cellByMonth[destMonth] || 0) + requiredCount;
+                                }
+                              });
+                              return (
+                                <tr key={r.stageId}>
+                                  <td className="p-2 text-[10px] text-gray-600 sticky left-0 bg-white">{r.label}</td>
+                                  {months.map(m => (
+                                    <td key={m} className="p-2 text-center text-xs text-gray-800">{cellByMonth[m] || ''}</td>
+                                  ))}
+                                </tr>
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+                    );
+                  })()}
+                </div>
+
+                {/* 6. 完了・離脱サマリー */}
+                <div className="bg-white border border-gray-200 shadow-sm p-8">
+                  <h2 className="text-lg font-serif tracking-[0.2em] text-gray-800 flex items-center gap-2 mb-6"><IdCardIcon className="w-5 h-5" /> 完了・離脱サマリー</h2>
+                  <div className="grid grid-cols-3 gap-6 text-center">
+                    <div><div className="text-[10px] text-gray-500 tracking-widest uppercase mb-2">全顧客</div><div className="text-2xl font-serif text-gray-800">{analyticsData.totalCustomers}</div></div>
+                    <div><div className="text-[10px] text-gray-500 tracking-widest uppercase mb-2">引継ぎ完了済</div><div className="text-2xl font-serif text-emerald-600">{analyticsData.completedCount}<span className="text-xs ml-1 text-gray-400">({analyticsData.totalCustomers > 0 ? Math.round(analyticsData.completedCount / analyticsData.totalCustomers * 100) : 0}%)</span></div></div>
+                    <div><div className="text-[10px] text-gray-500 tracking-widest uppercase mb-2">離脱</div><div className="text-2xl font-serif text-rose-600">{analyticsData.droppedCount}<span className="text-xs ml-1 text-gray-400">({analyticsData.totalCustomers > 0 ? Math.round(analyticsData.droppedCount / analyticsData.totalCustomers * 100) : 0}%)</span></div></div>
+                  </div>
+                </div>
+
+              </div>
+            )}
+
+            {}
             {currentView === 'settings' && !showFormModal && <SettingsView templates={templates} setTemplates={setTemplates} categories={categories} systemConfig={systemConfig} saveSystemConfig={saveSystemConfig} showConfirm={showConfirm} showAlert={showAlert} />}
 
             {}
@@ -1067,6 +1636,7 @@
                     return (
                     <div key={customer.id} className={`bg-white border hover:shadow-md transition-all flex flex-col h-full ${isArchivedCard ? 'border-gray-100 opacity-70 grayscale-[0.2]' : 'border-gray-200 hover:border-gray-300'}`}>
                       <div className="p-6 relative">
+                        <button onClick={() => { setStageHistoryModalData(customer); setShowStageHistoryModal(true); }} className="absolute top-4 right-11 text-gray-300 hover:text-gray-800 transition-colors p-2" title="ステージ履歴を編集"><ClockIcon className="w-4 h-4" /></button>
                         <button onClick={() => openEditModal(customer)} className="absolute top-4 right-4 text-gray-300 hover:text-gray-800 transition-colors p-2"><EditIcon className="w-4 h-4" /></button>
                         <div className="mb-4 pr-6">
                            <div className={`inline-block text-white text-[9px] px-2 py-0.5 tracking-widest mb-3 uppercase ${isArchivedCard ? 'bg-gray-400' : 'bg-gray-800'}`}>STAGE: {customer.currentStage}</div>
