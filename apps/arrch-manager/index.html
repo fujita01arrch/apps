@@ -1624,9 +1624,11 @@
                        )
                      })}
                      <div className="h-4 w-px bg-gray-200 mx-2 hidden md:block"></div>
-                     <button onClick={() => setBoardTab('アーカイブ')} className={`text-xs tracking-widest transition-all whitespace-nowrap ${boardTab === 'アーカイブ' ? 'text-gray-500 font-bold border-b border-gray-300 pb-1' : 'text-gray-300 hover:text-gray-400 opacity-60'}`}>
-                       完了・離脱 <span className="text-[10px] ml-1 opacity-70">({customers.filter(c => ARCHIVE_STAGES.some(s=>s.id===c.currentStage)).length})</span>
-                     </button>
+                     {ARCHIVE_STAGES.map(stage => (
+                       <button key={stage.id} onClick={() => setBoardTab(stage.id)} className={`text-xs tracking-widest transition-all whitespace-nowrap ${boardTab === stage.id ? 'text-gray-500 font-bold border-b border-gray-300 pb-1' : 'text-gray-300 hover:text-gray-400 opacity-60'}`}>
+                         {stage.label} <span className="text-[10px] ml-1 opacity-70">({customers.filter(c => c.currentStage === stage.id).length})</span>
+                       </button>
+                     ))}
                    </div>
                    <div className="flex items-center gap-2 self-end md:self-auto bg-white border border-gray-200 p-1">
                       <select value={sortOrder} onChange={(e) => setSortOrder(e.target.value)} className="text-xs tracking-widest text-gray-600 bg-transparent outline-none p-1 cursor-pointer">
@@ -1636,7 +1638,7 @@
                 </div>
 
                 <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 items-start">
-                  {[...customers].filter(c => boardTab === 'アーカイブ' ? ARCHIVE_STAGES.some(s => s.id === c.currentStage) : (boardTab !== '全体' ? c.currentStage === boardTab : !ARCHIVE_STAGES.some(s => s.id === c.currentStage))).sort((a, b) => {
+                  {[...customers].filter(c => boardTab !== '全体' ? c.currentStage === boardTab : !ARCHIVE_STAGES.some(s => s.id === c.currentStage)).sort((a, b) => {
                      if (sortOrder === 'nextDateAsc') return (a.nextDate ? new Date(a.nextDate) : Infinity) - (b.nextDate ? new Date(b.nextDate) : Infinity);
                      const getEarliest = (cust) => { const undone = (cust.tasks||[]).filter(t => !t.isDone && t.dueDate); return undone.length===0 ? Infinity : Math.min(...undone.map(t => new Date(t.dueDate).getTime())); };
                      return getEarliest(a) - getEarliest(b);
