@@ -651,6 +651,7 @@
       const [editingId, setEditingId] = useState(null);
       const [dialog, setDialog] = useState({ isOpen: false, message: '', type: 'alert', onConfirm: null });
       const [showCompletedTasks, setShowCompletedTasks] = useState({});
+      const [showArchivedCardTasks, setShowArchivedCardTasks] = useState({});
       const [showStageModal, setShowStageModal] = useState(false);
       const [stageModalData, setStageModalData] = useState(null);
       const [showStageHistoryModal, setShowStageHistoryModal] = useState(false);
@@ -1719,37 +1720,48 @@
                       </div>
 
                       <div className="p-6 bg-gray-50/50 border-t border-gray-100 flex-grow">
-                        <div className="flex justify-between items-center mb-4">
-                          <h4 className="text-[10px] text-gray-500 tracking-widest uppercase font-bold">Tasks ({undoneTasks.length})</h4>
-                          <button onClick={() => addTask(customer.id)} className="text-[10px] text-gray-500 hover:text-gray-800 tracking-widest uppercase flex items-center gap-0.5"><PlusIcon className="w-3 h-3"/> Add</button>
-                        </div>
-                        <div className="space-y-2 mb-4">
-                          {undoneTasks.length === 0 ? <p className="text-[10px] text-gray-400 tracking-widest py-6 text-center bg-white border border-dashed border-gray-200">現在タスクはありません</p> : 
-                            undoneTasks.map(task => (
-                              <TaskItem 
-                                key={task.id} task={task} categories={categories}
-                                isWarning={isDeadlineNear(task.dueDate)} isPastDue={isOverdue(task.dueDate)}
-                                onChange={(field, val) => updateTaskLocal(customer.id, task.id, field, val)}
-                                onCommit={() => commitTaskUpdate(customer.id)}
-                                onToggleDone={() => toggleTaskDone(customer.id, task.id)} onDelete={() => deleteTask(customer.id, task.id)}
-                              />
-                            ))
-                          }
-                        </div>
-                        {doneTasks.length > 0 && (
-                          <div>
-                            <button onClick={() => setShowCompletedTasks(prev => ({...prev, [customer.id]: !prev[customer.id]}))} className="text-[10px] text-gray-500 hover:text-gray-800 tracking-widest flex items-center gap-1 mb-2 w-full justify-center py-1.5 bg-white border border-gray-200">
-                              完了済みタスク ({doneTasks.length}) {showCompletedTasks[customer.id] ? <ChevronUpIcon className="w-3 h-3"/> : <ChevronDownIcon className="w-3 h-3"/>}
-                            </button>
-                            {showCompletedTasks[customer.id] && (
-                              <div className="space-y-1.5 opacity-60">
-                                {doneTasks.map(task => (
-                                  <div key={task.id} className="flex items-center gap-2 p-1.5 bg-gray-100 border border-gray-200">
-                                    <input type="checkbox" checked={true} onChange={() => toggleTaskDone(customer.id, task.id)} className="w-3 h-3 accent-gray-500 cursor-pointer" />
-                                    <span className="flex-1 text-[11px] text-gray-500 line-through truncate">{task.title}</span>
-                                    <button onClick={() => deleteTask(customer.id, task.id)} className="text-gray-400 hover:text-rose-500"><TrashIcon className="w-3 h-3" /></button>
+                        {isArchivedCard ? (
+                          <button onClick={() => setShowArchivedCardTasks(prev => ({...prev, [customer.id]: !prev[customer.id]}))} className="text-[10px] text-gray-500 hover:text-gray-800 tracking-widest uppercase font-bold flex items-center gap-1 w-full justify-between">
+                            <span>Tasks ({undoneTasks.length + doneTasks.length})</span>
+                            {showArchivedCardTasks[customer.id] ? <ChevronUpIcon className="w-3 h-3"/> : <ChevronDownIcon className="w-3 h-3"/>}
+                          </button>
+                        ) : (
+                          <div className="flex justify-between items-center mb-4">
+                            <h4 className="text-[10px] text-gray-500 tracking-widest uppercase font-bold">Tasks ({undoneTasks.length})</h4>
+                            <button onClick={() => addTask(customer.id)} className="text-[10px] text-gray-500 hover:text-gray-800 tracking-widest uppercase flex items-center gap-0.5"><PlusIcon className="w-3 h-3"/> Add</button>
+                          </div>
+                        )}
+                        {(!isArchivedCard || showArchivedCardTasks[customer.id]) && (
+                          <div className={isArchivedCard ? 'mt-4' : ''}>
+                            <div className="space-y-2 mb-4">
+                              {undoneTasks.length === 0 ? <p className="text-[10px] text-gray-400 tracking-widest py-6 text-center bg-white border border-dashed border-gray-200">現在タスクはありません</p> :
+                                undoneTasks.map(task => (
+                                  <TaskItem
+                                    key={task.id} task={task} categories={categories}
+                                    isWarning={isDeadlineNear(task.dueDate)} isPastDue={isOverdue(task.dueDate)}
+                                    onChange={(field, val) => updateTaskLocal(customer.id, task.id, field, val)}
+                                    onCommit={() => commitTaskUpdate(customer.id)}
+                                    onToggleDone={() => toggleTaskDone(customer.id, task.id)} onDelete={() => deleteTask(customer.id, task.id)}
+                                  />
+                                ))
+                              }
+                            </div>
+                            {doneTasks.length > 0 && (
+                              <div>
+                                <button onClick={() => setShowCompletedTasks(prev => ({...prev, [customer.id]: !prev[customer.id]}))} className="text-[10px] text-gray-500 hover:text-gray-800 tracking-widest flex items-center gap-1 mb-2 w-full justify-center py-1.5 bg-white border border-gray-200">
+                                  完了済みタスク ({doneTasks.length}) {showCompletedTasks[customer.id] ? <ChevronUpIcon className="w-3 h-3"/> : <ChevronDownIcon className="w-3 h-3"/>}
+                                </button>
+                                {showCompletedTasks[customer.id] && (
+                                  <div className="space-y-1.5 opacity-60">
+                                    {doneTasks.map(task => (
+                                      <div key={task.id} className="flex items-center gap-2 p-1.5 bg-gray-100 border border-gray-200">
+                                        <input type="checkbox" checked={true} onChange={() => toggleTaskDone(customer.id, task.id)} className="w-3 h-3 accent-gray-500 cursor-pointer" />
+                                        <span className="flex-1 text-[11px] text-gray-500 line-through truncate">{task.title}</span>
+                                        <button onClick={() => deleteTask(customer.id, task.id)} className="text-gray-400 hover:text-rose-500"><TrashIcon className="w-3 h-3" /></button>
+                                      </div>
+                                    ))}
                                   </div>
-                                ))}
+                                )}
                               </div>
                             )}
                           </div>
