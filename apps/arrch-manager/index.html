@@ -188,7 +188,7 @@
                     </div>
                  )}
                  <div className="flex items-center gap-1">
-                   <input type="text" value={localTitle} onChange={(e) => { setLocalTitle(e.target.value); onChange('title', e.target.value); }} onBlur={handleBlur} onKeyDown={handleKeyDown} placeholder="タスク内容" className={`text-sm bg-transparent outline-none flex-1 min-w-0 font-medium ${task.isDone ? 'line-through text-gray-400' : (isPastDue ? 'text-rose-800' : 'text-gray-800')}`} />
+                   <input type="text" value={localTitle} onChange={(e) => { setLocalTitle(e.target.value); onChange('title', e.target.value); }} onBlur={handleBlur} onKeyDown={handleKeyDown} placeholder="タスク内容" className={`text-sm bg-transparent outline-none flex-1 min-w-0 ${(!task.isDone && (isPastDue || task.priority === 3)) ? 'font-medium' : 'font-normal'} ${task.isDone ? 'line-through text-gray-400' : (isPastDue ? 'text-rose-800' : 'text-gray-800')}`} />
                    <button onClick={() => setIsMemoOpen(!isMemoOpen)} className="p-1 hover:bg-gray-100 rounded transition-colors flex-shrink-0" title={hasMemoContent ? "メモを編集" : "メモを追加"}><FileTextIcon className={`w-3.5 h-3.5 ${hasMemoContent ? 'text-gray-800' : 'text-gray-300'}`} /></button>
                  </div>
               </div>
@@ -967,7 +967,7 @@
                                <td className={`p-4 text-sm ${!task.isDone && isOverdue(task.dueDate) ? 'text-rose-600 font-bold' : 'text-gray-600'}`}>{task.dueDate}</td>
                                <td className="p-4">
                                   <div className="flex items-center gap-2 mb-1">
-                                    <div className="text-sm text-gray-800 font-medium">{task.title}</div>
+                                    <div className={`text-sm text-gray-800 ${(!task.isDone && (isOverdue(task.dueDate) || task.priority === 3)) ? 'font-medium' : 'font-normal'}`}>{task.title}</div>
                                     {task.memo && <FileTextIcon className="w-3.5 h-3.5 text-gray-400" title="メモあり"/>}
                                   </div>
                                   <PriorityMeter priority={task.priority || 2} readOnly={true} />
