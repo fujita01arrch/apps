@@ -82,6 +82,10 @@
     ];
     const UI_STAGES = STAGES.filter(s => s.id !== '全体');
     const ARCHIVE_STAGES = [{ id: '引継ぎ完了済', label: '引継ぎ完了済' }, { id: '離脱', label: '離脱' }];
+    const KEY_CONVERSION_PAIRS = [
+      ['初回', 'おうちカフェ'], ['おうちカフェ', 'LP'], ['LP', 'HB・SB'], ['HB・SB', '資金計画'], ['資金計画', 'P申込後'],
+      ['初回', 'P申込後'], ['おうちカフェ', 'P申込後']
+    ];
     const CONTENT_OPTIONS = ['おうちカフェ', 'ライフプラン', 'ヒアリングブック', '資金計画'];
     const HURDLE_OPTIONS = ['資金', '土地', '時期', 'デザイン', '会社選び', '建物サイズ', '相談者', '性能/構造'];
     const ASSIGNEE_OPTIONS = ['藤田', '橋本', '市川', '寺田', '小林', '田中', '大峰', '白栁', '乗松', '藤原'];
@@ -259,11 +263,8 @@
       const [matrixUrgentDays, setMatrixUrgentDays] = useState(systemConfig?.matrixUrgentDays ?? 5);
       const [matrixImportantLevel, setMatrixImportantLevel] = useState(systemConfig?.matrixImportantLevel ?? 3);
 
-      // Conversion Target State（歩留まり目標）
-      const CONVERSION_TARGET_PAIRS = [];
-      for (let i = 0; i < UI_STAGES.length; i++) {
-        for (let j = i + 1; j < UI_STAGES.length; j++) CONVERSION_TARGET_PAIRS.push([UI_STAGES[i], UI_STAGES[j]]);
-      }
+      // Conversion Target State（歩留まり目標。常時表示している主要7つの歩留まりのみ）
+      const CONVERSION_TARGET_PAIRS = KEY_CONVERSION_PAIRS.map(([fromId, toId]) => [UI_STAGES.find(s => s.id === fromId), UI_STAGES.find(s => s.id === toId)]);
       const [conversionTargetInputs, setConversionTargetInputs] = useState({ ...(systemConfig?.conversionTargets || {}) });
 
       // P申込目標 State
@@ -861,10 +862,6 @@
       }, [filteredAllTasksList, systemConfig]);
 
       // --- Analytics (歩留まり・リードタイム分析) ---
-      const KEY_CONVERSION_PAIRS = [
-        ['初回', 'おうちカフェ'], ['おうちカフェ', 'LP'], ['LP', 'HB・SB'], ['HB・SB', '資金計画'], ['資金計画', 'P申込後'],
-        ['初回', 'P申込後'], ['おうちカフェ', 'P申込後']
-      ];
       const REVERSE_CALC_STAGES = UI_STAGES.filter(s => ['初回', 'おうちカフェ', 'LP', 'HB・SB', '資金計画'].includes(s.id));
       const MATRIX_STAGES = [...UI_STAGES, ...ARCHIVE_STAGES];
 
