@@ -145,7 +145,7 @@
       return { ...colorInfo, ...cat };
     };
 
-    const CustomDialog = ({ isOpen, message, type, onConfirm, onCancel }) => {
+    const CustomDialog = ({ isOpen, message, type, onConfirm, onCancel, confirmLabel }) => {
       if (!isOpen) return null;
       return (
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-fade-in">
@@ -153,7 +153,7 @@
             <p className="text-sm text-gray-700 mb-8 whitespace-pre-wrap leading-relaxed">{message}</p>
             <div className="flex justify-center gap-4">
               {type === 'confirm' && <button onClick={onCancel} className="px-6 py-2 text-xs tracking-widest text-gray-500 hover:bg-gray-50 transition-colors border border-transparent">キャンセル</button>}
-              <button onClick={onConfirm} className="px-8 py-2 text-xs tracking-widest text-white bg-gray-800 hover:bg-gray-900 transition-colors shadow-sm">OK</button>
+              <button onClick={onConfirm} className="px-8 py-2 text-xs tracking-widest text-white bg-gray-800 hover:bg-gray-900 transition-colors shadow-sm">{confirmLabel || 'OK'}</button>
             </div>
           </div>
         </div>
@@ -677,7 +677,7 @@
       const [formData, setFormData] = useState(initialFormState);
 
       const showAlert = (message) => setDialog({ isOpen: true, message, type: 'alert', onConfirm: () => setDialog({ ...dialog, isOpen: false }) });
-      const showConfirm = (message, onConfirm) => setDialog({ isOpen: true, message, type: 'confirm', onConfirm: () => { onConfirm(); setDialog({ ...dialog, isOpen: false }); } });
+      const showConfirm = (message, onConfirm, confirmLabel) => setDialog({ isOpen: true, message, type: 'confirm', confirmLabel, onConfirm: () => { onConfirm(); setDialog({ ...dialog, isOpen: false }); } });
 
       useEffect(() => {
         const initAuth = async () => { try { if (isPreviewEnv) await signInWithCustomToken(auth, __initial_auth_token); } catch (e) {} };
@@ -1131,7 +1131,6 @@
         const [isDateUnknown, setIsDateUnknown] = useState(false);
 
         const handleMigrate = () => {
-           if (isArchive && isStageHistoryIncomplete(customer)) { showAlert('ステージ履歴に記録漏れがあるため、完了・離脱に移行できません。先に「ステージ履歴の編集」から記録を補完してください。'); return; }
            let finalDateStr = '';
            if(!isArchive && !isDateUnknown){
               if(!modalDate) { showAlert('次回予定日を入力してください'); return; }
@@ -1699,10 +1698,19 @@
                         </div>
                         <div className="border-t border-gray-100 pt-4 mt-2">
                            <p className="text-[9px] text-gray-400 tracking-widest uppercase mb-2 text-center">Actions / Move Stage</p>
-                           <select onChange={(e) => { if(e.target.value){ setStageModalData({ customer, targetStage: e.target.value }); setShowStageModal(true); e.target.value=""; } }} className="bg-white border border-gray-800 text-gray-800 text-xs px-3 py-1.5 outline-none cursor-pointer hover:bg-gray-50 transition-colors text-center w-full">
+                           <select onChange={(e) => {
+                             const val = e.target.value;
+                             if (!val) return;
+                             e.target.value = "";
+                             if (ARCHIVE_STAGES.some(s => s.id === val) && isStageHistoryIncomplete(customer)) {
+                               showConfirm('ステージ履歴に記録漏れがあるため、完了・離脱に移行できません。\n先に記録を補完してください。', () => { setStageHistoryModalData(customer); setShowStageHistoryModal(true); }, 'ステージ履歴を編集する');
+                               return;
+                             }
+                             setStageModalData({ customer, targetStage: val }); setShowStageModal(true);
+                           }} className="bg-white border border-gray-800 text-gray-800 text-xs px-3 py-1.5 outline-none cursor-pointer hover:bg-gray-50 transition-colors text-center w-full">
                              <option value="">ステージを移行する...</option>
                              <optgroup label="進行中ステージ">{UI_STAGES.filter(s => s.id !== customer.currentStage).map(s => <option key={s.id} value={s.id}>{s.label} へ進む</option>)}</optgroup>
-                             <optgroup label={historyIncomplete ? 'アーカイブ（終了）※履歴の記録漏れを解消してください' : 'アーカイブ（終了）'}>{ARCHIVE_STAGES.filter(s => s.id !== customer.currentStage).map(s => <option key={s.id} value={s.id} disabled={historyIncomplete}>{s.label} にする</option>)}</optgroup>
+                             <optgroup label="アーカイブ（終了）">{ARCHIVE_STAGES.filter(s => s.id !== customer.currentStage).map(s => <option key={s.id} value={s.id}>{s.label} にする</option>)}</optgroup>
                            </select>
                            {isArchivedCard && (
                              <button onClick={() => deleteCustomer(customer.id)} className="mt-2 w-full flex items-center justify-center gap-1 text-[10px] text-gray-400 hover:text-rose-600 tracking-widest uppercase py-1.5 border border-transparent hover:border-rose-200 transition-colors"><TrashIcon className="w-3 h-3" /> この顧客データを削除</button>
