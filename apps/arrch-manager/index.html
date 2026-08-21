@@ -129,7 +129,7 @@
       const cat = categories.find(c => c.id === categoryId);
       if(!cat) return null;
       const colorInfo = CATEGORY_COLORS.find(c => c.id === cat.colorId) || CATEGORY_COLORS[0];
-      return { ...cat, ...colorInfo };
+      return { ...colorInfo, ...cat };
     };
 
     const CustomDialog = ({ isOpen, message, type, onConfirm, onCancel }) => {
