@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ARRCH 顧客引継ぎマネージャー</title>
+  <title>ARRCH マネージャー</title>
   
   <!-- Tailwind CSS -->
   <script src="https://cdn.tailwindcss.com"></script>
@@ -16,7 +16,6 @@
   <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 </head>
 <body class="selection:bg-gray-200">
-  <!-- Loading Placeholder -->
   <div id="root">
     <div style="display: flex; flex-direction: column; justify-content: center; align-items: center; min-height: 100vh; background-color: #f9f9f9; font-family: serif; color: #6b7280; letter-spacing: 0.15em;">
       <div style="width: 40px; height: 40px; border: 3px solid #e5e7eb; border-top-color: #1f2937; border-radius: 50%; animation: spin 1s linear infinite; margin-bottom: 16px;"></div>
@@ -36,7 +35,6 @@
 
     const { useState, useEffect, useMemo, useRef } = React;
 
-    // --- Firebase Initialization ---
     const isPreviewEnv = typeof __firebase_config !== 'undefined' && typeof __initial_auth_token !== 'undefined';
     
     const firebaseConfig = isPreviewEnv ? JSON.parse(__firebase_config) : {
@@ -53,8 +51,10 @@
     const db = getFirestore(app);
     const appId = typeof __app_id !== 'undefined' ? __app_id : 'arrch-handover-app';
 
-    // --- Icon Components ---
     const BoardIcon = ({ className = "w-5 h-5" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="3" x2="9" y2="21"></line></svg>;
+    const IdCardIcon = ({ className = "w-5 h-5" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}><rect x="3" y="4" width="18" height="16" rx="2" ry="2"></rect><line x1="3" y1="10" x2="21" y2="10"></line><line x1="7" y1="15" x2="7.01" y2="15"></line><line x1="11" y1="15" x2="15" y2="15"></line></svg>;
+    const GridIcon = ({ className = "w-5 h-5" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}><rect x="3" y="3" width="7" height="7"></rect><rect x="14" y="3" width="7" height="7"></rect><rect x="14" y="14" width="7" height="7"></rect><rect x="3" y="14" width="7" height="7"></rect></svg>;
+    const FileTextIcon = ({ className = "w-5 h-5" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><polyline points="14 2 14 8 20 8"></polyline><line x1="16" y1="13" x2="8" y2="13"></line><line x1="16" y1="17" x2="8" y2="17"></line><polyline points="10 9 9 9 8 9"></polyline></svg>;
     const ListIcon = ({ className = "w-5 h-5" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="8" y1="6" x2="21" y2="6"></line><line x1="8" y1="12" x2="21" y2="12"></line><line x1="8" y1="18" x2="21" y2="18"></line><line x1="3" y1="6" x2="3.01" y2="6"></line><line x1="3" y1="12" x2="3.01" y2="12"></line><line x1="3" y1="18" x2="3.01" y2="18"></line></svg>;
     const PlusIcon = ({ className = "w-5 h-5" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="12" x2="12" y1="5" y2="19"/><line x1="5" x2="19" y1="12" y2="12"/></svg>;
     const TrashIcon = ({ className = "w-5 h-5" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>;
@@ -64,49 +64,49 @@
     const SettingsIcon = ({ className = "w-5 h-5" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg>;
     const ChevronDownIcon = ({ className = "w-5 h-5" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="6 9 12 15 18 9"></polyline></svg>;
     const ChevronUpIcon = ({ className = "w-5 h-5" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="18 15 12 9 6 15"></polyline></svg>;
+    const FilterIcon = ({ className = "w-5 h-5" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>;
 
-    // --- Constants ---
     const STAGES = [
       { id: '全体', label: '全体' },
       { id: '来場前', label: '来場前' },
       { id: '初回', label: '初回' },
       { id: 'おうちカフェ', label: 'おうちカフェ' },
-      { id: 'LP', label: 'LP' }, // 新規追加: LPステージ
+      { id: 'LP', label: 'LP' },
       { id: 'HB・SB', label: 'HB・SB' },
       { id: '資金計画', label: '資金計画' },
       { id: 'P申込後', label: 'P申込後' },
       { id: '送客後', label: '送客後' }
     ];
-    
     const UI_STAGES = STAGES.filter(s => s.id !== '全体');
-
-    const ARCHIVE_STAGES = [
-      { id: '引継ぎ完了済', label: '引継ぎ完了済' },
-      { id: '離脱', label: '離脱' }
-    ];
-
+    const ARCHIVE_STAGES = [{ id: '引継ぎ完了済', label: '引継ぎ完了済' }, { id: '離脱', label: '離脱' }];
     const CONTENT_OPTIONS = ['おうちカフェ', 'ライフプラン', 'ヒアリングブック', '資金計画'];
     const HURDLE_OPTIONS = ['資金', '土地', '時期', 'デザイン', '会社選び', '建物サイズ', '相談者', '性能/構造'];
     const ASSIGNEE_OPTIONS = ['藤田', '橋本', '市川', '寺田', '小林', '田中', '大峰', '白栁', '乗松', '藤原'];
 
-    // --- Helpers ---
+    const CATEGORY_COLORS = [
+      { id: 'slate', name: 'スレート (灰)', bg: 'bg-slate-100', text: 'text-slate-700', border: 'border-slate-200', hex: '#f1f5f9' },
+      { id: 'stone', name: 'ストーン (砂)', bg: 'bg-stone-100', text: 'text-stone-700', border: 'border-stone-200', hex: '#f5f5f4' },
+      { id: 'rose', name: 'ローズ (薄紅)', bg: 'bg-rose-50', text: 'text-rose-700', border: 'border-rose-200', hex: '#fff1f2' },
+      { id: 'amber', name: 'アンバー (琥珀)', bg: 'bg-amber-50', text: 'text-amber-700', border: 'border-amber-200', hex: '#fffbeb' },
+      { id: 'emerald', name: 'エメラルド (緑)', bg: 'bg-emerald-50', text: 'text-emerald-700', border: 'border-emerald-200', hex: '#ecfdf5' },
+      { id: 'teal', name: 'ティール (青緑)', bg: 'bg-teal-50', text: 'text-teal-700', border: 'border-teal-200', hex: '#f0fdfa' },
+      { id: 'indigo', name: 'インディゴ (藍)', bg: 'bg-indigo-50', text: 'text-indigo-700', border: 'border-indigo-200', hex: '#eef2ff' },
+      { id: 'purple', name: 'パープル (紫)', bg: 'bg-purple-50', text: 'text-purple-700', border: 'border-purple-200', hex: '#faf5ff' }
+    ];
+
     const isOverdue = (dateString) => {
       if (!dateString) return false;
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const targetDate = new Date(dateString.split('T')[0]);
-      targetDate.setHours(0, 0, 0, 0);
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const targetDate = new Date(dateString.split('T')[0]); targetDate.setHours(0, 0, 0, 0);
       return targetDate.getTime() < today.getTime();
     };
 
-    const isDeadlineNear = (dateString) => {
+    const isDeadlineNear = (dateString, urgentDays = 5) => {
       if (!dateString) return false;
-      const today = new Date();
-      today.setHours(0, 0, 0, 0);
-      const targetDate = new Date(dateString.split('T')[0]);
-      targetDate.setHours(0, 0, 0, 0);
+      const today = new Date(); today.setHours(0, 0, 0, 0);
+      const targetDate = new Date(dateString.split('T')[0]); targetDate.setHours(0, 0, 0, 0);
       const diffDays = Math.ceil((targetDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-      return diffDays <= 3;
+      return diffDays >= 0 && diffDays <= urgentDays;
     };
 
     const formatDateTime = (dateTimeStr) => {
@@ -118,9 +118,13 @@
     };
 
     const getTodayString = () => new Date().toISOString().split('T')[0];
+    const getCategoryData = (categoryId, categories) => {
+      const cat = categories.find(c => c.id === categoryId);
+      if(!cat) return null;
+      const colorInfo = CATEGORY_COLORS.find(c => c.id === cat.colorId) || CATEGORY_COLORS[0];
+      return { ...cat, ...colorInfo };
+    };
 
-    // --- UI Components ---
-    // カスタムダイアログ
     const CustomDialog = ({ isOpen, message, type, onConfirm, onCancel }) => {
       if (!isOpen) return null;
       return (
@@ -128,9 +132,7 @@
           <div className="bg-white max-w-sm w-full p-8 shadow-xl text-center border border-gray-200">
             <p className="text-sm text-gray-700 mb-8 whitespace-pre-wrap leading-relaxed">{message}</p>
             <div className="flex justify-center gap-4">
-              {type === 'confirm' && (
-                <button onClick={onCancel} className="px-6 py-2 text-xs tracking-widest text-gray-500 hover:bg-gray-50 transition-colors border border-transparent">キャンセル</button>
-              )}
+              {type === 'confirm' && <button onClick={onCancel} className="px-6 py-2 text-xs tracking-widest text-gray-500 hover:bg-gray-50 transition-colors border border-transparent">キャンセル</button>}
               <button onClick={onConfirm} className="px-8 py-2 text-xs tracking-widest text-white bg-gray-800 hover:bg-gray-900 transition-colors shadow-sm">OK</button>
             </div>
           </div>
@@ -138,31 +140,17 @@
       );
     };
 
-    // 上品で点灯式のメータードット
     const PriorityMeter = ({ priority = 2, onChange, readOnly = false }) => {
       return (
         <div className="flex items-center gap-[3px] shrink-0">
           {[1, 2, 3].map((level) => {
             const isActive = level <= priority;
             let dotClass = 'w-[5px] h-[5px] rounded-full border border-gray-200 bg-transparent transition-colors duration-200';
-            
-            if (isActive) {
-              if (priority === 3) {
-                dotClass = 'w-[5px] h-[5px] rounded-full bg-rose-300 border border-rose-300 transition-colors duration-200';
-              } else {
-                dotClass = 'w-[5px] h-[5px] rounded-full bg-gray-400 border border-gray-400 transition-colors duration-200';
-              }
-            }
-            
+            if (isActive) dotClass = priority === 3 ? 'w-[5px] h-[5px] rounded-full bg-rose-300 border border-rose-300' : 'w-[5px] h-[5px] rounded-full bg-gray-400 border border-gray-400';
             return (
               <button
-                key={level}
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  if (!readOnly && onChange) onChange(level);
-                }}
-                disabled={readOnly}
+                key={level} type="button" disabled={readOnly}
+                onClick={(e) => { e.stopPropagation(); if (!readOnly && onChange) onChange(level); }}
                 title={level === 1 ? '低' : level === 2 ? '中' : '高'}
                 className={`${dotClass} ${readOnly ? 'cursor-default' : 'cursor-pointer hover:opacity-70'}`}
               />
@@ -172,793 +160,687 @@
       );
     };
 
-    const TaskItem = ({ task, customer, isWarning, isPastDue, onUpdateLocal, onCommit, onToggleDone, onDelete }) => {
-      const [localTitle, setLocalTitle] = useState(task.title);
+    const TaskItem = ({ task, contextLabel, isWarning, isPastDue, categories, onChange, onCommit, onToggleDone, onDelete }) => {
+      const [localTitle, setLocalTitle] = useState(task.title || '');
+      const [localMemo, setLocalMemo] = useState(task.memo || '');
+      const [isMemoOpen, setIsMemoOpen] = useState(false);
 
-      useEffect(() => {
-        setLocalTitle(task.title);
-      }, [task.title]);
+      useEffect(() => { setLocalTitle(task.title || ''); setLocalMemo(task.memo || ''); }, [task.title, task.memo]);
 
-      const handleChange = (e) => {
-        setLocalTitle(e.target.value);
-        onUpdateLocal(customer.id, task.id, 'title', e.target.value);
-      };
-
-      const handleBlur = () => {
-        if (localTitle !== task.title) {
-           onCommit(customer.id);
-        }
-      };
-
-      const handleKeyDown = (e) => {
-        if (e.key === 'Enter') {
-          e.target.blur();
-        }
-      };
+      const handleBlur = () => { if (localTitle !== task.title || localMemo !== task.memo) onCommit(); };
+      const handleKeyDown = (e) => { if (e.key === 'Enter') e.target.blur(); };
+      const hasMemoContent = localMemo && localMemo.trim().length > 0;
+      const catData = getCategoryData(task.categoryId, categories);
 
       return (
-        <div className={`flex items-start gap-2 p-2 bg-white border ${task.isDone ? 'border-gray-200 bg-gray-50' : (isPastDue ? 'border-rose-300 bg-rose-50/30' : (isWarning ? 'border-amber-200 shadow-sm' : 'border-gray-200'))}`}>
-          <input type="checkbox" checked={task.isDone} onChange={() => onToggleDone(customer.id, task.id)} className="mt-1 w-3.5 h-3.5 text-gray-800 border-gray-300 rounded-sm cursor-pointer accent-gray-800 flex-shrink-0" />
-          <div className="flex-1 min-w-0 flex flex-col gap-1">
-            <input 
-               type="text" 
-               value={localTitle} 
-               onChange={handleChange} 
-               onBlur={handleBlur}
-               onKeyDown={handleKeyDown}
-               placeholder="タスク内容" 
-               className={`text-sm bg-transparent outline-none w-full ${task.isDone ? 'line-through text-gray-400' : (isPastDue ? 'text-rose-700 font-medium' : 'text-gray-700')}`} 
-            />
-            <div className="flex items-center gap-2">
-               <PriorityMeter priority={task.priority || 2} onChange={(val) => { onUpdateLocal(customer.id, task.id, 'priority', val); onCommit(customer.id); }} readOnly={task.isDone} />
-               <input 
-                 type="date" 
-                 value={task.dueDate} 
-                 onChange={(e) => { onUpdateLocal(customer.id, task.id, 'dueDate', e.target.value); onCommit(customer.id); }} 
-                 className={`text-[10px] outline-none bg-transparent w-24 ${task.isDone ? 'text-gray-400' : (isPastDue ? 'text-rose-600' : 'text-gray-400')}`} 
-               />
-               <button onClick={() => onDelete(customer.id, task.id)} className="text-gray-300 hover:text-rose-500 text-[10px] px-1 ml-auto">削除</button>
+        <div className={`flex flex-col p-2.5 bg-white border ${task.isDone ? 'border-gray-200 bg-gray-50/80' : (isPastDue ? 'border-rose-300 bg-rose-50/40 shadow-sm' : (isWarning ? 'border-amber-200 shadow-sm' : 'border-gray-200 hover:border-gray-300 transition-colors'))}`}>
+          
+          {contextLabel && <div className="text-[9px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-sm w-fit mb-1 border border-gray-200 truncate max-w-full">{contextLabel}</div>}
+
+          <div className="flex items-start gap-2.5">
+            <input type="checkbox" checked={task.isDone} onChange={onToggleDone} className="mt-1 w-3.5 h-3.5 text-gray-800 border-gray-300 rounded-sm cursor-pointer accent-gray-800 flex-shrink-0" />
+            
+            <div className="flex-1 min-w-0 flex flex-col gap-1.5">
+              <div className="flex flex-col w-full gap-0.5">
+                 {catData && !task.isDone && (
+                    <div className="flex">
+                      <span className={`text-[9px] px-1.5 py-0.5 rounded-sm border ${catData.bg} ${catData.text} ${catData.border} whitespace-nowrap leading-none inline-block`}>{catData.name}</span>
+                    </div>
+                 )}
+                 <div className="flex items-center gap-1">
+                   <input type="text" value={localTitle} onChange={(e) => { setLocalTitle(e.target.value); onChange('title', e.target.value); }} onBlur={handleBlur} onKeyDown={handleKeyDown} placeholder="タスク内容" className={`text-sm bg-transparent outline-none flex-1 min-w-0 font-medium ${task.isDone ? 'line-through text-gray-400' : (isPastDue ? 'text-rose-800' : 'text-gray-800')}`} />
+                   <button onClick={() => setIsMemoOpen(!isMemoOpen)} className="p-1 hover:bg-gray-100 rounded transition-colors flex-shrink-0" title={hasMemoContent ? "メモを編集" : "メモを追加"}><FileTextIcon className={`w-3.5 h-3.5 ${hasMemoContent ? 'text-gray-800' : 'text-gray-300'}`} /></button>
+                 </div>
+              </div>
+
+              <div className="flex items-center gap-3 flex-wrap">
+                 <PriorityMeter priority={task.priority || 2} onChange={(val) => { onChange('priority', val); onCommit(); }} readOnly={task.isDone} />
+                 <input type="date" value={task.dueDate || ''} onChange={(e) => { onChange('dueDate', e.target.value); onCommit(); }} className={`text-[10px] outline-none bg-transparent w-[90px] cursor-pointer ${task.isDone ? 'text-gray-400' : (isPastDue ? 'text-rose-600 font-bold' : 'text-gray-500')}`} />
+                 
+                 {/* カテゴリ選択（詳細行） */}
+                 <select value={task.categoryId || ''} onChange={(e) => { onChange('categoryId', e.target.value); onCommit(); }} disabled={task.isDone} className={`text-[10px] outline-none bg-transparent border-b border-dashed border-gray-300 max-w-[80px] truncate cursor-pointer ${task.isDone ? 'text-gray-400 border-transparent' : 'text-gray-500'}`}>
+                    <option value="">未分類</option>
+                    {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                 </select>
+                 
+                 <button onClick={onDelete} className="text-gray-300 hover:text-rose-500 text-[10px] px-1 ml-auto opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100">削除</button>
+              </div>
             </div>
           </div>
+
+          {/* メモ開閉エリア */}
+          {isMemoOpen && (
+            <div className="pl-6 pr-1 pb-1 pt-2 animate-fade-in">
+              <textarea value={localMemo} onChange={(e) => { setLocalMemo(e.target.value); onChange('memo', e.target.value); }} onBlur={handleBlur} placeholder="タスクのメモや詳細を入力..." className="w-full text-xs p-2 bg-gray-50/80 border border-gray-200 resize-none h-16 outline-none focus:border-gray-400 transition-colors text-gray-700 leading-relaxed rounded-sm" />
+            </div>
+          )}
         </div>
       );
     };
 
-    const SettingsView = ({ templates, setTemplates, showConfirm, showAlert }) => {
+    const SettingsView = ({ templates, setTemplates, categories, systemConfig, saveSystemConfig, showConfirm, showAlert }) => {
+      const [selectedTab, setSelectedTab] = useState('templates'); // 'templates', 'matrix', 'categories'
+      
+      // Template State
       const [selectedStage, setSelectedStage] = useState(UI_STAGES[0].id);
       const [newTaskTitle, setNewTaskTitle] = useState('');
       const [newDaysOffset, setNewDaysOffset] = useState(0);
       const [newTaskPriority, setNewTaskPriority] = useState(2);
-      const [newBaseDateType, setNewBaseDateType] = useState('stageDate'); // stageDate or nextDate
+      const [newBaseDateType, setNewBaseDateType] = useState('stageDate');
+      const [newTemplateCategory, setNewTemplateCategory] = useState('');
 
-      // 編集用のState
       const [editingTemplateId, setEditingTemplateId] = useState(null);
       const [editTaskTitle, setEditTaskTitle] = useState('');
       const [editDaysOffset, setEditDaysOffset] = useState(0);
       const [editTaskPriority, setEditTaskPriority] = useState(2);
       const [editBaseDateType, setEditBaseDateType] = useState('stageDate');
+      const [editTemplateCategory, setEditTemplateCategory] = useState('');
+
+      // Matrix State
+      const [matrixUrgentDays, setMatrixUrgentDays] = useState(systemConfig?.matrixUrgentDays ?? 5);
+      const [matrixImportantLevel, setMatrixImportantLevel] = useState(systemConfig?.matrixImportantLevel ?? 3);
+
+      // Categories State
+      const [newCatName, setNewCatName] = useState('');
+      const [newCatColor, setNewCatColor] = useState('slate');
+      const [editingCatId, setEditingCatId] = useState(null);
+      const [editCatName, setEditCatName] = useState('');
+      const [editCatColor, setEditCatColor] = useState('');
+
+      const handleAddCategory = async () => {
+         if(!newCatName.trim()) return;
+         const newRef = doc(collection(db, 'artifacts', appId, 'public', 'data', 'task_categories'));
+         await setDoc(newRef, { id: newRef.id, name: newCatName.trim(), colorId: newCatColor, createdAt: new Date().toISOString() });
+         setNewCatName(''); setNewCatColor('slate');
+      };
+      const handleUpdateCategory = async () => {
+         if(!editCatName.trim() || !editingCatId) return;
+         await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'task_categories', editingCatId), { name: editCatName.trim(), colorId: editCatColor });
+         setEditingCatId(null);
+      };
+      const handleDeleteCategory = (catId) => {
+         showConfirm('この分類を削除しますか？\n（すでに設定されているタスクからは「未分類」になります）', async () => {
+            await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'task_categories', catId));
+         });
+      };
+
+      const handleSaveMatrixConfig = () => {
+         saveSystemConfig({ matrixUrgentDays: parseInt(matrixUrgentDays, 10) || 0, matrixImportantLevel: parseInt(matrixImportantLevel, 10) || 3 });
+      };
 
       const handleAddTemplate = async () => {
         if (!newTaskTitle) return;
-        const newTemplate = {
-          stageId: selectedStage,
-          title: newTaskTitle,
-          daysOffset: parseInt(newDaysOffset, 10) || 0,
-          priority: newTaskPriority,
-          baseDateType: newBaseDateType
-        };
-
+        const newTemplate = { stageId: selectedStage, title: newTaskTitle, daysOffset: parseInt(newDaysOffset, 10) || 0, priority: newTaskPriority, baseDateType: newBaseDateType, categoryId: newTemplateCategory };
         const newDocRef = doc(collection(db, 'artifacts', appId, 'public', 'data', 'task_templates'));
-        try {
-          await setDoc(newDocRef, { id: newDocRef.id, ...newTemplate });
-          setNewTaskTitle('');
-          setNewDaysOffset(0);
-          setNewTaskPriority(2);
-          setNewBaseDateType('stageDate');
-        } catch (error) {
-          console.error("Error adding template:", error);
-          showAlert("テンプレートの保存に失敗しました。");
-        }
+        await setDoc(newDocRef, { id: newDocRef.id, ...newTemplate });
+        setNewTaskTitle(''); setNewDaysOffset(0); setNewTaskPriority(2); setNewBaseDateType('stageDate'); setNewTemplateCategory('');
       };
-
-      const handleDeleteTemplate = (templateId) => {
-        showConfirm('このテンプレートを削除しますか？\n（すでに顧客に割り当て済みのタスクは消えません）', async () => {
-          const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'task_templates', templateId);
-          await deleteDoc(docRef).catch(e => console.error(e));
-        });
-      };
-
-      // 編集開始
-      const handleEditClick = (template) => {
-        setEditingTemplateId(template.id);
-        setEditTaskTitle(template.title);
-        setEditDaysOffset(template.daysOffset);
-        setEditTaskPriority(template.priority || 2);
-        setEditBaseDateType(template.baseDateType || 'stageDate');
-      };
-
-      // 編集キャンセル
-      const handleCancelEdit = () => {
-        setEditingTemplateId(null);
-      };
-
-      // 編集内容の保存
       const handleUpdateTemplate = async () => {
         if (!editTaskTitle) return;
-        const updatedTemplate = {
-          title: editTaskTitle,
-          daysOffset: parseInt(editDaysOffset, 10) || 0,
-          priority: editTaskPriority,
-          baseDateType: editBaseDateType
-        };
-
-        const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'task_templates', editingTemplateId);
-        try {
-          await updateDoc(docRef, updatedTemplate);
-          setEditingTemplateId(null);
-        } catch (error) {
-          console.error("Error updating template:", error);
-          showAlert("テンプレートの更新に失敗しました。");
-        }
+        const updatedTemplate = { title: editTaskTitle, daysOffset: parseInt(editDaysOffset, 10) || 0, priority: editTaskPriority, baseDateType: editBaseDateType, categoryId: editTemplateCategory };
+        await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'task_templates', editingTemplateId), updatedTemplate);
+        setEditingTemplateId(null);
+      };
+      const handleDeleteTemplate = (templateId) => {
+        showConfirm('削除しますか？（割り当て済みのタスクは消えません）', async () => await deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'task_templates', templateId)));
       };
 
-      const currentStageTemplates = templates.filter(t => t.stageId === selectedStage).sort((a,b) => {
-         if(a.baseDateType !== b.baseDateType) return a.baseDateType === 'stageDate' ? -1 : 1;
-         return a.daysOffset - b.daysOffset;
-      });
+      const currentStageTemplates = templates.filter(t => t.stageId === selectedStage).sort((a,b) => (a.baseDateType === b.baseDateType) ? (a.daysOffset - b.daysOffset) : (a.baseDateType === 'stageDate' ? -1 : 1));
 
       return (
-        <div className="bg-white border border-gray-200 shadow-sm animate-fade-in max-w-4xl mx-auto mt-8">
-          <div className="p-6 border-b border-gray-200 bg-gray-50 flex items-center gap-2">
-            <SettingsIcon className="w-5 h-5 text-gray-800" />
-            <h2 className="text-lg font-serif tracking-[0.2em] text-gray-800">自動タスク テンプレート設定</h2>
+        <div className="bg-white border border-gray-200 shadow-sm animate-fade-in max-w-5xl mx-auto mt-8">
+          <div className="p-6 border-b border-gray-200 bg-gray-50 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-center gap-2"><SettingsIcon className="w-5 h-5 text-gray-800" /><h2 className="text-lg font-serif tracking-[0.2em] text-gray-800">システム設定</h2></div>
+            <div className="flex bg-white border border-gray-200 p-1 flex-wrap">
+               <button onClick={() => setSelectedTab('templates')} className={`px-4 py-1 text-xs tracking-widest ${selectedTab === 'templates' ? 'bg-gray-800 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}>自動タスク生成</button>
+               <button onClick={() => setSelectedTab('matrix')} className={`px-4 py-1 text-xs tracking-widest ${selectedTab === 'matrix' ? 'bg-gray-800 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}>アイゼンハワー基準</button>
+               <button onClick={() => setSelectedTab('categories')} className={`px-4 py-1 text-xs tracking-widest ${selectedTab === 'categories' ? 'bg-gray-800 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}>タスク分類（タグ）</button>
+            </div>
           </div>
           
-          <div className="flex flex-col md:flex-row">
-            {/* Sidebar (Stages) */}
-            <div className="w-full md:w-64 border-r border-gray-200 bg-gray-50/30">
-              {UI_STAGES.map(stage => (
-                <button
-                  key={stage.id}
-                  onClick={() => setSelectedStage(stage.id)}
-                  className={`w-full text-left px-6 py-4 text-sm tracking-wider transition-colors border-b border-gray-100 ${selectedStage === stage.id ? 'bg-white border-l-4 border-l-gray-800 font-medium text-gray-900 shadow-sm' : 'text-gray-500 hover:bg-gray-100'}`}
-                >
-                  {stage.label}
-                </button>
-              ))}
-            </div>
+          {selectedTab === 'categories' && (
+             <div className="p-8">
+                <h3 className="text-lg font-medium text-gray-800 mb-2">タスクの分類（カテゴリ）設定</h3>
+                <p className="text-xs text-gray-500 tracking-wider mb-8 leading-relaxed">タスクを整理するための分類タグを作成・編集できます。設定した色はマトリクス画面等で反映されます。</p>
 
-            {/* Main Content (Templates) */}
-            <div className="flex-1 p-8">
-              <h3 className="text-lg font-medium text-gray-800 mb-2">「{selectedStage}」への移行時</h3>
-              <p className="text-xs text-gray-500 tracking-wider mb-8 leading-relaxed">このステージに移行した際、またはこのステージで新規登録した際に、以下のタスクが自動的に追加されます。</p>
-
-              {/* Add New Template */}
-              <div className="bg-gray-50 p-6 border border-gray-200 mb-8">
-                <h4 className="text-xs font-bold text-gray-600 tracking-widest uppercase mb-4">新しいタスクを追加</h4>
-                <div className="flex flex-col sm:flex-row gap-4 items-end">
-                  <div className="flex-1 w-full">
-                    <label className="block text-[10px] text-gray-500 tracking-widest uppercase mb-1">タスク名</label>
-                    <input 
-                      type="text" 
-                      value={newTaskTitle} 
-                      onChange={(e) => setNewTaskTitle(e.target.value)}
-                      placeholder="例: サンクスLINE" 
-                      className="w-full border-b border-gray-300 py-1.5 focus:border-gray-800 outline-none bg-transparent text-sm" 
-                    />
-                  </div>
-                  <div className="w-full sm:w-56">
-                    <label className="block text-[10px] text-gray-500 tracking-widest uppercase mb-1">期日の基準と日数</label>
-                    <div className="flex items-center gap-2">
-                      <select 
-                        value={newBaseDateType} 
-                        onChange={(e) => setNewBaseDateType(e.target.value)}
-                        className="w-28 border-b border-gray-300 py-1.5 focus:border-gray-800 outline-none bg-transparent text-xs"
-                      >
-                        <option value="stageDate">ステージ移行日</option>
-                        <option value="nextDate">次回予定日</option>
-                      </select>
-                      <span className="text-xs text-gray-500">の</span>
-                      <input 
-                        type="number" 
-                        value={newDaysOffset} 
-                        onChange={(e) => setNewDaysOffset(e.target.value)}
-                        className="w-12 border-b border-gray-300 py-1.5 focus:border-gray-800 outline-none bg-transparent text-sm text-center" 
-                      />
-                      <span className="text-xs text-gray-600 whitespace-nowrap">日後</span>
-                    </div>
-                    <div className="text-[9px] text-gray-400 mt-1">※マイナスで〇日前になります</div>
-                  </div>
-                  <div className="w-full sm:w-20">
-                    <label className="block text-[10px] text-gray-500 tracking-widest uppercase mb-2">重要度</label>
-                    <div className="pb-1">
-                       <PriorityMeter priority={newTaskPriority} onChange={setNewTaskPriority} />
-                    </div>
-                  </div>
-                  <button onClick={handleAddTemplate} className="bg-gray-800 text-white px-6 py-2 text-xs tracking-widest hover:bg-gray-900 transition-colors whitespace-nowrap w-full sm:w-auto mb-1">
-                    追加
-                  </button>
+                <div className="bg-gray-50 p-6 border border-gray-200 mb-8 max-w-3xl">
+                   <h4 className="text-xs font-bold text-gray-600 tracking-widest uppercase mb-4">新しい分類を追加</h4>
+                   <div className="flex flex-col sm:flex-row gap-6 items-start sm:items-end">
+                      <div className="w-full sm:w-64">
+                         <label className="block text-[10px] text-gray-500 tracking-widest uppercase mb-2">分類名</label>
+                         <input type="text" value={newCatName} onChange={e=>setNewCatName(e.target.value)} placeholder="例: 連絡・確認" className="w-full border-b border-gray-300 py-1.5 focus:border-gray-800 outline-none bg-transparent text-sm" />
+                      </div>
+                      <div className="flex-1">
+                         <label className="block text-[10px] text-gray-500 tracking-widest uppercase mb-2">カラー設定</label>
+                         <div className="flex flex-wrap gap-2">
+                            {CATEGORY_COLORS.map(c => (
+                               <button key={c.id} onClick={() => setNewCatColor(c.id)} title={c.name} className={`w-6 h-6 rounded-full border-2 transition-all ${c.bg} ${newCatColor === c.id ? 'border-gray-800 scale-110 shadow-sm' : 'border-transparent hover:scale-110'}`} />
+                            ))}
+                         </div>
+                      </div>
+                      <button onClick={handleAddCategory} className="bg-gray-800 text-white px-6 py-2 text-xs tracking-widest hover:bg-gray-900 transition-colors shadow-sm whitespace-nowrap">追加する</button>
+                   </div>
                 </div>
-              </div>
 
-              {/* Template List */}
-              <div>
-                <h4 className="text-xs font-bold text-gray-600 tracking-widest uppercase mb-4 border-b border-gray-200 pb-2">設定済みタスク ({currentStageTemplates.length})</h4>
-                <div className="space-y-3">
-                  {currentStageTemplates.length === 0 ? (
-                    <div className="text-center py-8 border border-dashed border-gray-300 text-gray-400 text-xs tracking-wider">
-                      自動追加されるタスクはありません。
-                    </div>
-                  ) : (
-                    currentStageTemplates.map(template => {
-                      // ▼ 編集中モードのUI
-                      if (editingTemplateId === template.id) {
-                        return (
-                          <div key={template.id} className="bg-gray-50 border border-gray-300 p-4 shadow-sm animate-fade-in">
-                            <div className="flex flex-col sm:flex-row gap-4 items-end">
-                              <div className="flex-1 w-full">
-                                <label className="block text-[10px] text-gray-500 tracking-widest uppercase mb-1">タスク名</label>
-                                <input 
-                                  type="text" 
-                                  value={editTaskTitle} 
-                                  onChange={(e) => setEditTaskTitle(e.target.value)}
-                                  className="w-full border-b border-gray-400 py-1 focus:border-gray-800 outline-none bg-transparent text-sm font-medium text-gray-900" 
-                                />
-                              </div>
-                              <div className="w-full sm:w-56">
-                                <label className="block text-[10px] text-gray-500 tracking-widest uppercase mb-1">期日の基準と日数</label>
-                                <div className="flex items-center gap-2">
-                                  <select 
-                                    value={editBaseDateType} 
-                                    onChange={(e) => setEditBaseDateType(e.target.value)}
-                                    className="w-28 border-b border-gray-400 py-1 focus:border-gray-800 outline-none bg-transparent text-xs"
-                                  >
-                                    <option value="stageDate">ステージ移行日</option>
-                                    <option value="nextDate">次回予定日</option>
-                                  </select>
-                                  <span className="text-xs text-gray-500">の</span>
-                                  <input 
-                                    type="number" 
-                                    value={editDaysOffset} 
-                                    onChange={(e) => setEditDaysOffset(e.target.value)}
-                                    className="w-12 border-b border-gray-400 py-1 focus:border-gray-800 outline-none bg-transparent text-sm text-center" 
-                                  />
-                                  <span className="text-xs text-gray-600 whitespace-nowrap">日後</span>
-                                </div>
-                              </div>
-                              <div className="w-full sm:w-20">
-                                <label className="block text-[10px] text-gray-500 tracking-widest uppercase mb-2">重要度</label>
-                                <div className="pb-1">
-                                   <PriorityMeter priority={editTaskPriority} onChange={setEditTaskPriority} />
-                                </div>
-                              </div>
-                              <div className="flex gap-2 mb-1 w-full sm:w-auto">
-                                <button onClick={handleCancelEdit} className="px-3 py-2 text-xs tracking-widest text-gray-500 hover:text-gray-800 transition-colors border border-transparent whitespace-nowrap">ｷｬﾝｾﾙ</button>
-                                <button onClick={handleUpdateTemplate} className="bg-gray-800 text-white px-4 py-2 text-xs tracking-widest hover:bg-gray-900 transition-colors shadow-sm whitespace-nowrap">保存</button>
-                              </div>
+                <div className="max-w-3xl">
+                   <h4 className="text-xs font-bold text-gray-600 tracking-widest uppercase mb-4 border-b border-gray-200 pb-2">設定済みの分類 ({categories.length})</h4>
+                   <div className="space-y-3">
+                      {categories.map(cat => {
+                         const cInfo = CATEGORY_COLORS.find(c => c.id === cat.colorId) || CATEGORY_COLORS[0];
+                         if (editingCatId === cat.id) {
+                            return (
+                               <div key={cat.id} className="bg-white border border-gray-300 p-4 shadow-sm flex flex-col sm:flex-row gap-4 items-center">
+                                  <input type="text" value={editCatName} onChange={e=>setEditCatName(e.target.value)} className="border-b border-gray-400 py-1 focus:border-gray-800 outline-none text-sm w-full sm:w-48" />
+                                  <div className="flex gap-1">
+                                     {CATEGORY_COLORS.map(c => (
+                                        <button key={c.id} onClick={() => setEditCatColor(c.id)} className={`w-5 h-5 rounded-full border-2 ${c.bg} ${editCatColor === c.id ? 'border-gray-800' : 'border-transparent'}`} />
+                                     ))}
+                                  </div>
+                                  <div className="flex gap-2 ml-auto">
+                                     <button onClick={()=>setEditingCatId(null)} className="px-3 py-1.5 text-xs text-gray-500 hover:bg-gray-100">ｷｬﾝｾﾙ</button>
+                                     <button onClick={handleUpdateCategory} className="bg-gray-800 text-white px-4 py-1.5 text-xs">保存</button>
+                                  </div>
+                               </div>
+                            )
+                         }
+                         return (
+                            <div key={cat.id} className="flex justify-between items-center bg-white border border-gray-200 p-3 hover:border-gray-300 group">
+                               <div className="flex items-center gap-3">
+                                  <span className={`text-[10px] px-2 py-1 rounded-sm border ${cInfo.bg} ${cInfo.text} ${cInfo.border}`}>{cat.name}</span>
+                               </div>
+                               <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                                  <button onClick={() => {setEditingCatId(cat.id); setEditCatName(cat.name); setEditCatColor(cat.colorId);}} className="text-gray-400 hover:text-gray-800 p-1.5"><EditIcon className="w-4 h-4" /></button>
+                                  <button onClick={() => handleDeleteCategory(cat.id)} className="text-gray-400 hover:text-rose-500 p-1.5"><TrashIcon className="w-4 h-4" /></button>
+                               </div>
                             </div>
-                          </div>
-                        );
-                      }
-                      
-                      // ▼ 通常表示モードのUI
-                      return (
-                        <div key={template.id} className="flex justify-between items-center bg-white border border-gray-200 p-4 hover:border-gray-300 transition-colors group">
-                          <div>
-                            <div className="flex items-center gap-2 mb-1">
-                               <div className="text-sm text-gray-800 font-medium">{template.title}</div>
-                               <PriorityMeter priority={template.priority || 2} readOnly={true} />
-                            </div>
-                            <div className="text-[11px] text-gray-500 tracking-wider">期日: {template.baseDateType === 'nextDate' ? '次回予定日' : 'ステージ移行日'} の <span className="font-bold text-gray-700">{template.daysOffset}</span> 日後</div>
-                          </div>
-                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                            <button onClick={() => handleEditClick(template)} className="text-gray-300 hover:text-gray-800 p-2 transition-colors" title="編集">
-                              <EditIcon className="w-4 h-4" />
-                            </button>
-                            <button onClick={() => handleDeleteTemplate(template.id)} className="text-gray-300 hover:text-rose-500 p-2 transition-colors" title="削除">
-                              <TrashIcon className="w-4 h-4" />
-                            </button>
-                          </div>
-                        </div>
-                      );
-                    })
-                  )}
+                         )
+                      })}
+                   </div>
                 </div>
-              </div>
-            </div>
-          </div>
+             </div>
+          )}
+
+          {selectedTab === 'templates' && (
+             <div className="flex flex-col md:flex-row">
+               <div className="w-full md:w-64 border-r border-gray-200 bg-gray-50/30">
+                 {UI_STAGES.map(stage => (
+                   <button key={stage.id} onClick={() => setSelectedStage(stage.id)} className={`w-full text-left px-6 py-4 text-sm tracking-wider transition-colors border-b border-gray-100 ${selectedStage === stage.id ? 'bg-white border-l-4 border-l-gray-800 font-medium text-gray-900 shadow-sm' : 'text-gray-500 hover:bg-gray-100'}`}>
+                     {stage.label}
+                   </button>
+                 ))}
+               </div>
+               <div className="flex-1 p-8">
+                 <div className="bg-gray-50 p-6 border border-gray-200 mb-8">
+                   <h4 className="text-xs font-bold text-gray-600 tracking-widest uppercase mb-4">新しいタスクを追加</h4>
+                   <div className="flex flex-col xl:flex-row gap-4 items-end">
+                     <div className="flex-1 w-full min-w-[200px]">
+                       <label className="block text-[10px] text-gray-500 tracking-widest uppercase mb-1">タスク名</label>
+                       <input type="text" value={newTaskTitle} onChange={(e) => setNewTaskTitle(e.target.value)} placeholder="例: サンクスLINE" className="w-full border-b border-gray-300 py-1.5 focus:border-gray-800 outline-none bg-transparent text-sm" />
+                     </div>
+                     <div className="w-full xl:w-auto">
+                        <label className="block text-[10px] text-gray-500 tracking-widest uppercase mb-1">分類</label>
+                        <select value={newTemplateCategory} onChange={e=>setNewTemplateCategory(e.target.value)} className="w-full xl:w-28 border-b border-gray-300 py-1.5 focus:border-gray-800 outline-none bg-transparent text-xs text-gray-700">
+                           <option value="">未分類</option>
+                           {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                        </select>
+                     </div>
+                     <div className="w-full xl:w-auto">
+                       <label className="block text-[10px] text-gray-500 tracking-widest uppercase mb-1">期日の基準と日数</label>
+                       <div className="flex items-center gap-2">
+                         <select value={newBaseDateType} onChange={(e) => setNewBaseDateType(e.target.value)} className="w-24 border-b border-gray-300 py-1.5 focus:border-gray-800 outline-none bg-transparent text-[11px]">
+                           <option value="stageDate">移行日</option><option value="nextDate">次回予定日</option>
+                         </select>
+                         <span className="text-[10px] text-gray-500">の</span>
+                         <input type="number" value={newDaysOffset} onChange={(e) => setNewDaysOffset(e.target.value)} className="w-12 border-b border-gray-300 py-1.5 focus:border-gray-800 outline-none bg-transparent text-sm text-center" />
+                         <span className="text-[10px] text-gray-600 whitespace-nowrap">日後</span>
+                       </div>
+                     </div>
+                     <div className="w-full xl:w-auto">
+                       <label className="block text-[10px] text-gray-500 tracking-widest uppercase mb-2">重要度</label>
+                       <div className="pb-1"><PriorityMeter priority={newTaskPriority} onChange={setNewTaskPriority} /></div>
+                     </div>
+                     <button onClick={handleAddTemplate} className="bg-gray-800 text-white px-6 py-2 text-xs tracking-widest hover:bg-gray-900 transition-colors whitespace-nowrap w-full xl:w-auto mb-1">追加</button>
+                   </div>
+                 </div>
+
+                 <div>
+                   <h4 className="text-xs font-bold text-gray-600 tracking-widest uppercase mb-4 border-b border-gray-200 pb-2">設定済みタスク ({currentStageTemplates.length})</h4>
+                   <div className="space-y-2">
+                     {currentStageTemplates.length === 0 ? <div className="text-center py-8 border border-dashed border-gray-300 text-gray-400 text-xs">自動追加されるタスクはありません</div> : 
+                       currentStageTemplates.map(template => {
+                         if (editingTemplateId === template.id) {
+                           return (
+                             <div key={template.id} className="bg-gray-50 border border-gray-400 p-4 shadow-sm animate-fade-in flex flex-col xl:flex-row gap-4 items-end">
+                               <div className="flex-1 w-full">
+                                 <label className="block text-[10px] text-gray-500 uppercase mb-1">タスク名</label>
+                                 <input type="text" value={editTaskTitle} onChange={e=>setEditTaskTitle(e.target.value)} className="w-full border-b border-gray-400 py-1 focus:border-gray-800 outline-none bg-transparent text-sm font-medium" />
+                               </div>
+                               <div className="w-full xl:w-auto">
+                                 <label className="block text-[10px] text-gray-500 uppercase mb-1">分類</label>
+                                 <select value={editTemplateCategory} onChange={e=>setEditTemplateCategory(e.target.value)} className="w-full xl:w-28 border-b border-gray-400 py-1 focus:border-gray-800 outline-none bg-transparent text-xs text-gray-700">
+                                   <option value="">未分類</option>
+                                   {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                 </select>
+                               </div>
+                               <div className="w-full xl:w-auto">
+                                 <label className="block text-[10px] text-gray-500 uppercase mb-1">期日基準</label>
+                                 <div className="flex items-center gap-1">
+                                   <select value={editBaseDateType} onChange={e=>setEditBaseDateType(e.target.value)} className="w-24 border-b border-gray-400 py-1 focus:border-gray-800 outline-none bg-transparent text-[11px]"><option value="stageDate">移行日</option><option value="nextDate">次回予定日</option></select>
+                                   <span className="text-[10px]">の</span>
+                                   <input type="number" value={editDaysOffset} onChange={e=>setEditDaysOffset(e.target.value)} className="w-10 border-b border-gray-400 py-1 focus:border-gray-800 outline-none bg-transparent text-sm text-center" />
+                                   <span className="text-[10px]">日後</span>
+                                 </div>
+                               </div>
+                               <div className="w-full xl:w-auto">
+                                 <label className="block text-[10px] text-gray-500 uppercase mb-2">重要度</label>
+                                 <div className="pb-1"><PriorityMeter priority={editTaskPriority} onChange={setEditTaskPriority} /></div>
+                               </div>
+                               <div className="flex gap-2 mb-1">
+                                 <button onClick={()=>setEditingTemplateId(null)} className="px-3 py-1.5 text-xs text-gray-500 hover:text-gray-800 border border-gray-300 bg-white">ｷｬﾝｾﾙ</button>
+                                 <button onClick={handleUpdateTemplate} className="bg-gray-800 text-white px-4 py-1.5 text-xs">保存</button>
+                               </div>
+                             </div>
+                           );
+                         }
+                         const catData = getCategoryData(template.categoryId, categories);
+                         return (
+                           <div key={template.id} className="flex justify-between items-center bg-white border border-gray-200 p-3 hover:border-gray-300 transition-colors group">
+                             <div>
+                               <div className="flex items-center gap-2 mb-1">
+                                  {catData && <span className={`text-[9px] px-1.5 py-0.5 rounded-sm border ${catData.bg} ${catData.text} ${catData.border} leading-none`}>{catData.name}</span>}
+                                  <div className="text-sm text-gray-800 font-medium">{template.title}</div>
+                                  <PriorityMeter priority={template.priority || 2} readOnly={true} />
+                               </div>
+                               <div className="text-[11px] text-gray-500 tracking-wider">期日: {template.baseDateType === 'nextDate' ? '次回予定日' : 'ステージ移行日'} の <span className="font-bold text-gray-700">{template.daysOffset}</span> 日後</div>
+                             </div>
+                             <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                               <button onClick={() => {setEditingTemplateId(template.id); setEditTaskTitle(template.title); setEditDaysOffset(template.daysOffset); setEditTaskPriority(template.priority||2); setEditBaseDateType(template.baseDateType||'stageDate'); setEditTemplateCategory(template.categoryId||'');}} className="text-gray-400 hover:text-gray-800 p-2"><EditIcon className="w-4 h-4" /></button>
+                               <button onClick={() => handleDeleteTemplate(template.id)} className="text-gray-400 hover:text-rose-500 p-2"><TrashIcon className="w-4 h-4" /></button>
+                             </div>
+                           </div>
+                         );
+                       })
+                     }
+                   </div>
+                 </div>
+               </div>
+             </div>
+          )}
+
+          {selectedTab === 'matrix' && (
+             <div className="p-8">
+               <h3 className="text-lg font-medium text-gray-800 mb-2">アイゼンハワーマトリクスの振り分け基準</h3>
+               <p className="text-[11px] text-gray-500 tracking-wider mb-8 leading-relaxed max-w-2xl">「タスクボード」画面における、タスクの緊急・重要の判定基準を変更します。チームの状況や時期に合わせて柔軟に調整してください。</p>
+               <div className="space-y-8 max-w-lg bg-gray-50 p-6 border border-gray-200">
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-3">【緊急】の基準</label>
+                    <div className="flex items-center gap-3">
+                       <span className="text-sm text-gray-600">今日から</span>
+                       <input type="number" value={matrixUrgentDays} onChange={(e) => setMatrixUrgentDays(e.target.value)} className="w-20 border border-gray-300 px-3 py-2 outline-none text-center focus:border-gray-800 bg-white" />
+                       <span className="text-sm text-gray-600">日以内のタスクを「緊急」とする</span>
+                    </div>
+                    <p className="text-[10px] text-gray-400 mt-2">※期限切れのタスクは日数に関わらず常に緊急扱いとなります。</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-gray-700 mb-3">【重要】の基準</label>
+                    <select value={matrixImportantLevel} onChange={(e) => setMatrixImportantLevel(e.target.value)} className="w-full border border-gray-300 px-3 py-2 outline-none focus:border-gray-800 text-sm bg-white cursor-pointer">
+                       <option value="3">重要度【高】のみを「重要」とする</option>
+                       <option value="2">重要度【中】と【高】を「重要」とする</option>
+                       <option value="1">すべてのタスクを「重要」とする</option>
+                    </select>
+                  </div>
+                  <div className="pt-4 border-t border-gray-200 mt-4">
+                    <button onClick={handleSaveMatrixConfig} className="bg-gray-800 text-white px-8 py-2.5 text-xs tracking-widest hover:bg-gray-900 transition-colors shadow-sm w-full sm:w-auto">設定を保存する</button>
+                  </div>
+               </div>
+             </div>
+          )}
         </div>
       );
     };
 
-    // --- Main Application ---
     function App() {
       const [user, setUser] = useState(null);
       const [authChecking, setAuthChecking] = useState(true);
+      
+      // Data State
       const [customers, setCustomers] = useState([]);
+      const [generalTasks, setGeneralTasks] = useState([]);
       const [templates, setTemplates] = useState([]);
+      const [categories, setCategories] = useState([]);
+      const [systemConfig, setSystemConfig] = useState(null);
       const [isLoading, setIsLoading] = useState(true);
 
-      const [currentView, setCurrentView] = useState('board');
+      // View State
+      const [currentView, setCurrentView] = useState('board'); // 'board', 'matrix', 'taskList', 'remind', 'settings'
       const [boardTab, setBoardTab] = useState('全体');
       const [sortOrder, setSortOrder] = useState('nextDateAsc');
       const [taskListSort, setTaskListSort] = useState('dueDateAsc');
+      const [filterCategory, setFilterCategory] = useState('all'); // matrix filter
       
+      // Form State
       const [showFormModal, setShowFormModal] = useState(false);
       const [isEditing, setIsEditing] = useState(false);
       const [editingId, setEditingId] = useState(null);
-
-      // ダイアログ状態管理
       const [dialog, setDialog] = useState({ isOpen: false, message: '', type: 'alert', onConfirm: null });
-      const showAlert = (message) => setDialog({ isOpen: true, message, type: 'alert', onConfirm: () => setDialog({ ...dialog, isOpen: false }) });
-      const showConfirm = (message, onConfirm) => setDialog({ isOpen: true, message, type: 'confirm', onConfirm: () => { onConfirm(); setDialog({ ...dialog, isOpen: false }); } });
-
       const [showCompletedTasks, setShowCompletedTasks] = useState({});
-      
       const [showStageModal, setShowStageModal] = useState(false);
       const [stageModalData, setStageModalData] = useState(null);
+
+      // General Task Form State
+      const [newGenTaskTitle, setNewGenTaskTitle] = useState('');
+      const [newGenTaskDate, setNewGenTaskDate] = useState(getTodayString());
+      const [newGenTaskPriority, setNewGenTaskPriority] = useState(2);
+      const [newGenTaskCategory, setNewGenTaskCategory] = useState('');
 
       const initialFormState = {
         name: '', nextDateDay: '', nextDateTimeSelect: '10:00', customNextDateTime: '', nextContentSelect: '来場前', customNextContent: '',
         hurdles: [], hasCustomHurdle: false, customHurdle: '', summary: '',
-        assignee: ASSIGNEE_OPTIONS[0], customAssignee: '', meetingUrl: '',
-        currentStage: '来場前'
+        assignee: ASSIGNEE_OPTIONS[0], customAssignee: '', meetingUrl: '', currentStage: '来場前'
       };
       const [formData, setFormData] = useState(initialFormState);
 
-      // --- Firebase Auth & Data Fetching ---
+      const showAlert = (message) => setDialog({ isOpen: true, message, type: 'alert', onConfirm: () => setDialog({ ...dialog, isOpen: false }) });
+      const showConfirm = (message, onConfirm) => setDialog({ isOpen: true, message, type: 'confirm', onConfirm: () => { onConfirm(); setDialog({ ...dialog, isOpen: false }); } });
+
       useEffect(() => {
-        const initAuth = async () => {
-          try {
-            if (isPreviewEnv) {
-              await signInWithCustomToken(auth, __initial_auth_token);
-            }
-          } catch (error) {
-            console.error("Auth error:", error);
-          }
-        };
+        const initAuth = async () => { try { if (isPreviewEnv) await signInWithCustomToken(auth, __initial_auth_token); } catch (e) {} };
         initAuth();
-        const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-          setUser(currentUser);
-          setAuthChecking(false);
-        });
+        const unsubscribe = onAuthStateChanged(auth, (currentUser) => { setUser(currentUser); setAuthChecking(false); });
         return () => unsubscribe();
       }, []);
 
       useEffect(() => {
         if (!user) return;
         
-        // テンプレート自動生成（アップデートバージョン管理付き）
+        // Seed Categories
+        const seedCategories = async () => {
+           try {
+             const categoriesRef = collection(db, 'artifacts', appId, 'public', 'data', 'task_categories');
+             const catDocs = await getDocs(categoriesRef);
+             if (catDocs.empty) {
+                const DEFAULT_CATS = [
+                  { id: 'cat_contact', name: '連絡・確認', colorId: 'teal' },
+                  { id: 'cat_doc', name: '事務・書類', colorId: 'slate' },
+                  { id: 'cat_mtg', name: '商談・準備', colorId: 'indigo' },
+                  { id: 'cat_research', name: '調査・手配', colorId: 'amber' }
+                ];
+                for (const c of DEFAULT_CATS) await setDoc(doc(categoriesRef, c.id), { name: c.name, colorId: c.colorId, createdAt: new Date().toISOString() });
+             }
+           } catch(e) { console.error("Category Seed Error", e); }
+        };
+        seedCategories();
+
+        // Seed Templates
         const seedDefaultTemplates = async () => {
           try {
             const configRef = doc(db, 'artifacts', appId, 'public', 'data', 'system_config', 'default');
             const configSnap = await getDoc(configRef);
             const currentSeedVersion = configSnap.exists() ? (configSnap.data().seedVersion || 1) : 0;
-            // 今回のアップデートでバージョン3に引き上げ
-            const TARGET_VERSION = 3; 
+            const TARGET_VERSION = 5;
 
             if (currentSeedVersion < TARGET_VERSION) {
               const templatesRef = collection(db, 'artifacts', appId, 'public', 'data', 'task_templates');
-              
-              // バージョンアップ時は古いテンプレートを一旦クリアする
               if (currentSeedVersion > 0) {
                  const oldDocs = await getDocs(templatesRef);
                  oldDocs.forEach(d => deleteDoc(d.ref).catch(e=>console.error(e)));
               }
-              
-              // 今回一緒に作成した完璧なデフォルトテンプレート群
               const defaults = [
                 // 【来場前】
-                { stageId: '来場前', title: 'ZOHO,アンケート確認', daysOffset: 0, priority: 2, baseDateType: 'stageDate' },
-                { stageId: '来場前', title: '補足情報がないか集客チャットを確認', daysOffset: -3, priority: 2, baseDateType: 'nextDate' },
-                { stageId: '来場前', title: '0次接客を行う', daysOffset: -3, priority: 2, baseDateType: 'nextDate' },
-                
+                { stageId: '来場前', title: 'ZOHO,アンケート確認', daysOffset: 0, priority: 2, baseDateType: 'stageDate', categoryId: 'cat_doc' },
+                { stageId: '来場前', title: '補足情報がないか集客チャットを確認', daysOffset: -3, priority: 2, baseDateType: 'nextDate', categoryId: 'cat_contact' },
+                { stageId: '来場前', title: '0次接客を行う', daysOffset: -3, priority: 2, baseDateType: 'nextDate', categoryId: 'cat_contact' },
                 // 【初回】
-                { stageId: '初回', title: 'ZOHO登録', daysOffset: 0, priority: 2, baseDateType: 'stageDate' },
-                { stageId: '初回', title: '未完了の予定追加', daysOffset: 0, priority: 2, baseDateType: 'stageDate' },
-                { stageId: '初回', title: 'Rakumoに設備,LIFEFUNDを追加', daysOffset: 0, priority: 3, baseDateType: 'stageDate' },
-                { stageId: '初回', title: '顧客テーブル追加', daysOffset: 0, priority: 2, baseDateType: 'stageDate' },
-                { stageId: '初回', title: 'サンクスLINE送付', daysOffset: 0, priority: 3, baseDateType: 'stageDate' },
-                { stageId: '初回', title: '議事録作成', daysOffset: 3, priority: 3, baseDateType: 'stageDate' },
-                { stageId: '初回', title: '案件対策タイム（個人）を30分間Rakumoに登録', daysOffset: 3, priority: 2, baseDateType: 'stageDate' },
-                { stageId: '初回', title: '商談レビューを30分間Rakumoに登録', daysOffset: 3, priority: 2, baseDateType: 'stageDate' },
-                { stageId: '初回', title: 'nottaにデータ追加', daysOffset: 5, priority: 1, baseDateType: 'stageDate' },
-                { stageId: '初回', title: 'notebookLMを作成しデータ追加', daysOffset: 5, priority: 1, baseDateType: 'stageDate' },
-                
+                { stageId: '初回', title: 'ZOHO登録', daysOffset: 0, priority: 2, baseDateType: 'stageDate', categoryId: 'cat_doc' },
+                { stageId: '初回', title: '未完了の予定追加', daysOffset: 0, priority: 2, baseDateType: 'stageDate', categoryId: 'cat_doc' },
+                { stageId: '初回', title: 'Rakumoに設備,LIFEFUNDを追加', daysOffset: 0, priority: 3, baseDateType: 'stageDate', categoryId: 'cat_doc' },
+                { stageId: '初回', title: '顧客テーブル追加', daysOffset: 0, priority: 2, baseDateType: 'stageDate', categoryId: 'cat_doc' },
+                { stageId: '初回', title: 'サンクスLINE送付', daysOffset: 0, priority: 3, baseDateType: 'stageDate', categoryId: 'cat_contact' },
+                { stageId: '初回', title: '議事録作成', daysOffset: 3, priority: 3, baseDateType: 'stageDate', categoryId: 'cat_doc' },
+                { stageId: '初回', title: '案件対策タイム（個人）を30分間Rakumoに登録', daysOffset: 3, priority: 2, baseDateType: 'stageDate', categoryId: 'cat_mtg' },
+                { stageId: '初回', title: '商談レビューを30分間Rakumoに登録', daysOffset: 3, priority: 2, baseDateType: 'stageDate', categoryId: 'cat_mtg' },
+                { stageId: '初回', title: 'nottaにデータ追加', daysOffset: 5, priority: 1, baseDateType: 'stageDate', categoryId: 'cat_doc' },
+                { stageId: '初回', title: 'notebookLMを作成しデータ追加', daysOffset: 5, priority: 1, baseDateType: 'stageDate', categoryId: 'cat_doc' },
                 // 【おうちカフェ】
-                { stageId: 'おうちカフェ', title: 'LPヒアリングシートのお渡し', daysOffset: 0, priority: 3, baseDateType: 'stageDate' },
-                { stageId: 'おうちカフェ', title: '未完了の活動追加', daysOffset: 0, priority: 2, baseDateType: 'stageDate' },
-                { stageId: 'おうちカフェ', title: 'Rakumoに設備,和さん,LIFEFUND登録', daysOffset: 0, priority: 3, baseDateType: 'stageDate' },
-                { stageId: 'おうちカフェ', title: 'LP日程調整チャット', daysOffset: 0, priority: 3, baseDateType: 'stageDate' },
-                { stageId: 'おうちカフェ', title: 'サンクスLINE', daysOffset: 0, priority: 2, baseDateType: 'stageDate' },
-                { stageId: 'おうちカフェ', title: '議事録送付', daysOffset: 0, priority: 2, baseDateType: 'stageDate' },
-                { stageId: 'おうちカフェ', title: '顧客テーブル更新', daysOffset: 0, priority: 2, baseDateType: 'stageDate' },
-                { stageId: 'おうちカフェ', title: 'nottaにデータ追加', daysOffset: 5, priority: 1, baseDateType: 'stageDate' },
-                { stageId: 'おうちカフェ', title: 'notebookLMにデータ追加', daysOffset: 5, priority: 1, baseDateType: 'stageDate' },
-                
+                { stageId: 'おうちカフェ', title: 'LPヒアリングシートのお渡し', daysOffset: 0, priority: 3, baseDateType: 'stageDate', categoryId: 'cat_contact' },
+                { stageId: 'おうちカフェ', title: '未完了の活動追加', daysOffset: 0, priority: 2, baseDateType: 'stageDate', categoryId: 'cat_doc' },
+                { stageId: 'おうちカフェ', title: 'Rakumoに設備,和さん,LIFEFUND登録', daysOffset: 0, priority: 3, baseDateType: 'stageDate', categoryId: 'cat_doc' },
+                { stageId: 'おうちカフェ', title: 'LP日程調整チャット', daysOffset: 0, priority: 3, baseDateType: 'stageDate', categoryId: 'cat_contact' },
+                { stageId: 'おうちカフェ', title: 'サンクスLINE', daysOffset: 0, priority: 2, baseDateType: 'stageDate', categoryId: 'cat_contact' },
+                { stageId: 'おうちカフェ', title: '議事録送付', daysOffset: 0, priority: 2, baseDateType: 'stageDate', categoryId: 'cat_contact' },
+                { stageId: 'おうちカフェ', title: '顧客テーブル更新', daysOffset: 0, priority: 2, baseDateType: 'stageDate', categoryId: 'cat_doc' },
+                { stageId: 'おうちカフェ', title: 'nottaにデータ追加', daysOffset: 5, priority: 1, baseDateType: 'stageDate', categoryId: 'cat_doc' },
+                { stageId: 'おうちカフェ', title: 'notebookLMにデータ追加', daysOffset: 5, priority: 1, baseDateType: 'stageDate', categoryId: 'cat_doc' },
                 // 【LP】
-                { stageId: 'LP', title: 'ヒアリングブックのお渡し', daysOffset: 0, priority: 3, baseDateType: 'stageDate' },
-                { stageId: 'LP', title: '未完了の活動追加', daysOffset: 0, priority: 2, baseDateType: 'stageDate' },
-                { stageId: 'LP', title: 'Rakumoに設備,LIFEFUND登録', daysOffset: 0, priority: 2, baseDateType: 'stageDate' },
-                { stageId: 'LP', title: 'サンクスLINE', daysOffset: 1, priority: 2, baseDateType: 'stageDate' },
-                { stageId: 'LP', title: 'LP結果シートの送付', daysOffset: 1, priority: 2, baseDateType: 'stageDate' },
-                { stageId: 'LP', title: '顧客テーブル更新', daysOffset: 0, priority: 2, baseDateType: 'stageDate' },
-                { stageId: 'LP', title: 'nottaにデータ追加', daysOffset: 5, priority: 1, baseDateType: 'stageDate' },
-                { stageId: 'LP', title: 'notebookLMにデータ追加', daysOffset: 5, priority: 1, baseDateType: 'stageDate' },
-
+                { stageId: 'LP', title: 'ヒアリングブックのお渡し', daysOffset: 0, priority: 3, baseDateType: 'stageDate', categoryId: 'cat_contact' },
+                { stageId: 'LP', title: '未完了の活動追加', daysOffset: 0, priority: 2, baseDateType: 'stageDate', categoryId: 'cat_doc' },
+                { stageId: 'LP', title: 'Rakumoに設備,LIFEFUND登録', daysOffset: 0, priority: 2, baseDateType: 'stageDate', categoryId: 'cat_doc' },
+                { stageId: 'LP', title: 'サンクスLINE', daysOffset: 1, priority: 2, baseDateType: 'stageDate', categoryId: 'cat_contact' },
+                { stageId: 'LP', title: 'LP結果シートの送付', daysOffset: 1, priority: 2, baseDateType: 'stageDate', categoryId: 'cat_doc' },
+                { stageId: 'LP', title: '顧客テーブル更新', daysOffset: 0, priority: 2, baseDateType: 'stageDate', categoryId: 'cat_doc' },
+                { stageId: 'LP', title: 'nottaにデータ追加', daysOffset: 5, priority: 1, baseDateType: 'stageDate', categoryId: 'cat_doc' },
+                { stageId: 'LP', title: 'notebookLMにデータ追加', daysOffset: 5, priority: 1, baseDateType: 'stageDate', categoryId: 'cat_doc' },
                 // 【HB・SB】
-                { stageId: 'HB・SB', title: '未完了の活動追加', daysOffset: 0, priority: 2, baseDateType: 'stageDate' },
-                { stageId: 'HB・SB', title: 'Rakumoに設備,LIFEFUND登録', daysOffset: 0, priority: 2, baseDateType: 'stageDate' },
-                { stageId: 'HB・SB', title: 'サンクスLINE', daysOffset: 1, priority: 2, baseDateType: 'stageDate' },
-                { stageId: 'HB・SB', title: '顧客テーブル更新', daysOffset: 0, priority: 2, baseDateType: 'stageDate' },
-                { stageId: 'HB・SB', title: 'Rakumoに資金計画書確認タイムを追加', daysOffset: 0, priority: 2, baseDateType: 'stageDate' },
-                { stageId: 'HB・SB', title: '資金計画書作成', daysOffset: -10, priority: 3, baseDateType: 'nextDate' },
-                { stageId: 'HB・SB', title: '土地探し①', daysOffset: -11, priority: 3, baseDateType: 'nextDate' },
-                { stageId: 'HB・SB', title: '土地探し②', daysOffset: -3, priority: 3, baseDateType: 'nextDate' },
-                { stageId: 'HB・SB', title: 'nottaにデータ追加', daysOffset: 5, priority: 1, baseDateType: 'stageDate' },
-                { stageId: 'HB・SB', title: 'notebookLMにデータ追加', daysOffset: 5, priority: 1, baseDateType: 'stageDate' }
+                { stageId: 'HB・SB', title: '未完了の活動追加', daysOffset: 0, priority: 2, baseDateType: 'stageDate', categoryId: 'cat_doc' },
+                { stageId: 'HB・SB', title: 'Rakumoに設備,LIFEFUND登録', daysOffset: 0, priority: 2, baseDateType: 'stageDate', categoryId: 'cat_doc' },
+                { stageId: 'HB・SB', title: 'サンクスLINE', daysOffset: 1, priority: 2, baseDateType: 'stageDate', categoryId: 'cat_contact' },
+                { stageId: 'HB・SB', title: '顧客テーブル更新', daysOffset: 0, priority: 2, baseDateType: 'stageDate', categoryId: 'cat_doc' },
+                { stageId: 'HB・SB', title: 'Rakumoに資金計画書確認タイムを追加', daysOffset: 0, priority: 2, baseDateType: 'stageDate', categoryId: 'cat_mtg' },
+                { stageId: 'HB・SB', title: '資金計画書作成', daysOffset: -10, priority: 3, baseDateType: 'nextDate', categoryId: 'cat_doc' },
+                { stageId: 'HB・SB', title: '土地探し①', daysOffset: -11, priority: 3, baseDateType: 'nextDate', categoryId: 'cat_research' },
+                { stageId: 'HB・SB', title: '土地探し②', daysOffset: -3, priority: 3, baseDateType: 'nextDate', categoryId: 'cat_research' },
+                { stageId: 'HB・SB', title: 'nottaにデータ追加', daysOffset: 5, priority: 1, baseDateType: 'stageDate', categoryId: 'cat_doc' },
+                { stageId: 'HB・SB', title: 'notebookLMにデータ追加', daysOffset: 5, priority: 1, baseDateType: 'stageDate', categoryId: 'cat_doc' }
               ];
-
               for (const t of defaults) {
-                const newRef = doc(templatesRef);
-                await setDoc(newRef, { id: newRef.id, ...t });
+                const newRef = doc(templatesRef); await setDoc(newRef, { id: newRef.id, ...t });
               }
-              // シードバージョンを更新して記録
-              await setDoc(configRef, { isTemplatesSeeded: true, seedVersion: TARGET_VERSION }, { merge: true });
+              await setDoc(configRef, { seedVersion: TARGET_VERSION }, { merge: true });
             }
-          } catch (e) {
-            console.error("Failed to seed default templates:", e);
-          }
+          } catch (e) { console.error("Seed error:", e); }
         };
         seedDefaultTemplates();
 
-        // Fetch Customers
-        const customersRef = collection(db, 'artifacts', appId, 'public', 'data', 'customers');
-        const unsubCustomers = onSnapshot(customersRef, (snapshot) => {
-          const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-          const mappedData = data.map(d => ({
-             ...d, 
-             currentStage: d.currentStage || '来場前' 
-          }));
-          setCustomers(mappedData);
-          setIsLoading(false);
-        }, (error) => {
-          console.error("Firestore Error:", error);
+        const unsubCustomers = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'customers'), (snapshot) => {
+          setCustomers(snapshot.docs.map(doc => ({ id: doc.id, currentStage: '来場前', ...doc.data() })));
           setIsLoading(false);
         });
-
-        // Fetch Templates
-        const templatesRef = collection(db, 'artifacts', appId, 'public', 'data', 'task_templates');
-        const unsubTemplates = onSnapshot(templatesRef, (snapshot) => {
-          const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-          setTemplates(data);
-        }, (error) => {
-          console.error("Firestore Error (Templates):", error);
+        const unsubTemplates = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'task_templates'), (snapshot) => setTemplates(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
+        const unsubGenTasks = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'general_tasks'), (snapshot) => setGeneralTasks(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }))));
+        const unsubCategories = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'task_categories'), (snapshot) => setCategories(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a,b)=>a.createdAt > b.createdAt ? 1 : -1)));
+        const unsubConfig = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'system_config', 'default'), (doc) => {
+          const data = doc.exists() ? doc.data() : {};
+          setSystemConfig({ matrixUrgentDays: data.matrixUrgentDays ?? 5, matrixImportantLevel: data.matrixImportantLevel ?? 3 });
         });
 
-        return () => {
-          unsubCustomers();
-          unsubTemplates();
-        };
+        return () => { unsubCustomers(); unsubTemplates(); unsubGenTasks(); unsubCategories(); unsubConfig(); };
       }, [user]);
 
-      // リマインドバッジ用の件数計算
       const activeRemindersCount = useMemo(() => {
         let count = 0;
         customers.forEach(c => {
           if (!ARCHIVE_STAGES.some(s => s.id === c.currentStage)) {
             (c.tasks || []).forEach(t => {
-              if (t.title.includes('リマインド') && !t.isDone && t.dueDate) {
-                 if (isOverdue(t.dueDate) || t.dueDate === getTodayString()) {
-                    count++;
-                 }
-              }
+              if (t.title.includes('リマインド') && !t.isDone && t.dueDate && (isOverdue(t.dueDate) || t.dueDate === getTodayString())) count++;
             });
           }
         });
         return count;
       }, [customers]);
 
-      // タスク一覧用の全タスク抽出
       const allTasksList = useMemo(() => {
         const list = [];
         customers.forEach(c => {
           if (!ARCHIVE_STAGES.some(s => s.id === c.currentStage)) {
             (c.tasks || []).forEach(t => {
-              if (!t.title.includes('リマインド') && !t.isDone) {
-                list.push({ ...t, customerId: c.id, customerName: c.name, customerStage: c.currentStage, assignee: c.assignee });
-              }
+              if (!t.title.includes('リマインド') && !t.isDone) list.push({ ...t, type: 'customer', customerId: c.id, customerName: c.name, customerStage: c.currentStage, assignee: c.assignee });
             });
           }
         });
+        generalTasks.forEach(t => {
+           if(!t.isDone) list.push({ ...t, type: 'general', customerName: '-', customerStage: '-', assignee: '-' });
+        });
         return list.sort((a, b) => {
           if (taskListSort === 'priorityDesc') {
-             const pA = a.priority || 2;
-             const pB = b.priority || 2;
+             const pA = a.priority || 2; const pB = b.priority || 2;
              if (pB !== pA) return pB - pA;
           }
           const da = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
           const db = b.dueDate ? new Date(b.dueDate).getTime() : Infinity;
           return da - db;
         });
-      }, [customers, taskListSort]);
+      }, [customers, generalTasks, taskListSort]);
 
-      // --- Handlers (Auth & Form) ---
-      const handleGoogleLogin = async () => {
-        const provider = new GoogleAuthProvider();
-        try {
-          await signInWithPopup(auth, provider);
-        } catch (error) {
-          console.error("Google Login Error:", error);
-          if (error.code === 'auth/unauthorized-domain') {
-            showAlert(`【ドメイン未承認エラー】\nこのURL (${window.location.hostname}) からのログインが許可されていません。\n\nFirebaseコンソールの「Authentication」＞「設定」タブ＞「承認済みドメイン」に、\n${window.location.hostname}\nを追加してください。`);
-          } else {
-            showAlert(`ログインに失敗しました。\nエラー: ${error.message}`);
-          }
-        }
-      };
+      const filteredAllTasksList = useMemo(() => {
+         return allTasksList.filter(t => {
+            if (filterCategory === 'all') return true;
+            if (filterCategory === 'unassigned') return !t.categoryId;
+            return t.categoryId === filterCategory;
+         });
+      }, [allTasksList, filterCategory]);
 
-      const handleLogout = async () => {
-        try { await signOut(auth); } catch (error) { console.error("Logout Error:", error); }
-      };
+      const matrixData = useMemo(() => {
+          const q1 = [], q2 = [], q3 = [], q4 = [];
+          const urgentDays = systemConfig?.matrixUrgentDays ?? 5;
+          const importantLevel = systemConfig?.matrixImportantLevel ?? 3;
+          const today = new Date(); today.setHours(0,0,0,0);
 
-      const handleInputChange = (e) => {
-        const { name, value } = e.target;
-        setFormData(prev => ({ ...prev, [name]: value }));
-      };
+          filteredAllTasksList.forEach(t => {
+             const isImportant = (t.priority || 2) >= importantLevel;
+             let isUrgent = false;
+             if (t.dueDate) {
+                const tDate = new Date(t.dueDate); tDate.setHours(0,0,0,0);
+                const diffDays = Math.ceil((tDate.getTime() - today.getTime()) / (1000*60*60*24));
+                if (diffDays <= urgentDays) isUrgent = true;
+             }
+             if (isImportant && isUrgent) q1.push(t);
+             else if (isImportant && !isUrgent) q2.push(t);
+             else if (!isImportant && isUrgent) q3.push(t);
+             else q4.push(t);
+          });
+          return { q1, q2, q3, q4 };
+      }, [filteredAllTasksList, systemConfig]);
 
-      const handleHurdleChange = (option) => {
-        setFormData(prev => {
-          const newHurdles = prev.hurdles.includes(option)
-            ? prev.hurdles.filter(h => h !== option) : [...prev.hurdles, option];
-          return { ...prev, hurdles: newHurdles };
-        });
-      };
 
-      const openAddModal = () => {
-        setFormData(initialFormState);
-        setIsEditing(false);
-        setEditingId(null);
-        setShowFormModal(true);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
-      };
+      const handleInputChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+      const handleHurdleChange = (option) => setFormData(prev => ({ ...prev, hurdles: prev.hurdles.includes(option) ? prev.hurdles.filter(h => h !== option) : [...prev.hurdles, option] }));
 
+      const openAddModal = () => { setFormData(initialFormState); setIsEditing(false); setEditingId(null); setShowFormModal(true); window.scrollTo({ top: 0, behavior: 'smooth' }); };
       const openEditModal = (customer) => {
         const standardHurdles = (customer.hurdles || []).filter(h => HURDLE_OPTIONS.includes(h));
         const customHurdlesArr = (customer.hurdles || []).filter(h => !HURDLE_OPTIONS.includes(h));
         const hasCustom = customHurdlesArr.length > 0;
         const isStandardContent = CONTENT_OPTIONS.includes(customer.nextContent);
         const isStandardAssignee = ASSIGNEE_OPTIONS.includes(customer.assignee);
-
         const dateParts = customer.nextDate ? customer.nextDate.split('T') : ['', ''];
-        const dayPart = dateParts[0];
-        const timePart = dateParts[1] || '10:00';
+        const dayPart = dateParts[0]; const timePart = dateParts[1] || '10:00';
         const isStandardTime = ['09:00', '10:00', '13:00', '16:00', '17:00', '18:00', '19:00'].includes(timePart);
 
         setFormData({
-          name: customer.name,
-          nextDateDay: dayPart,
-          nextDateTimeSelect: isStandardTime ? timePart : 'other',
-          customNextDateTime: isStandardTime ? '' : timePart,
-          nextContentSelect: isStandardContent ? customer.nextContent : 'other',
-          customNextContent: isStandardContent ? '' : (customer.nextContent || ''),
-          hurdles: standardHurdles,
-          hasCustomHurdle: hasCustom,
-          customHurdle: hasCustom ? customHurdlesArr[0] : '',
-          summary: customer.summary || '',
-          assignee: isStandardAssignee ? customer.assignee : 'other',
-          customAssignee: isStandardAssignee ? '' : customer.assignee,
-          meetingUrl: customer.meetingUrl || '',
-          currentStage: customer.currentStage || '来場前'
+          name: customer.name, nextDateDay: dayPart, nextDateTimeSelect: isStandardTime ? timePart : 'other', customNextDateTime: isStandardTime ? '' : timePart,
+          nextContentSelect: isStandardContent ? customer.nextContent : 'other', customNextContent: isStandardContent ? '' : (customer.nextContent || ''),
+          hurdles: standardHurdles, hasCustomHurdle: hasCustom, customHurdle: hasCustom ? customHurdlesArr[0] : '',
+          summary: customer.summary || '', assignee: isStandardAssignee ? customer.assignee : 'other', customAssignee: isStandardAssignee ? '' : customer.assignee,
+          meetingUrl: customer.meetingUrl || '', currentStage: customer.currentStage || '来場前'
         });
-        setIsEditing(true);
-        setEditingId(customer.id);
-        setShowFormModal(true);
-        window.scrollTo({ top: 0, behavior: 'smooth' });
+        setIsEditing(true); setEditingId(customer.id); setShowFormModal(true); window.scrollTo({ top: 0, behavior: 'smooth' });
       };
 
-      // --- Task Generation Logic ---
       const generateTasksForStage = (stageId, nextDateStr, stageMigrationDateStr = getTodayString()) => {
-        const stageTemplates = templates.filter(t => t.stageId === stageId);
-        
-        let nextDate = new Date(nextDateStr);
-        if(isNaN(nextDate.getTime())){
-             nextDate = new Date();
-        }
-        let stageDate = new Date(stageMigrationDateStr);
-        if(isNaN(stageDate.getTime())){
-             stageDate = new Date();
-        }
-
-        return stageTemplates.map(template => {
-          const baseType = template.baseDateType || 'nextDate';
-          const baseDateObj = baseType === 'stageDate' ? new Date(stageDate) : new Date(nextDate);
-          
+        return templates.filter(t => t.stageId === stageId).map(template => {
+          let nextDate = new Date(nextDateStr); if(isNaN(nextDate.getTime())) nextDate = new Date();
+          let stageDate = new Date(stageMigrationDateStr); if(isNaN(stageDate.getTime())) stageDate = new Date();
+          const baseDateObj = (template.baseDateType || 'nextDate') === 'stageDate' ? new Date(stageDate) : new Date(nextDate);
           baseDateObj.setDate(baseDateObj.getDate() + template.daysOffset);
-          
-          return {
-            id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
-            title: template.title,
-            dueDate: baseDateObj.toISOString().split('T')[0],
-            isDone: false,
-            priority: template.priority || 2
-          };
+          return { id: Date.now().toString() + Math.random().toString(36).substr(2, 9), title: template.title, dueDate: baseDateObj.toISOString().split('T')[0], isDone: false, priority: template.priority || 2, memo: '', categoryId: template.categoryId || '' };
         });
       };
 
-      // --- CRUD Operations ---
       const handleSubmit = async (e) => {
         e.preventDefault();
-        
-        if (!formData.name) {
-          showAlert("顧客名は必須です。"); 
-          return;
-        }
-
+        if (!formData.name) { showAlert("顧客名は必須です。"); return; }
         setShowFormModal(false);
 
         try {
           const finalTime = formData.nextDateTimeSelect === 'other' ? formData.customNextDateTime : formData.nextDateTimeSelect;
           const finalNextDate = formData.nextDateDay ? `${formData.nextDateDay}T${finalTime || '00:00'}` : '';
-
           const finalNextContent = formData.nextContentSelect === 'other' ? formData.customNextContent : formData.nextContentSelect;
           const finalAssignee = formData.assignee === 'other' ? formData.customAssignee : formData.assignee;
           const finalHurdles = [...formData.hurdles];
-          if (formData.hasCustomHurdle && formData.customHurdle.trim() !== '') {
-            finalHurdles.push(formData.customHurdle.trim());
-          }
+          if (formData.hasCustomHurdle && formData.customHurdle.trim() !== '') finalHurdles.push(formData.customHurdle.trim());
 
-          const payload = {
-            name: formData.name,
-            nextDate: finalNextDate,
-            nextContent: finalNextContent,
-            hurdles: finalHurdles,
-            summary: formData.summary,
-            assignee: finalAssignee,
-            meetingUrl: formData.meetingUrl,
-            currentStage: formData.currentStage,
-            updatedAt: new Date().toISOString()
-          };
+          const payload = { name: formData.name, nextDate: finalNextDate, nextContent: finalNextContent, hurdles: finalHurdles, summary: formData.summary, assignee: finalAssignee, meetingUrl: formData.meetingUrl, currentStage: formData.currentStage, updatedAt: new Date().toISOString() };
 
           if (isEditing) {
-            const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'customers', editingId);
-            updateDoc(docRef, payload).catch(err => console.error(err));
+            await updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'customers', editingId), payload);
           } else {
-            let initialTasks = [];
-            if(finalNextDate || formData.currentStage){
-                initialTasks = generateTasksForStage(formData.currentStage, finalNextDate ? finalNextDate.split('T')[0] : getTodayString(), getTodayString());
-            }
-            
-            const newDocRef = doc(collection(db, 'artifacts', appId, 'public', 'data', 'customers'));
-            setDoc(newDocRef, {
-              ...payload,
-              tasks: initialTasks,
-              createdAt: new Date().toISOString()
-            }).catch(err => console.error(err));
+            let initialTasks = (finalNextDate || formData.currentStage) ? generateTasksForStage(formData.currentStage, finalNextDate ? finalNextDate.split('T')[0] : getTodayString(), getTodayString()) : [];
+            await setDoc(doc(collection(db, 'artifacts', appId, 'public', 'data', 'customers')), { ...payload, tasks: initialTasks, createdAt: new Date().toISOString() });
           }
-          
           setFormData(initialFormState);
-
-        } catch (error) {
-          console.error("Error processing data:", error);
-          showAlert("保存中にエラーが発生しました。");
-        }
+        } catch (error) { showAlert("保存中にエラーが発生しました。"); }
       };
 
       const changeCustomerStage = (id, newStage, newNextDateStr) => {
         const customer = customers.find(c => c.id === id);
         if (!customer) return;
-
-        const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'customers', id);
         let payload = { currentStage: newStage, updatedAt: new Date().toISOString() };
-        
-        if(newNextDateStr !== undefined && newNextDateStr !== null){
-            payload.nextDate = newNextDateStr;
-        }
-
+        if(newNextDateStr !== undefined && newNextDateStr !== null) payload.nextDate = newNextDateStr;
         if (!ARCHIVE_STAGES.some(s => s.id === newStage)) {
            const baseDateStr = newNextDateStr ? newNextDateStr.split('T')[0] : (customer.nextDate ? customer.nextDate.split('T')[0] : getTodayString());
-           const newTasks = generateTasksForStage(newStage, baseDateStr, getTodayString());
-           
-           const existingTasks = customer.tasks || [];
-           payload.tasks = [...existingTasks, ...newTasks];
+           payload.tasks = [...(customer.tasks || []), ...generateTasksForStage(newStage, baseDateStr, getTodayString())];
         }
-
-        updateDoc(docRef, payload).catch(e => console.error(e));
+        updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'customers', id), payload).catch(e => console.error(e));
       };
 
       const deleteCustomer = (id) => {
-        showConfirm('この顧客データを削除してもよろしいですか？', () => {
-          const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'customers', id);
-          deleteDoc(docRef).catch(e => console.error(e));
+        showConfirm('この顧客データを削除してもよろしいですか？\n（この操作は取り消せません）', () => {
+          deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'customers', id)).catch(e => console.error(e));
         });
       };
 
-      // --- Task Operations ---
-      const updateCustomerTasksInDB = (customerId, updatedTasks) => {
-        const docRef = doc(db, 'artifacts', appId, 'public', 'data', 'customers', customerId);
-        updateDoc(docRef, { tasks: updatedTasks }).catch(e => console.error(e));
-      };
-
+      // Customer Tasks
+      const updateCustomerTasksInDB = (customerId, updatedTasks) => updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'customers', customerId), { tasks: updatedTasks });
       const toggleTaskDone = (customerId, taskId) => {
         const customer = customers.find(c => c.id === customerId);
-        if (!customer) return;
-        const updatedTasks = customer.tasks.map(t => t.id === taskId ? { ...t, isDone: !t.isDone } : t);
-        updateCustomerTasksInDB(customerId, updatedTasks);
+        if (customer) updateCustomerTasksInDB(customerId, customer.tasks.map(t => t.id === taskId ? { ...t, isDone: !t.isDone } : t));
       };
-
-      const updateTaskLocal = (customerId, taskId, field, value) => {
-        setCustomers(prevCustomers => {
-          return prevCustomers.map(customer => {
-            if (customer.id !== customerId) return customer;
-            const updatedTasks = customer.tasks.map(t => t.id === taskId ? { ...t, [field]: value } : t);
-            return { ...customer, tasks: updatedTasks };
-          });
-        });
-      };
-
-      const commitTaskUpdate = (customerId) => {
-         const customer = customers.find(c => c.id === customerId);
-         if (!customer) return;
-         updateCustomerTasksInDB(customerId, customer.tasks);
-      };
-
+      const updateTaskLocal = (customerId, taskId, field, value) => setCustomers(prev => prev.map(c => c.id === customerId ? { ...c, tasks: c.tasks.map(t => t.id === taskId ? { ...t, [field]: value } : t) } : c));
+      const commitTaskUpdate = (customerId) => { const customer = customers.find(c => c.id === customerId); if (customer) updateCustomerTasksInDB(customerId, customer.tasks); };
       const addTask = (customerId) => {
         const customer = customers.find(c => c.id === customerId);
-        if (!customer) return;
-        const taskDate = customer.nextDate ? customer.nextDate.split('T')[0] : getTodayString();
-        const updatedTasks = [...(customer.tasks || []), { id: Date.now().toString(), title: '', dueDate: taskDate, isDone: false, priority: 2 }];
-        updateCustomerTasksInDB(customerId, updatedTasks);
+        if (customer) updateCustomerTasksInDB(customerId, [...(customer.tasks || []), { id: Date.now().toString(), title: '', dueDate: customer.nextDate ? customer.nextDate.split('T')[0] : getTodayString(), isDone: false, priority: 2, memo: '', categoryId: '' }]);
       };
-
       const deleteTask = (customerId, taskId) => {
         const customer = customers.find(c => c.id === customerId);
-        if (!customer) return;
-        const updatedTasks = customer.tasks.filter(t => t.id !== taskId);
-        updateCustomerTasksInDB(customerId, updatedTasks);
+        if (customer) updateCustomerTasksInDB(customerId, customer.tasks.filter(t => t.id !== taskId));
       };
 
-      // --- Sorting Logic ---
-      const sortCustomers = (customersArray) => {
-        return [...customersArray].sort((a, b) => {
-          if (sortOrder === 'nextDateAsc') {
-             if(!a.nextDate) return 1;
-             if(!b.nextDate) return -1;
-             return new Date(a.nextDate) - new Date(b.nextDate);
-          } else if (sortOrder === 'taskDueDateAsc') {
-             const getEarliestTaskDate = (cust) => {
-                if(!cust.tasks || cust.tasks.length === 0) return Infinity;
-                const undoneTasks = cust.tasks.filter(t => !t.isDone && t.dueDate);
-                if(undoneTasks.length === 0) return Infinity;
-                return Math.min(...undoneTasks.map(t => new Date(t.dueDate).getTime()));
-             };
-             const aDate = getEarliestTaskDate(a);
-             const bDate = getEarliestTaskDate(b);
-             return aDate - bDate;
-          }
-          return 0;
-        });
+      // General Tasks
+      const handleAddGeneralTask = () => {
+         if(!newGenTaskTitle.trim()) return;
+         const newTask = { title: newGenTaskTitle, dueDate: newGenTaskDate, priority: newGenTaskPriority, categoryId: newGenTaskCategory, isDone: false, memo: '', createdAt: new Date().toISOString() };
+         setDoc(doc(collection(db, 'artifacts', appId, 'public', 'data', 'general_tasks')), newTask).catch(e=>console.error(e));
+         setNewGenTaskTitle(''); setNewGenTaskPriority(2); setNewGenTaskCategory('');
+      };
+      const toggleGeneralTaskDone = (taskId) => {
+         const task = generalTasks.find(t => t.id === taskId);
+         if(task) updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'general_tasks', taskId), { isDone: !task.isDone });
+      };
+      const updateGeneralTaskLocal = (taskId, field, value) => setGeneralTasks(prev => prev.map(t => t.id === taskId ? { ...t, [field]: value } : t));
+      const commitGeneralTaskUpdate = (taskId) => {
+         const task = generalTasks.find(t => t.id === taskId);
+         if(task) updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'general_tasks', taskId), { title: task.title, dueDate: task.dueDate, priority: task.priority, memo: task.memo, categoryId: task.categoryId||'' });
+      };
+      const deleteGeneralTask = (taskId) => deleteDoc(doc(db, 'artifacts', appId, 'public', 'data', 'general_tasks', taskId));
+
+      const saveSystemConfig = async (newConfig) => {
+         await setDoc(doc(db, 'artifacts', appId, 'public', 'data', 'system_config', 'default'), newConfig, { merge: true });
+         showAlert('設定を保存しました。');
       };
 
-      const boardFilteredCustomers = useMemo(() => {
-        let filtered = customers;
-        
-        if (boardTab === 'アーカイブ') {
-           filtered = customers.filter(c => ARCHIVE_STAGES.some(s => s.id === c.currentStage));
-        } else if (boardTab !== '全体') {
-           filtered = customers.filter(c => c.currentStage === boardTab);
-        } else {
-           filtered = customers.filter(c => !ARCHIVE_STAGES.some(s => s.id === c.currentStage));
-        }
-
-        return sortCustomers(filtered);
-      }, [customers, boardTab, sortOrder]);
-
-
-      // --- Sub-Components ---
       const StageModal = () => {
         if (!showStageModal || !stageModalData) return null;
-        
         const customer = stageModalData.customer;
         const isArchive = ARCHIVE_STAGES.some(s => s.id === stageModalData.targetStage);
         const [modalDate, setModalDate] = useState(customer.nextDate ? customer.nextDate.split('T')[0] : '');
@@ -972,53 +854,28 @@
               finalDateStr = `${modalDate}T${modalTime}`;
            }
            changeCustomerStage(customer.id, stageModalData.targetStage, finalDateStr);
-           setShowStageModal(false);
-           setStageModalData(null);
+           setShowStageModal(false); setStageModalData(null);
         };
 
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-fade-in">
             <div className="bg-white max-w-md w-full p-8 shadow-xl border border-gray-200">
                <h3 className="text-xl font-serif text-gray-800 mb-6 text-center tracking-widest">ステージ移行</h3>
-               <p className="text-sm text-center mb-6 text-gray-600 leading-relaxed">
-                 <strong className="text-gray-900">{customer.name}</strong> 様を<br/>
-                 「<span className="font-bold border-b-2 border-gray-800">{stageModalData.targetStage}</span>」へ移行しますか？
-               </p>
-
+               <p className="text-sm text-center mb-6 text-gray-600 leading-relaxed"><strong className="text-gray-900">{customer.name}</strong> 様を<br/>「<span className="font-bold border-b-2 border-gray-800">{stageModalData.targetStage}</span>」へ移行しますか？</p>
                {!isArchive && (
                  <div className="bg-gray-50 p-6 border border-gray-200 mb-6">
-                    <label className="block text-xs tracking-widest text-gray-500 mb-4 text-center">次の予定日を設定してください<br/><span className="text-[10px] text-gray-400">（この日を基準にタスクが自動作成されます）</span></label>
+                    <label className="block text-xs tracking-widest text-gray-500 mb-4 text-center">次の予定日を設定<br/><span className="text-[10px] text-gray-400">（この日を基準にタスクが自動作成されます）</span></label>
                     <div className="flex gap-2 justify-center mb-4">
-                       <input 
-                         type="date" 
-                         value={modalDate} 
-                         onChange={e => {setModalDate(e.target.value); setIsDateUnknown(false);}} 
-                         disabled={isDateUnknown}
-                         className="border-b border-gray-300 py-1 focus:border-gray-800 outline-none bg-transparent disabled:opacity-50 text-sm" 
-                       />
-                       <input 
-                         type="time" 
-                         value={modalTime} 
-                         onChange={e => {setModalTime(e.target.value); setIsDateUnknown(false);}} 
-                         disabled={isDateUnknown}
-                         className="border-b border-gray-300 py-1 focus:border-gray-800 outline-none bg-transparent disabled:opacity-50 text-sm" 
-                       />
+                       <input type="date" value={modalDate} onChange={e => {setModalDate(e.target.value); setIsDateUnknown(false);}} disabled={isDateUnknown} className="border-b border-gray-300 py-1 focus:border-gray-800 outline-none bg-transparent disabled:opacity-50 text-sm" />
+                       <input type="time" value={modalTime} onChange={e => {setModalTime(e.target.value); setIsDateUnknown(false);}} disabled={isDateUnknown} className="border-b border-gray-300 py-1 focus:border-gray-800 outline-none bg-transparent disabled:opacity-50 text-sm" />
                     </div>
-                    <div className="text-center">
-                      <label className="inline-flex items-center gap-2 cursor-pointer mt-2">
-                        <input type="checkbox" checked={isDateUnknown} onChange={e => setIsDateUnknown(e.target.checked)} className="accent-gray-800 w-3.5 h-3.5" />
-                        <span className="text-xs text-gray-600 tracking-wider">今は未定にする（後で設定）</span>
-                      </label>
-                    </div>
+                    <label className="flex items-center justify-center gap-2 cursor-pointer mt-2">
+                      <input type="checkbox" checked={isDateUnknown} onChange={e => setIsDateUnknown(e.target.checked)} className="accent-gray-800 w-3.5 h-3.5" />
+                      <span className="text-xs text-gray-600 tracking-wider">今は未定にする</span>
+                    </label>
                  </div>
                )}
-
-               {isArchive && (
-                  <div className="text-center text-xs text-amber-600 mb-6 p-3 bg-amber-50 border border-amber-100">
-                    完了または離脱処理を行うと、「完了・離脱」タブへ移動します。
-                  </div>
-               )}
-
+               {isArchive && <div className="text-center text-xs text-amber-600 mb-6 p-3 bg-amber-50 border border-amber-100">完了または離脱処理を行うと、「完了・離脱」タブへ移動します。</div>}
                <div className="flex justify-center gap-4">
                  <button onClick={() => setShowStageModal(false)} className="px-6 py-2 text-xs tracking-widest text-gray-500 hover:bg-gray-50 transition-colors border border-transparent">キャンセル</button>
                  <button onClick={handleMigrate} className="px-8 py-2 text-xs tracking-widest text-white bg-gray-800 hover:bg-gray-900 transition-colors shadow-sm">実行する</button>
@@ -1028,94 +885,54 @@
         );
       };
 
-
-      // --- Views ---
-      if (authChecking) {
-        return (
-          <div className="min-h-screen bg-[#f9f9f9] flex flex-col items-center justify-center font-serif tracking-widest text-gray-500">
-            <div className="w-10 h-10 border-4 border-gray-200 border-t-gray-800 rounded-full animate-spin mb-4"></div>
-            Checking Auth...
-          </div>
-        );
-      }
-
-      if (!user) {
-        return (
+      if (authChecking) return <div className="min-h-screen bg-[#f9f9f9] flex flex-col items-center justify-center font-serif tracking-widest text-gray-500"><div className="w-10 h-10 border-4 border-gray-200 border-t-gray-800 rounded-full animate-spin mb-4"></div>Loading...</div>;
+      if (!user) return (
           <div className="min-h-screen bg-[#f9f9f9] flex items-center justify-center font-sans">
             <div className="bg-white p-10 shadow-sm border border-gray-200 text-center max-w-md w-full mx-4">
               <h1 className="text-2xl font-serif tracking-[0.15em] text-gray-800 mb-2">ARRCH</h1>
               <p className="text-gray-400 text-xs tracking-widest uppercase mb-8">Pipeline Manager</p>
-              <button onClick={handleGoogleLogin} className="bg-white border border-gray-300 text-gray-700 px-6 py-3 text-sm tracking-wider hover:bg-gray-50 transition-colors w-full flex items-center justify-center gap-3">
+              <button onClick={() => signInWithPopup(auth, new GoogleAuthProvider()).catch(e=>showAlert(e.message))} className="bg-white border border-gray-300 text-gray-700 px-6 py-3 text-sm tracking-wider hover:bg-gray-50 transition-colors w-full flex items-center justify-center gap-3">
                 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" width="18px" height="18px"><path fill="#FFC107" d="M43.611,20.083H42V20H24v8h11.303c-1.649,4.657-6.08,8-11.303,8c-6.627,0-12-5.373-12-12c0-6.627,5.373-12,12-12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C12.955,4,4,12.955,4,24c0,11.045,8.955,20,20,20c11.045,0,20-8.955,20-20C44,22.659,43.862,21.35,43.611,20.083z"/><path fill="#FF3D00" d="M6.306,14.691l6.571,4.819C14.655,15.108,18.961,12,24,12c3.059,0,5.842,1.154,7.961,3.039l5.657-5.657C34.046,6.053,29.268,4,24,4C16.318,4,9.656,8.337,6.306,14.691z"/><path fill="#4CAF50" d="M24,44c5.166,0,9.86-1.977,13.409-5.192l-6.19-5.238C29.211,35.091,26.715,36,24,36c-5.202,0-9.619-3.317-11.283-7.946l-6.522,5.025C9.505,39.556,16.227,44,24,44z"/><path fill="#1976D2" d="M43.611,20.083H42V20H24v8h11.303c-0.792,2.237-2.231,4.166-4.087,5.571c0.001-0.001,0.002-0.001,0.003-0.002l6.19,5.238C36.971,39.205,44,34,44,24C44,22.659,43.862,21.35,43.611,20.083z"/></svg>
                 Googleでログイン
               </button>
             </div>
           </div>
-        );
-      }
+      );
 
-      if (isLoading) {
-        return (
-           <div className="min-h-screen bg-[#f9f9f9] flex flex-col items-center justify-center font-serif tracking-widest text-gray-500">
-             <div className="w-10 h-10 border-4 border-gray-200 border-t-gray-800 rounded-full animate-spin mb-4"></div>
-             Loading Data...
-           </div>
-        );
-      }
+      if (isLoading) return <div className="min-h-screen bg-[#f9f9f9] flex flex-col items-center justify-center font-serif tracking-widest text-gray-500"><div className="w-10 h-10 border-4 border-gray-200 border-t-gray-800 rounded-full animate-spin mb-4"></div>Loading...</div>;
 
       return (
         <div className="min-h-screen bg-[#f9f9f9] text-gray-800 font-sans pb-20 selection:bg-gray-200">
           <CustomDialog {...dialog} onCancel={() => setDialog({ ...dialog, isOpen: false })} />
           <StageModal />
           
-          {/* Header */}
           <header className="bg-white border-b border-gray-200 sticky top-0 z-20 shadow-sm">
-            <div className="max-w-7xl mx-auto px-4 py-3 flex flex-col xl:flex-row xl:justify-between xl:items-center gap-4">
+            <div className="max-w-[1400px] mx-auto px-4 py-3 flex flex-col xl:flex-row xl:justify-between xl:items-center gap-4">
               <div className="flex justify-between items-center w-full xl:w-auto">
-                <div>
-                  <h1 className="text-xl font-serif tracking-[0.15em] text-gray-800">ARRCH</h1>
-                  <p className="text-gray-400 text-[9px] tracking-widest uppercase mt-0.5">Pipeline Manager</p>
-                </div>
-                <button onClick={handleLogout} className="xl:hidden text-gray-400 hover:text-gray-800 text-[10px] tracking-widest uppercase transition-colors underline">Logout</button>
+                <div><h1 className="text-xl font-serif tracking-[0.15em] text-gray-800">ARRCH</h1><p className="text-gray-400 text-[9px] tracking-widest uppercase mt-0.5">Pipeline Manager</p></div>
+                <button onClick={()=>signOut(auth)} className="xl:hidden text-gray-400 hover:text-gray-800 text-[10px] tracking-widest uppercase transition-colors underline">Logout</button>
               </div>
               <div className="flex items-center gap-2 flex-wrap justify-start">
                 <div className="flex border border-gray-200 p-1 bg-gray-50 overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                  <button onClick={() => {setCurrentView('board'); setShowFormModal(false);}} className={`flex items-center gap-1 px-3 py-1.5 text-[10px] sm:text-xs tracking-wider transition-colors whitespace-nowrap ${currentView === 'board' ? 'bg-white text-gray-900 shadow-sm border border-gray-200' : 'text-gray-500 hover:text-gray-900'}`}>
-                    <BoardIcon className="w-3.5 h-3.5" /> タスクボード
-                  </button>
-                  <button onClick={() => {setCurrentView('taskList'); setShowFormModal(false);}} className={`flex items-center gap-1 px-3 py-1.5 text-[10px] sm:text-xs tracking-wider transition-colors whitespace-nowrap ${currentView === 'taskList' ? 'bg-white text-gray-900 shadow-sm border border-gray-200' : 'text-gray-500 hover:text-gray-900'}`}>
-                    <ListIcon className="w-3.5 h-3.5" /> タスク一覧
-                  </button>
-                  <button onClick={() => {setCurrentView('remind'); setShowFormModal(false);}} className={`flex items-center gap-1 px-3 py-1.5 text-[10px] sm:text-xs tracking-wider transition-colors whitespace-nowrap relative ${currentView === 'remind' ? 'bg-white text-gray-900 shadow-sm border border-gray-200' : 'text-gray-500 hover:text-gray-900'}`}>
-                    <BellIcon className="w-3.5 h-3.5" /> リマインド
-                    {activeRemindersCount > 0 && (
-                      <span className="ml-1 bg-rose-500 text-white text-[9px] px-1.5 py-0.5 rounded-full leading-none">{activeRemindersCount}</span>
-                    )}
-                  </button>
-                  <button onClick={() => {setCurrentView('settings'); setShowFormModal(false);}} className={`flex items-center gap-1 px-3 py-1.5 text-[10px] sm:text-xs tracking-wider transition-colors whitespace-nowrap ${currentView === 'settings' ? 'bg-white text-gray-900 shadow-sm border border-gray-200' : 'text-gray-500 hover:text-gray-900'}`}>
-                    <SettingsIcon className="w-3.5 h-3.5" /> 設定
-                  </button>
+                  <button onClick={() => {setCurrentView('board'); setShowFormModal(false);}} className={`flex items-center gap-1 px-3 py-1.5 text-[10px] sm:text-xs tracking-wider transition-colors whitespace-nowrap ${currentView === 'board' ? 'bg-white text-gray-900 shadow-sm border border-gray-200' : 'text-gray-500 hover:text-gray-900'}`}><IdCardIcon className="w-3.5 h-3.5" /> 顧客カード</button>
+                  <button onClick={() => {setCurrentView('matrix'); setShowFormModal(false);}} className={`flex items-center gap-1 px-3 py-1.5 text-[10px] sm:text-xs tracking-wider transition-colors whitespace-nowrap ${currentView === 'matrix' ? 'bg-white text-gray-900 shadow-sm border border-gray-200' : 'text-gray-500 hover:text-gray-900'}`}><GridIcon className="w-3.5 h-3.5" /> タスクボード</button>
+                  <button onClick={() => {setCurrentView('taskList'); setShowFormModal(false);}} className={`flex items-center gap-1 px-3 py-1.5 text-[10px] sm:text-xs tracking-wider transition-colors whitespace-nowrap ${currentView === 'taskList' ? 'bg-white text-gray-900 shadow-sm border border-gray-200' : 'text-gray-500 hover:text-gray-900'}`}><ListIcon className="w-3.5 h-3.5" /> タスク一覧</button>
+                  <button onClick={() => {setCurrentView('remind'); setShowFormModal(false);}} className={`flex items-center gap-1 px-3 py-1.5 text-[10px] sm:text-xs tracking-wider transition-colors whitespace-nowrap relative ${currentView === 'remind' ? 'bg-white text-gray-900 shadow-sm border border-gray-200' : 'text-gray-500 hover:text-gray-900'}`}><BellIcon className="w-3.5 h-3.5" /> リマインド{activeRemindersCount > 0 && <span className="ml-1 bg-rose-500 text-white text-[9px] px-1.5 py-0.5 rounded-full leading-none">{activeRemindersCount}</span>}</button>
+                  <button onClick={() => {setCurrentView('settings'); setShowFormModal(false);}} className={`flex items-center gap-1 px-3 py-1.5 text-[10px] sm:text-xs tracking-wider transition-colors whitespace-nowrap ${currentView === 'settings' ? 'bg-white text-gray-900 shadow-sm border border-gray-200' : 'text-gray-500 hover:text-gray-900'}`}><SettingsIcon className="w-3.5 h-3.5" /> 設定</button>
                 </div>
-                <button onClick={openAddModal} className="flex items-center gap-1.5 bg-gray-800 text-white px-4 py-2 text-[10px] sm:text-xs tracking-wider hover:bg-gray-900 transition-colors shadow-sm ml-auto xl:ml-2 whitespace-nowrap">
-                  <PlusIcon className="w-4 h-4" /> 新規登録
-                </button>
-                <button onClick={handleLogout} className="hidden xl:block text-gray-400 hover:text-gray-800 text-[10px] tracking-widest uppercase transition-colors underline ml-4">Logout</button>
+                <button onClick={openAddModal} className="flex items-center gap-1.5 bg-gray-800 text-white px-4 py-2 text-[10px] sm:text-xs tracking-wider hover:bg-gray-900 transition-colors shadow-sm ml-auto xl:ml-2 whitespace-nowrap"><PlusIcon className="w-4 h-4" /> 顧客登録</button>
+                <button onClick={()=>signOut(auth)} className="hidden xl:block text-gray-400 hover:text-gray-800 text-[10px] tracking-widest uppercase transition-colors underline ml-4">Logout</button>
               </div>
             </div>
           </header>
 
-          <main className="max-w-7xl mx-auto px-4 mt-8 relative">
+          <main className="max-w-[1400px] mx-auto px-4 mt-8 relative">
 
-            {/* --- VIEW: TASK LIST --- */}
+            {}
             {currentView === 'taskList' && !showFormModal && (
               <div className="bg-white border border-gray-200 overflow-hidden shadow-sm animate-fade-in">
                 <div className="p-6 border-b border-gray-200 bg-white flex flex-col md:flex-row md:items-center justify-between gap-4">
-                  <div className="flex items-center gap-2">
-                    <ListIcon className="w-5 h-5 text-gray-800" />
-                    <h2 className="text-lg font-serif tracking-[0.2em] text-gray-800">タスク一覧</h2>
-                  </div>
-                  
-                  {/* Task Summary (Minimalist Typography) */}
+                  <div className="flex items-center gap-2"><ListIcon className="w-5 h-5 text-gray-800" /><h2 className="text-lg font-serif tracking-[0.2em] text-gray-800">すべてのタスク一覧</h2></div>
                   <div className="flex items-center gap-4 text-[10px] tracking-widest font-serif">
                      <span className="text-gray-500">TOTAL <strong className="text-gray-800 text-sm ml-1 font-normal">{allTasksList.length}</strong></span>
                      <span className="text-gray-300">/</span>
@@ -1123,324 +940,179 @@
                      <span className="text-gray-300">/</span>
                      <span className={allTasksList.filter(t => isOverdue(t.dueDate)).length > 0 ? 'text-rose-600' : 'text-gray-400'}>OVERDUE <strong className="text-sm ml-1 font-normal">{allTasksList.filter(t => isOverdue(t.dueDate)).length}</strong></span>
                   </div>
-
-                  <div>
-                    <select 
-                      value={taskListSort}
-                      onChange={(e) => setTaskListSort(e.target.value)}
-                      className="text-xs tracking-widest text-gray-600 bg-gray-50 border border-gray-200 p-2 outline-none cursor-pointer hover:bg-gray-100 transition-colors w-full md:w-auto"
-                    >
-                      <option value="dueDateAsc">期日が近い順</option>
-                      <option value="priorityDesc">重要度が高い順</option>
-                    </select>
-                  </div>
+                  <select value={taskListSort} onChange={(e) => setTaskListSort(e.target.value)} className="text-xs tracking-widest text-gray-600 bg-gray-50 border border-gray-200 p-2 outline-none cursor-pointer hover:bg-gray-100 transition-colors w-full md:w-auto">
+                    <option value="dueDateAsc">期日が近い順</option><option value="priorityDesc">重要度が高い順</option>
+                  </select>
                 </div>
-
                 <div className="overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                   <table className="w-full text-left border-collapse min-w-[800px]">
+                   <table className="w-full text-left border-collapse min-w-[900px]">
                       <thead>
                         <tr className="border-b border-gray-200 text-[10px] text-gray-400 uppercase tracking-widest bg-gray-50/50">
                            <th className="p-4 font-normal w-12 text-center">Done</th>
                            <th className="p-4 font-normal w-32">期日</th>
                            <th className="p-4 font-normal">タスク内容</th>
-                           <th className="p-4 font-normal">お客様</th>
+                           <th className="p-4 font-normal">分類</th>
+                           <th className="p-4 font-normal">種類 / お客様</th>
                            <th className="p-4 font-normal">担当</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
-                        {allTasksList.map((task) => (
-                           <tr key={task.id} className="hover:bg-gray-50 transition-colors">
-                             <td className="p-4 text-center">
-                               <input type="checkbox" checked={task.isDone} onChange={() => toggleTaskDone(task.customerId, task.id)} className="accent-gray-800 cursor-pointer"/>
-                             </td>
-                             <td className={`p-4 text-sm ${!task.isDone && isOverdue(task.dueDate) ? 'text-rose-600' : 'text-gray-600'}`}>
-                               {task.dueDate}
-                             </td>
-                             <td className="p-4">
-                                <div className="text-sm text-gray-700 font-medium mb-1">{task.title}</div>
-                                <PriorityMeter priority={task.priority || 2} readOnly={true} />
-                             </td>
-                             <td className="p-4">
-                                <div className="font-medium text-gray-800 font-serif tracking-wider cursor-pointer hover:underline" onClick={() => {
-                                   const cust = customers.find(c => c.id === task.customerId);
-                                   if(cust) openEditModal(cust);
-                                }}>{task.customerName}</div>
-                                <div className="text-[10px] text-gray-400 mt-0.5">{task.customerStage}</div>
-                             </td>
-                             <td className="p-4 text-xs text-gray-500">{task.assignee}</td>
-                           </tr>
-                        ))}
-                        {allTasksList.length === 0 && (
-                          <tr><td colSpan="5" className="p-8 text-center text-gray-400 text-xs tracking-widest">未完了の通常タスクはありません</td></tr>
-                        )}
+                        {allTasksList.map((task) => {
+                           const catData = getCategoryData(task.categoryId, categories);
+                           return (
+                             <tr key={task.id} className="hover:bg-gray-50 transition-colors">
+                               <td className="p-4 text-center">
+                                 <input type="checkbox" checked={task.isDone} onChange={() => task.type==='customer' ? toggleTaskDone(task.customerId, task.id) : toggleGeneralTaskDone(task.id)} className="accent-gray-800 cursor-pointer"/>
+                               </td>
+                               <td className={`p-4 text-sm ${!task.isDone && isOverdue(task.dueDate) ? 'text-rose-600 font-bold' : 'text-gray-600'}`}>{task.dueDate}</td>
+                               <td className="p-4">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <div className="text-sm text-gray-800 font-medium">{task.title}</div>
+                                    {task.memo && <FileTextIcon className="w-3.5 h-3.5 text-gray-400" title="メモあり"/>}
+                                  </div>
+                                  <PriorityMeter priority={task.priority || 2} readOnly={true} />
+                               </td>
+                               <td className="p-4">
+                                  {catData ? <span className={`text-[10px] px-2 py-1 rounded-sm border ${catData.bg} ${catData.text} ${catData.border} whitespace-nowrap inline-block`}>{catData.name}</span> : <span className="text-[10px] text-gray-400">未分類</span>}
+                               </td>
+                               <td className="p-4">
+                                  {task.type === 'customer' ? (
+                                    <>
+                                      <div className="font-medium text-gray-800 font-serif tracking-wider cursor-pointer hover:underline" onClick={() => { const cust = customers.find(c => c.id === task.customerId); if(cust) openEditModal(cust); }}>{task.customerName}</div>
+                                      <div className="text-[10px] text-gray-400 mt-0.5">{task.customerStage}</div>
+                                    </>
+                                  ) : <div className="text-[10px] bg-gray-200 text-gray-700 px-2 py-0.5 rounded-sm inline-block tracking-widest">一般タスク</div>}
+                               </td>
+                               <td className="p-4 text-xs text-gray-500">{task.assignee}</td>
+                             </tr>
+                           )
+                        })}
+                        {allTasksList.length === 0 && <tr><td colSpan="6" className="p-8 text-center text-gray-400 text-xs tracking-widest">未完了の通常タスクはありません</td></tr>}
                       </tbody>
                    </table>
                 </div>
               </div>
             )}
             
-            {/* Settings View */}
-            {currentView === 'settings' && !showFormModal && (
-               <SettingsView templates={templates} setTemplates={setTemplates} showConfirm={showConfirm} showAlert={showAlert} />
-            )}
+            {}
+            {currentView === 'settings' && !showFormModal && <SettingsView templates={templates} setTemplates={setTemplates} categories={categories} systemConfig={systemConfig} saveSystemConfig={saveSystemConfig} showConfirm={showConfirm} showAlert={showAlert} />}
 
-            {/* Registration/Edit Form */}
+            {}
             {showFormModal && (
               <div className="bg-white border border-gray-200 p-8 mb-12 relative shadow-sm animate-fade-in max-w-4xl mx-auto">
-                <button onClick={() => setShowFormModal(false)} className="absolute top-6 right-6 text-gray-400 hover:text-gray-800 transition-colors">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>
-                </button>
-                
-                <div className="text-center mb-8">
-                  <h2 className="text-xl font-serif tracking-[0.2em] text-gray-800">
-                    {isEditing ? '顧客情報の編集' : '新規登録'}
-                  </h2>
-                </div>
-
+                <button onClick={() => setShowFormModal(false)} className="absolute top-6 right-6 text-gray-400 hover:text-gray-800 transition-colors"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg></button>
+                <div className="text-center mb-8"><h2 className="text-xl font-serif tracking-[0.2em] text-gray-800">{isEditing ? '顧客情報の編集' : '顧客の新規登録'}</h2></div>
                 <form onSubmit={handleSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-x-10 gap-y-8">
                   <div className="space-y-6">
-                    <div>
-                      <label className="block text-xs tracking-widest text-gray-500 mb-2">顧客名 <span className="text-rose-500">*</span></label>
-                      <input required type="text" name="name" value={formData.name} onChange={handleInputChange} className="w-full border-b border-gray-300 py-2 focus:border-gray-800 outline-none bg-transparent text-sm" placeholder="例: 山田 太郎 様" />
-                    </div>
-                    
-                    <div>
-                      <label className="block text-xs tracking-widest text-gray-500 mb-2">現在のステージ</label>
-                      <select name="currentStage" value={formData.currentStage} onChange={handleInputChange} className="w-full border-b border-gray-300 py-2 focus:border-gray-800 outline-none bg-transparent text-sm">
-                        {UI_STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
-                      </select>
-                    </div>
-
-                    <div className="flex gap-4">
-                      <div className="flex-1">
-                        <label className="block text-xs tracking-widest text-gray-500 mb-2">次回予定日</label>
-                        <input type="date" name="nextDateDay" value={formData.nextDateDay} onChange={handleInputChange} className="w-full border-b border-gray-300 py-2 focus:border-gray-800 outline-none bg-transparent text-sm" />
-                      </div>
-                      <div className="flex-1">
-                        <label className="block text-xs tracking-widest text-gray-500 mb-2">時間</label>
-                        <div className="flex gap-2">
-                           <select name="nextDateTimeSelect" value={formData.nextDateTimeSelect} onChange={handleInputChange} className="w-full border-b border-gray-300 py-2 focus:border-gray-800 outline-none bg-transparent text-sm">
-                            <option value="09:00">09:00</option><option value="10:00">10:00</option><option value="13:00">13:00</option>
-                            <option value="16:00">16:00</option><option value="17:00">17:00</option><option value="18:00">18:00</option>
-                            <option value="19:00">19:00</option><option value="other">その他</option>
-                          </select>
-                          {formData.nextDateTimeSelect === 'other' && (
-                            <input required type="time" name="customNextDateTime" value={formData.customNextDateTime} onChange={handleInputChange} className="w-full border-b border-gray-300 py-2 focus:border-gray-800 outline-none bg-transparent text-sm" />
-                          )}
-                        </div>
-                      </div>
-                    </div>
+                    <div><label className="block text-xs tracking-widest text-gray-500 mb-2">顧客名 <span className="text-rose-500">*</span></label><input required type="text" name="name" value={formData.name} onChange={handleInputChange} className="w-full border-b border-gray-300 py-2 focus:border-gray-800 outline-none bg-transparent text-sm" placeholder="例: 山田 太郎 様" /></div>
+                    <div><label className="block text-xs tracking-widest text-gray-500 mb-2">現在のステージ</label><select name="currentStage" value={formData.currentStage} onChange={handleInputChange} className="w-full border-b border-gray-300 py-2 focus:border-gray-800 outline-none bg-transparent text-sm">{UI_STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}</select></div>
+                    <div className="flex gap-4"><div className="flex-1"><label className="block text-xs tracking-widest text-gray-500 mb-2">次回予定日</label><input type="date" name="nextDateDay" value={formData.nextDateDay} onChange={handleInputChange} className="w-full border-b border-gray-300 py-2 focus:border-gray-800 outline-none bg-transparent text-sm" /></div><div className="flex-1"><label className="block text-xs tracking-widest text-gray-500 mb-2">時間</label><div className="flex gap-2"><select name="nextDateTimeSelect" value={formData.nextDateTimeSelect} onChange={handleInputChange} className="w-full border-b border-gray-300 py-2 focus:border-gray-800 outline-none bg-transparent text-sm"><option value="09:00">09:00</option><option value="10:00">10:00</option><option value="13:00">13:00</option><option value="16:00">16:00</option><option value="17:00">17:00</option><option value="18:00">18:00</option><option value="19:00">19:00</option><option value="other">その他</option></select>{formData.nextDateTimeSelect === 'other' && (<input required type="time" name="customNextDateTime" value={formData.customNextDateTime} onChange={handleInputChange} className="w-full border-b border-gray-300 py-2 focus:border-gray-800 outline-none bg-transparent text-sm" />)}</div></div></div>
                   </div>
-
                   <div className="space-y-6">
-                    <div>
-                      <label className="block text-xs tracking-widest text-gray-500 mb-2">担当アドバイザー</label>
-                      <div className="flex gap-4">
-                        <select name="assignee" value={formData.assignee} onChange={handleInputChange} className="w-1/2 border-b border-gray-300 py-2 focus:border-gray-800 outline-none bg-transparent text-sm">
-                          {ASSIGNEE_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}
-                          <option value="other">その他</option>
-                        </select>
-                        {formData.assignee === 'other' && (
-                          <input type="text" name="customAssignee" value={formData.customAssignee} onChange={handleInputChange} placeholder="氏名" className="w-1/2 border-b border-gray-300 py-2 focus:border-gray-800 outline-none bg-transparent text-sm" />
-                        )}
-                      </div>
-                    </div>
-                    
-                    <div>
-                      <label className="block text-xs tracking-widest text-gray-500 mb-2">議事録URL (任意)</label>
-                      <input type="url" name="meetingUrl" value={formData.meetingUrl} onChange={handleInputChange} className="w-full border-b border-gray-300 py-2 focus:border-gray-800 outline-none bg-transparent text-sm" placeholder="https://docs.google.com/..." />
-                    </div>
-
-                    <div>
-                      <label className="block text-xs tracking-widest text-gray-500 mb-2">お客様の概要・備考</label>
-                      <textarea name="summary" value={formData.summary} onChange={handleInputChange} rows="2" className="w-full border border-gray-300 p-3 focus:border-gray-800 outline-none resize-none bg-transparent text-sm" placeholder="家族構成、予算、要望など"></textarea>
-                    </div>
+                    <div><label className="block text-xs tracking-widest text-gray-500 mb-2">担当</label><div className="flex gap-4"><select name="assignee" value={formData.assignee} onChange={handleInputChange} className="w-1/2 border-b border-gray-300 py-2 focus:border-gray-800 outline-none bg-transparent text-sm">{ASSIGNEE_OPTIONS.map(opt => <option key={opt} value={opt}>{opt}</option>)}<option value="other">その他</option></select>{formData.assignee === 'other' && (<input type="text" name="customAssignee" value={formData.customAssignee} onChange={handleInputChange} placeholder="氏名" className="w-1/2 border-b border-gray-300 py-2 focus:border-gray-800 outline-none bg-transparent text-sm" />)}</div></div>
+                    <div><label className="block text-xs tracking-widest text-gray-500 mb-2">議事録URL (任意)</label><input type="url" name="meetingUrl" value={formData.meetingUrl} onChange={handleInputChange} className="w-full border-b border-gray-300 py-2 focus:border-gray-800 outline-none bg-transparent text-sm" /></div>
+                    <div><label className="block text-xs tracking-widest text-gray-500 mb-2">お客様の概要・備考</label><textarea name="summary" value={formData.summary} onChange={handleInputChange} rows="2" className="w-full border border-gray-300 p-3 focus:border-gray-800 outline-none resize-none bg-transparent text-sm"></textarea></div>
                   </div>
-
-                  {/* Hurdles */}
                   <div className="md:col-span-2 mt-2">
                     <label className="block text-[10px] tracking-widest text-gray-500 mb-3 text-center uppercase">Hurdles</label>
                     <div className="flex flex-wrap justify-center gap-2">
                       {HURDLE_OPTIONS.map(option => (
-                        <label key={option} className={`flex items-center justify-center cursor-pointer px-3 py-1.5 border text-xs tracking-wider transition-all duration-300 ${formData.hurdles.includes(option) ? 'bg-gray-800 border-gray-800 text-white' : 'bg-white border-gray-200 text-gray-500 hover:border-gray-400'}`}>
-                          <input type="checkbox" className="hidden" checked={formData.hurdles.includes(option)} onChange={() => handleHurdleChange(option)} />
-                          {option}
-                        </label>
+                        <label key={option} className={`flex items-center justify-center cursor-pointer px-3 py-1.5 border text-xs tracking-wider transition-all duration-300 ${formData.hurdles.includes(option) ? 'bg-gray-800 border-gray-800 text-white' : 'bg-white border-gray-200 text-gray-500 hover:border-gray-400'}`}><input type="checkbox" className="hidden" checked={formData.hurdles.includes(option)} onChange={() => handleHurdleChange(option)} />{option}</label>
                       ))}
                     </div>
                   </div>
-
-                  {!isEditing && (
-                    <div className="md:col-span-2 text-center text-xs text-amber-700 bg-amber-50 border border-amber-100 p-4 mt-2">
-                      新規登録時、選択したステージ（{formData.currentStage}）の設定に応じたタスクが自動作成されます。
-                    </div>
-                  )}
-
                   <div className="md:col-span-2 flex justify-center gap-4 mt-4">
                     <button type="button" onClick={() => setShowFormModal(false)} className="px-8 py-3 text-xs tracking-widest text-gray-500 hover:text-gray-800 transition-colors border border-transparent">キャンセル</button>
-                    <button type="submit" className="bg-gray-800 text-white px-12 py-3 text-xs tracking-widest hover:bg-gray-900 transition-colors shadow-sm">
-                      {isEditing ? '更新する' : '登録する'}
-                    </button>
+                    <button type="submit" className="bg-gray-800 text-white px-12 py-3 text-xs tracking-widest hover:bg-gray-900 transition-colors shadow-sm">{isEditing ? '更新する' : '登録する'}</button>
                   </div>
                 </form>
               </div>
             )}
 
-            {/* --- VIEW: BOARD --- */}
+            {}
             {currentView === 'board' && !showFormModal && (
               <div className="animate-fade-in">
-                
-                {/* Controls (Tabs & Sort) */}
                 <div className="flex flex-col md:flex-row justify-between items-center border-b border-gray-200 mb-8 pb-4 gap-4">
-                   {/* Stage Tabs */}
                    <div className="flex overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none] w-full md:w-auto gap-6 md:gap-8 pb-2 md:pb-0 items-center">
                      {STAGES.map(stage => {
                        const count = customers.filter(c => stage.id === '全体' ? !ARCHIVE_STAGES.some(s=>s.id===c.currentStage) : c.currentStage === stage.id).length;
                        return (
-                         <button 
-                           key={stage.id}
-                           onClick={() => setBoardTab(stage.id)}
-                           className={`text-sm tracking-widest transition-all whitespace-nowrap ${boardTab === stage.id ? 'text-gray-900 font-bold border-b-2 border-gray-800 pb-1' : 'text-gray-400 hover:text-gray-600'}`}
-                         >
+                         <button key={stage.id} onClick={() => setBoardTab(stage.id)} className={`text-sm tracking-widest transition-all whitespace-nowrap ${boardTab === stage.id ? 'text-gray-900 font-bold border-b-2 border-gray-800 pb-1' : 'text-gray-400 hover:text-gray-600'}`}>
                            {stage.label} <span className="text-[10px] ml-1 opacity-70">({count})</span>
                          </button>
                        )
                      })}
-                     
-                     {/* 完了・離脱タブ（控えめなデザイン） */}
                      <div className="h-4 w-px bg-gray-200 mx-2 hidden md:block"></div>
-                     <button 
-                       onClick={() => setBoardTab('アーカイブ')}
-                       className={`text-xs tracking-widest transition-all whitespace-nowrap ${boardTab === 'アーカイブ' ? 'text-gray-500 font-bold border-b border-gray-300 pb-1' : 'text-gray-300 hover:text-gray-400 opacity-60'}`}
-                     >
+                     <button onClick={() => setBoardTab('アーカイブ')} className={`text-xs tracking-widest transition-all whitespace-nowrap ${boardTab === 'アーカイブ' ? 'text-gray-500 font-bold border-b border-gray-300 pb-1' : 'text-gray-300 hover:text-gray-400 opacity-60'}`}>
                        完了・離脱 <span className="text-[10px] ml-1 opacity-70">({customers.filter(c => ARCHIVE_STAGES.some(s=>s.id===c.currentStage)).length})</span>
                      </button>
                    </div>
-
-                   {/* Sort Options */}
                    <div className="flex items-center gap-2 self-end md:self-auto bg-white border border-gray-200 p-1">
-                      <select 
-                        value={sortOrder} 
-                        onChange={(e) => setSortOrder(e.target.value)}
-                        className="text-xs tracking-widest text-gray-600 bg-transparent outline-none p-1 cursor-pointer"
-                      >
-                         <option value="nextDateAsc">次回予定日が近い順</option>
-                         <option value="taskDueDateAsc">タスク期日が近い順</option>
+                      <select value={sortOrder} onChange={(e) => setSortOrder(e.target.value)} className="text-xs tracking-widest text-gray-600 bg-transparent outline-none p-1 cursor-pointer">
+                         <option value="nextDateAsc">次回予定日が近い順</option><option value="taskDueDateAsc">タスク期日が近い順</option>
                       </select>
                    </div>
                 </div>
 
-                {/* Cards Grid */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 items-start">
-                  {boardFilteredCustomers.map(customer => {
+                  {[...customers].filter(c => boardTab === 'アーカイブ' ? ARCHIVE_STAGES.some(s => s.id === c.currentStage) : (boardTab !== '全体' ? c.currentStage === boardTab : !ARCHIVE_STAGES.some(s => s.id === c.currentStage))).sort((a, b) => {
+                     if (sortOrder === 'nextDateAsc') return (a.nextDate ? new Date(a.nextDate) : Infinity) - (b.nextDate ? new Date(b.nextDate) : Infinity);
+                     const getEarliest = (cust) => { const undone = (cust.tasks||[]).filter(t => !t.isDone && t.dueDate); return undone.length===0 ? Infinity : Math.min(...undone.map(t => new Date(t.dueDate).getTime())); };
+                     return getEarliest(a) - getEarliest(b);
+                  }).map(customer => {
                     const undoneTasks = customer.tasks?.filter(t => !t.isDone) || [];
                     const doneTasks = customer.tasks?.filter(t => t.isDone) || [];
-                    const isCompletedTasksShown = showCompletedTasks[customer.id];
                     const isArchivedCard = ARCHIVE_STAGES.some(s => s.id === customer.currentStage);
 
                     return (
                     <div key={customer.id} className={`bg-white border hover:shadow-md transition-all flex flex-col h-full ${isArchivedCard ? 'border-gray-100 opacity-70 grayscale-[0.2]' : 'border-gray-200 hover:border-gray-300'}`}>
-                      
-                      {/* Card Header */}
                       <div className="p-6 relative">
-                        <button onClick={() => openEditModal(customer)} className="absolute top-4 right-4 text-gray-300 hover:text-gray-800 transition-colors p-2" title="編集">
-                          <EditIcon className="w-4 h-4" />
-                        </button>
-
+                        <button onClick={() => openEditModal(customer)} className="absolute top-4 right-4 text-gray-300 hover:text-gray-800 transition-colors p-2"><EditIcon className="w-4 h-4" /></button>
                         <div className="mb-4 pr-6">
-                           <div className={`inline-block text-white text-[9px] px-2 py-0.5 tracking-widest mb-3 uppercase ${isArchivedCard ? 'bg-gray-400' : 'bg-gray-800'}`}>
-                             STAGE: {customer.currentStage}
-                           </div>
-                           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                              <h3 className="text-xl font-serif tracking-wider text-gray-900">{customer.name}</h3>
-                              <span className="text-[10px] text-gray-500 tracking-widest">/ {customer.assignee === 'other' ? customer.customAssignee : customer.assignee}</span>
-                           </div>
+                           <div className={`inline-block text-white text-[9px] px-2 py-0.5 tracking-widest mb-3 uppercase ${isArchivedCard ? 'bg-gray-400' : 'bg-gray-800'}`}>STAGE: {customer.currentStage}</div>
+                           <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1"><h3 className="text-xl font-serif tracking-wider text-gray-900">{customer.name}</h3><span className="text-[10px] text-gray-500 tracking-widest">/ {customer.assignee === 'other' ? customer.customAssignee : customer.assignee}</span></div>
                         </div>
-                        
                         <div className="bg-gray-50/50 border border-gray-100 p-3 mb-4 flex justify-between items-center">
-                           <div>
-                             <span className="block text-[9px] text-gray-400 tracking-widest uppercase mb-0.5">Next Appt.</span>
-                             <span className={`text-sm font-medium ${isArchivedCard ? 'text-gray-500 line-through' : 'text-gray-800'}`}>
-                               {formatDateTime(customer.nextDate)}
-                             </span>
-                           </div>
-                           {customer.meetingUrl && (
-                             <a href={customer.meetingUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-[10px] bg-white border border-gray-300 text-gray-600 px-2 py-1 hover:bg-gray-100 transition-colors">
-                               <LinkIcon className="w-3 h-3" /> 議事録
-                             </a>
-                           )}
+                           <div><span className="block text-[9px] text-gray-400 tracking-widest uppercase mb-0.5">Next Appt.</span><span className={`text-sm font-medium ${isArchivedCard ? 'text-gray-500 line-through' : 'text-gray-800'}`}>{formatDateTime(customer.nextDate)}</span></div>
+                           {customer.meetingUrl && <a href={customer.meetingUrl} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-[10px] bg-white border border-gray-300 text-gray-600 px-2 py-1 hover:bg-gray-100"><LinkIcon className="w-3 h-3" /> 議事録</a>}
                         </div>
-
-                        {/* Next Stage Buttons */}
                         <div className="border-t border-gray-100 pt-4 mt-2">
                            <p className="text-[9px] text-gray-400 tracking-widest uppercase mb-2 text-center">Actions / Move Stage</p>
-                           <div className="flex justify-center">
-                              <select 
-                                onChange={(e) => {
-                                   if(e.target.value === "") return;
-                                   setStageModalData({ customer, targetStage: e.target.value });
-                                   setShowStageModal(true);
-                                   e.target.value = ""; // Reset
-                                }}
-                                className="bg-white border border-gray-800 text-gray-800 text-xs px-3 py-1.5 outline-none cursor-pointer hover:bg-gray-50 transition-colors text-center w-full"
-                              >
-                                <option value="">ステージを移行する...</option>
-                                <optgroup label="進行中ステージ">
-                                  {UI_STAGES.filter(s => s.id !== customer.currentStage).map(s => <option key={s.id} value={s.id}>{s.label} へ進む</option>)}
-                                </optgroup>
-                                <optgroup label="アーカイブ（終了）">
-                                  {ARCHIVE_STAGES.filter(s => s.id !== customer.currentStage).map(s => <option key={s.id} value={s.id}>{s.label} にする</option>)}
-                                </optgroup>
-                              </select>
-                           </div>
+                           <select onChange={(e) => { if(e.target.value){ setStageModalData({ customer, targetStage: e.target.value }); setShowStageModal(true); e.target.value=""; } }} className="bg-white border border-gray-800 text-gray-800 text-xs px-3 py-1.5 outline-none cursor-pointer hover:bg-gray-50 transition-colors text-center w-full">
+                             <option value="">ステージを移行する...</option>
+                             <optgroup label="進行中ステージ">{UI_STAGES.filter(s => s.id !== customer.currentStage).map(s => <option key={s.id} value={s.id}>{s.label} へ進む</option>)}</optgroup>
+                             <optgroup label="アーカイブ（終了）">{ARCHIVE_STAGES.filter(s => s.id !== customer.currentStage).map(s => <option key={s.id} value={s.id}>{s.label} にする</option>)}</optgroup>
+                           </select>
+                           {isArchivedCard && (
+                             <button onClick={() => deleteCustomer(customer.id)} className="mt-2 w-full flex items-center justify-center gap-1 text-[10px] text-gray-400 hover:text-rose-600 tracking-widest uppercase py-1.5 border border-transparent hover:border-rose-200 transition-colors"><TrashIcon className="w-3 h-3" /> この顧客データを削除</button>
+                           )}
                         </div>
                       </div>
 
-                      {/* Tasks Section */}
                       <div className="p-6 bg-gray-50/50 border-t border-gray-100 flex-grow">
                         <div className="flex justify-between items-center mb-4">
                           <h4 className="text-[10px] text-gray-500 tracking-widest uppercase font-bold">Tasks ({undoneTasks.length})</h4>
-                          <button onClick={() => addTask(customer.id)} className="text-[10px] text-gray-500 hover:text-gray-800 tracking-widest uppercase flex items-center gap-0.5">
-                            <PlusIcon className="w-3 h-3"/> Add
-                          </button>
+                          <button onClick={() => addTask(customer.id)} className="text-[10px] text-gray-500 hover:text-gray-800 tracking-widest uppercase flex items-center gap-0.5"><PlusIcon className="w-3 h-3"/> Add</button>
                         </div>
-
-                        {/* 未完了タスク */}
                         <div className="space-y-2 mb-4">
-                          {undoneTasks.length === 0 ? (
-                            <p className="text-[10px] text-gray-400 tracking-widest py-6 text-center bg-white border border-dashed border-gray-200">現在タスクはありません</p>
-                          ) : (
-                            undoneTasks.map(task => {
-                              const isWarning = isDeadlineNear(task.dueDate);
-                              const isPastDue = isOverdue(task.dueDate);
-                              return (
-                                <TaskItem 
-                                  key={task.id} 
-                                  task={task} 
-                                  customer={customer}
-                                  isWarning={isWarning}
-                                  isPastDue={isPastDue}
-                                  onUpdateLocal={updateTaskLocal}
-                                  onCommit={commitTaskUpdate}
-                                  onToggleDone={toggleTaskDone}
-                                  onDelete={deleteTask}
-                                />
-                              );
-                            })
-                          )}
+                          {undoneTasks.length === 0 ? <p className="text-[10px] text-gray-400 tracking-widest py-6 text-center bg-white border border-dashed border-gray-200">現在タスクはありません</p> : 
+                            undoneTasks.map(task => (
+                              <TaskItem 
+                                key={task.id} task={task} categories={categories}
+                                isWarning={isDeadlineNear(task.dueDate)} isPastDue={isOverdue(task.dueDate)}
+                                onChange={(field, val) => updateTaskLocal(customer.id, task.id, field, val)}
+                                onCommit={() => commitTaskUpdate(customer.id)}
+                                onToggleDone={() => toggleTaskDone(customer.id, task.id)} onDelete={() => deleteTask(customer.id, task.id)}
+                              />
+                            ))
+                          }
                         </div>
-
-                        {/* 完了済みタスク（折りたたみ） */}
                         {doneTasks.length > 0 && (
                           <div>
-                            <button 
-                              onClick={() => setShowCompletedTasks(prev => ({...prev, [customer.id]: !prev[customer.id]}))}
-                              className="text-[10px] text-gray-500 hover:text-gray-800 tracking-widest flex items-center gap-1 mb-2 w-full justify-center py-1.5 bg-white border border-gray-200 transition-colors"
-                            >
-                              完了済みタスク ({doneTasks.length}) {isCompletedTasksShown ? <ChevronUpIcon className="w-3 h-3"/> : <ChevronDownIcon className="w-3 h-3"/>}
+                            <button onClick={() => setShowCompletedTasks(prev => ({...prev, [customer.id]: !prev[customer.id]}))} className="text-[10px] text-gray-500 hover:text-gray-800 tracking-widest flex items-center gap-1 mb-2 w-full justify-center py-1.5 bg-white border border-gray-200">
+                              完了済みタスク ({doneTasks.length}) {showCompletedTasks[customer.id] ? <ChevronUpIcon className="w-3 h-3"/> : <ChevronDownIcon className="w-3 h-3"/>}
                             </button>
-                            
-                            {isCompletedTasksShown && (
+                            {showCompletedTasks[customer.id] && (
                               <div className="space-y-1.5 opacity-60">
                                 {doneTasks.map(task => (
                                   <div key={task.id} className="flex items-center gap-2 p-1.5 bg-gray-100 border border-gray-200">
@@ -1456,23 +1128,169 @@
                       </div>
                     </div>
                   )})}
-                  
-                  {boardFilteredCustomers.length === 0 && (
-                     <div className="col-span-full text-center py-32 text-gray-400 border border-gray-200 bg-white shadow-sm">
-                       <div className="font-serif tracking-widest mb-2 text-lg">NO DATA</div>
-                       <div className="text-xs tracking-wider">該当する顧客データはありません。</div>
-                     </div>
-                  )}
                 </div>
               </div>
             )}
 
-            {/* --- VIEW: REMIND --- */}
+            {}
+            {currentView === 'matrix' && !showFormModal && (
+              <div className="animate-fade-in max-w-[1400px] mx-auto">
+                <div className="flex flex-col xl:flex-row xl:items-start gap-6 mb-6">
+                   {/* General Task Add Form */}
+                   <div className="bg-white border border-gray-200 p-5 shadow-sm flex-1">
+                      <h3 className="text-xs font-bold text-gray-800 tracking-widest uppercase mb-4 flex items-center gap-2">
+                        <PlusIcon className="w-4 h-4 text-gray-500" /> 一般タスク（顧客紐付けなし）の追加
+                      </h3>
+                      <div className="flex flex-col sm:flex-row gap-4 items-end">
+                         <div className="flex-1 w-full min-w-[200px]">
+                            <label className="block text-[10px] text-gray-500 tracking-widest uppercase mb-1">タスク名</label>
+                            <input type="text" value={newGenTaskTitle} onChange={e => setNewGenTaskTitle(e.target.value)} placeholder="例: 〇〇の資料作成" className="w-full border-b border-gray-300 py-1.5 focus:border-gray-800 outline-none bg-transparent text-sm font-medium" />
+                         </div>
+                         <div className="w-full sm:w-auto">
+                            <label className="block text-[10px] text-gray-500 tracking-widest uppercase mb-1">分類</label>
+                            <select value={newGenTaskCategory} onChange={e=>setNewGenTaskCategory(e.target.value)} className="w-full sm:w-28 border-b border-gray-300 py-1.5 focus:border-gray-800 outline-none bg-transparent text-xs text-gray-700">
+                               <option value="">未分類</option>
+                               {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            </select>
+                         </div>
+                         <div className="w-full sm:w-32">
+                            <label className="block text-[10px] text-gray-500 tracking-widest uppercase mb-1">期日</label>
+                            <input type="date" value={newGenTaskDate} onChange={e => setNewGenTaskDate(e.target.value)} className="w-full border-b border-gray-300 py-1.5 focus:border-gray-800 outline-none bg-transparent text-sm" />
+                         </div>
+                         <div className="w-full sm:w-20">
+                            <label className="block text-[10px] text-gray-500 tracking-widest uppercase mb-2">重要度</label>
+                            <div className="pb-1"><PriorityMeter priority={newGenTaskPriority} onChange={setNewGenTaskPriority} /></div>
+                         </div>
+                         <button onClick={handleAddGeneralTask} className="bg-gray-800 text-white px-6 py-2 text-xs tracking-widest hover:bg-gray-900 transition-colors whitespace-nowrap w-full sm:w-auto mb-1">追加</button>
+                      </div>
+                   </div>
+
+                   {/* Filter Box */}
+                   <div className="bg-gray-50 border border-gray-200 p-5 shadow-sm w-full xl:w-72 shrink-0 self-stretch flex flex-col justify-center">
+                      <h3 className="text-xs font-bold text-gray-800 tracking-widest uppercase mb-2 flex items-center gap-1.5">
+                         <FilterIcon className="w-3.5 h-3.5" /> ボードの絞り込み
+                      </h3>
+                      <p className="text-[10px] text-gray-500 mb-2">特定の分類のタスクだけを表示します</p>
+                      <select value={filterCategory} onChange={e => setFilterCategory(e.target.value)} className="w-full border border-gray-300 px-3 py-2 outline-none focus:border-gray-800 text-sm bg-white shadow-sm cursor-pointer">
+                         <option value="all">すべてのタスクを表示</option>
+                         <option value="unassigned">未分類のみ</option>
+                         <optgroup label="カテゴリで絞り込む">
+                           {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                         </optgroup>
+                      </select>
+                   </div>
+                </div>
+
+                {/* Matrix Grid */}
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+                  {/* Q1: Urgent & Important */}
+                  <div className="bg-rose-50/40 border border-rose-200 flex flex-col h-full min-h-[350px]">
+                     <div className="bg-rose-100/60 p-3 border-b border-rose-200 flex justify-between items-center">
+                       <div>
+                         <h4 className="text-sm font-bold text-rose-800 tracking-widest">第1象限：今すぐやる</h4>
+                         <p className="text-[10px] text-rose-600 tracking-wider">重要度 高 ＆ 期日 {systemConfig?.matrixUrgentDays ?? 5}日以内</p>
+                       </div>
+                       <span className="bg-rose-200/50 text-rose-800 text-[10px] font-bold px-2 py-1 rounded-sm">{matrixData.q1.length}</span>
+                     </div>
+                     <div className="p-3 space-y-2.5 flex-grow overflow-y-auto max-h-[600px] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-rose-200 hover:[&::-webkit-scrollbar-thumb]:bg-rose-300">
+                       {matrixData.q1.length === 0 ? <p className="text-[10px] text-rose-300 text-center py-8">該当タスクはありません</p> : 
+                         matrixData.q1.map(task => (
+                           <TaskItem 
+                              key={task.id} task={task} contextLabel={task.type === 'customer' ? `[顧客] ${task.customerName}様` : '[一般タスク]'} categories={categories}
+                              isWarning={isDeadlineNear(task.dueDate)} isPastDue={isOverdue(task.dueDate)}
+                              onChange={(f,v) => task.type === 'customer' ? updateTaskLocal(task.customerId, task.id, f, v) : updateGeneralTaskLocal(task.id, f, v)}
+                              onCommit={() => task.type === 'customer' ? commitTaskUpdate(task.customerId) : commitGeneralTaskUpdate(task.id)}
+                              onToggleDone={() => task.type === 'customer' ? toggleTaskDone(task.customerId, task.id) : toggleGeneralTaskDone(task.id)}
+                              onDelete={() => task.type === 'customer' ? deleteTask(task.customerId, task.id) : deleteGeneralTask(task.id)}
+                           />
+                         ))
+                       }
+                     </div>
+                  </div>
+
+                  {/* Q2: Not Urgent but Important */}
+                  <div className="bg-indigo-50/40 border border-indigo-200 flex flex-col h-full min-h-[350px]">
+                     <div className="bg-indigo-100/60 p-3 border-b border-indigo-200 flex justify-between items-center">
+                       <div>
+                         <h4 className="text-sm font-bold text-indigo-800 tracking-widest">第2象限：計画してやる</h4>
+                         <p className="text-[10px] text-indigo-600 tracking-wider">重要度 高 ＆ 期日 遠い(未定)</p>
+                       </div>
+                       <span className="bg-indigo-200/50 text-indigo-800 text-[10px] font-bold px-2 py-1 rounded-sm">{matrixData.q2.length}</span>
+                     </div>
+                     <div className="p-3 space-y-2.5 flex-grow overflow-y-auto max-h-[600px] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-indigo-200 hover:[&::-webkit-scrollbar-thumb]:bg-indigo-300">
+                       {matrixData.q2.length === 0 ? <p className="text-[10px] text-indigo-300 text-center py-8">該当タスクはありません</p> : 
+                         matrixData.q2.map(task => (
+                           <TaskItem 
+                              key={task.id} task={task} contextLabel={task.type === 'customer' ? `[顧客] ${task.customerName}様` : '[一般タスク]'} categories={categories}
+                              isWarning={false} isPastDue={false}
+                              onChange={(f,v) => task.type === 'customer' ? updateTaskLocal(task.customerId, task.id, f, v) : updateGeneralTaskLocal(task.id, f, v)}
+                              onCommit={() => task.type === 'customer' ? commitTaskUpdate(task.customerId) : commitGeneralTaskUpdate(task.id)}
+                              onToggleDone={() => task.type === 'customer' ? toggleTaskDone(task.customerId, task.id) : toggleGeneralTaskDone(task.id)}
+                              onDelete={() => task.type === 'customer' ? deleteTask(task.customerId, task.id) : deleteGeneralTask(task.id)}
+                           />
+                         ))
+                       }
+                     </div>
+                  </div>
+
+                  {/* Q3: Urgent but Not Important */}
+                  <div className="bg-amber-50/40 border border-amber-200 flex flex-col h-full min-h-[350px]">
+                     <div className="bg-amber-100/60 p-3 border-b border-amber-200 flex justify-between items-center">
+                       <div>
+                         <h4 className="text-sm font-bold text-amber-800 tracking-widest">第3象限：早く片付ける</h4>
+                         <p className="text-[10px] text-amber-600 tracking-wider">重要度 低 ＆ 期日 {systemConfig?.matrixUrgentDays ?? 5}日以内</p>
+                       </div>
+                       <span className="bg-amber-200/50 text-amber-800 text-[10px] font-bold px-2 py-1 rounded-sm">{matrixData.q3.length}</span>
+                     </div>
+                     <div className="p-3 space-y-2.5 flex-grow overflow-y-auto max-h-[600px] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-amber-200 hover:[&::-webkit-scrollbar-thumb]:bg-amber-300">
+                       {matrixData.q3.length === 0 ? <p className="text-[10px] text-amber-300 text-center py-8">該当タスクはありません</p> : 
+                         matrixData.q3.map(task => (
+                           <TaskItem 
+                              key={task.id} task={task} contextLabel={task.type === 'customer' ? `[顧客] ${task.customerName}様` : '[一般タスク]'} categories={categories}
+                              isWarning={isDeadlineNear(task.dueDate)} isPastDue={isOverdue(task.dueDate)}
+                              onChange={(f,v) => task.type === 'customer' ? updateTaskLocal(task.customerId, task.id, f, v) : updateGeneralTaskLocal(task.id, f, v)}
+                              onCommit={() => task.type === 'customer' ? commitTaskUpdate(task.customerId) : commitGeneralTaskUpdate(task.id)}
+                              onToggleDone={() => task.type === 'customer' ? toggleTaskDone(task.customerId, task.id) : toggleGeneralTaskDone(task.id)}
+                              onDelete={() => task.type === 'customer' ? deleteTask(task.customerId, task.id) : deleteGeneralTask(task.id)}
+                           />
+                         ))
+                       }
+                     </div>
+                  </div>
+
+                  {/* Q4: Not Urgent & Not Important */}
+                  <div className="bg-gray-50/80 border border-gray-200 flex flex-col h-full min-h-[350px]">
+                     <div className="bg-gray-200/60 p-3 border-b border-gray-200 flex justify-between items-center">
+                       <div>
+                         <h4 className="text-sm font-bold text-gray-700 tracking-widest">第4象限：後回し/やめる</h4>
+                         <p className="text-[10px] text-gray-500 tracking-wider">重要度 低 ＆ 期日 遠い(未定)</p>
+                       </div>
+                       <span className="bg-gray-300/50 text-gray-600 text-[10px] font-bold px-2 py-1 rounded-sm">{matrixData.q4.length}</span>
+                     </div>
+                     <div className="p-3 space-y-2.5 flex-grow overflow-y-auto max-h-[600px] [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-gray-200 hover:[&::-webkit-scrollbar-thumb]:bg-gray-300">
+                       {matrixData.q4.length === 0 ? <p className="text-[10px] text-gray-400 text-center py-8">該当タスクはありません</p> : 
+                         matrixData.q4.map(task => (
+                           <TaskItem 
+                              key={task.id} task={task} contextLabel={task.type === 'customer' ? `[顧客] ${task.customerName}様` : '[一般タスク]'} categories={categories}
+                              isWarning={false} isPastDue={false}
+                              onChange={(f,v) => task.type === 'customer' ? updateTaskLocal(task.customerId, task.id, f, v) : updateGeneralTaskLocal(task.id, f, v)}
+                              onCommit={() => task.type === 'customer' ? commitTaskUpdate(task.customerId) : commitGeneralTaskUpdate(task.id)}
+                              onToggleDone={() => task.type === 'customer' ? toggleTaskDone(task.customerId, task.id) : toggleGeneralTaskDone(task.id)}
+                              onDelete={() => task.type === 'customer' ? deleteTask(task.customerId, task.id) : deleteGeneralTask(task.id)}
+                           />
+                         ))
+                       }
+                     </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {}
             {currentView === 'remind' && !showFormModal && (
               <div className="bg-white border border-gray-200 overflow-hidden shadow-sm animate-fade-in">
                 <div className="p-6 border-b border-gray-200 bg-white flex items-center gap-2">
-                  <BellIcon className="w-5 h-5 text-gray-800" />
-                  <h2 className="text-lg font-serif tracking-[0.2em] text-gray-800">リマインドタスク一覧</h2>
+                  <BellIcon className="w-5 h-5 text-gray-800" /><h2 className="text-lg font-serif tracking-[0.2em] text-gray-800">リマインドタスク一覧</h2>
                 </div>
                 <div className="overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                    <table className="w-full text-left border-collapse min-w-[800px]">
@@ -1486,18 +1304,10 @@
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-100">
-                        {customers.flatMap(c => (c.tasks || []).map(t => ({customer: c, task: t})))
-                          .filter(item => item.task.title.includes('リマインド'))
-                          .sort((a,b) => new Date(a.task.dueDate) - new Date(b.task.dueDate))
-                          .map(({ customer, task }) => (
+                        {customers.flatMap(c => (c.tasks || []).map(t => ({customer: c, task: t}))).filter(item => item.task.title.includes('リマインド')).sort((a,b) => new Date(a.task.dueDate) - new Date(b.task.dueDate)).map(({ customer, task }) => (
                            <tr key={task.id} className={`hover:bg-gray-50 transition-colors ${task.isDone ? 'opacity-50 bg-gray-50' : ''}`}>
-                             <td className="p-4 text-center">
-                               <input type="checkbox" checked={task.isDone} onChange={() => toggleTaskDone(customer.id, task.id)} className="accent-gray-800 cursor-pointer"/>
-                             </td>
-                             <td className={`p-4 text-sm ${!task.isDone && isOverdue(task.dueDate) ? 'text-rose-600 font-medium' : 'text-gray-600'}`}>
-                               {task.dueDate}
-                               {!task.isDone && isOverdue(task.dueDate) && <span className="ml-2 text-[9px] bg-rose-100 text-rose-700 px-1 border border-rose-200">期限切れ</span>}
-                             </td>
+                             <td className="p-4 text-center"><input type="checkbox" checked={task.isDone} onChange={() => toggleTaskDone(customer.id, task.id)} className="accent-gray-800 cursor-pointer"/></td>
+                             <td className={`p-4 text-sm ${!task.isDone && isOverdue(task.dueDate) ? 'text-rose-600 font-medium' : 'text-gray-600'}`}>{task.dueDate}{!task.isDone && isOverdue(task.dueDate) && <span className="ml-2 text-[9px] bg-rose-100 text-rose-700 px-1 border border-rose-200">期限切れ</span>}</td>
                              <td className="p-4 font-medium text-gray-800 font-serif tracking-wider">{customer.name}</td>
                              <td className="p-4 text-sm text-gray-600">{task.title}</td>
                              <td className="p-4 text-xs text-gray-500">{customer.currentStage}</td>
@@ -1511,7 +1321,6 @@
                 </div>
               </div>
             )}
-
           </main>
         </div>
       );
