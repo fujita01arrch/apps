@@ -108,6 +108,19 @@
       return targetDate.getTime() < today.getTime();
     };
 
+    const isStageHistoryIncomplete = (customer) => {
+      const history = customer.stageHistory || [];
+      const hasStage = (id) => history.some(h => h.stage === id);
+      let maxIdx = UI_STAGES.findIndex(s => s.id === customer.currentStage);
+      history.forEach(h => {
+        const idx = UI_STAGES.findIndex(s => s.id === h.stage);
+        if (idx > maxIdx) maxIdx = idx;
+      });
+      if (maxIdx < 0) return false;
+      for (let i = 0; i <= maxIdx; i++) { if (!hasStage(UI_STAGES[i].id)) return true; }
+      return false;
+    };
+
     const isDeadlineNear = (dateString, urgentDays = 5) => {
       if (!dateString) return false;
       const today = new Date(); today.setHours(0, 0, 0, 0);
@@ -1118,6 +1131,7 @@
         const [isDateUnknown, setIsDateUnknown] = useState(false);
 
         const handleMigrate = () => {
+           if (isArchive && isStageHistoryIncomplete(customer)) { showAlert('ステージ履歴に記録漏れがあるため、完了・離脱に移行できません。先に「ステージ履歴の編集」から記録を補完してください。'); return; }
            let finalDateStr = '';
            if(!isArchive && !isDateUnknown){
               if(!modalDate) { showAlert('次回予定日を入力してください'); return; }
@@ -1647,11 +1661,12 @@
                     const undoneTasks = customer.tasks?.filter(t => !t.isDone) || [];
                     const doneTasks = customer.tasks?.filter(t => t.isDone) || [];
                     const isArchivedCard = ARCHIVE_STAGES.some(s => s.id === customer.currentStage);
+                    const historyIncomplete = isStageHistoryIncomplete(customer);
 
                     return (
                     <div key={customer.id} className={`bg-white border hover:shadow-md transition-all flex flex-col h-full ${isArchivedCard ? 'border-gray-100 opacity-70 grayscale-[0.2]' : 'border-gray-200 hover:border-gray-300'}`}>
                       <div className="p-6 relative">
-                        <button onClick={() => { setStageHistoryModalData(customer); setShowStageHistoryModal(true); }} className="absolute top-4 right-11 text-gray-300 hover:text-gray-800 transition-colors p-2" title="ステージ履歴を編集"><ClockIcon className="w-4 h-4" /></button>
+                        <button onClick={() => { setStageHistoryModalData(customer); setShowStageHistoryModal(true); }} className={`absolute top-4 right-11 transition-colors p-2 ${historyIncomplete ? 'text-rose-500 hover:text-rose-700' : 'text-gray-300 hover:text-gray-800'}`} title={historyIncomplete ? 'ステージ履歴に記録漏れがあります（歩留まり計算に影響します）' : 'ステージ履歴を編集'}><ClockIcon className="w-4 h-4" /></button>
                         <button onClick={() => openEditModal(customer)} className="absolute top-4 right-4 text-gray-300 hover:text-gray-800 transition-colors p-2"><EditIcon className="w-4 h-4" /></button>
                         <div className="mb-4 pr-6">
                            <div className={`inline-block text-white text-[9px] px-2 py-0.5 tracking-widest mb-3 uppercase ${isArchivedCard ? 'bg-gray-400' : 'bg-gray-800'}`}>STAGE: {customer.currentStage}</div>
@@ -1666,7 +1681,7 @@
                            <select onChange={(e) => { if(e.target.value){ setStageModalData({ customer, targetStage: e.target.value }); setShowStageModal(true); e.target.value=""; } }} className="bg-white border border-gray-800 text-gray-800 text-xs px-3 py-1.5 outline-none cursor-pointer hover:bg-gray-50 transition-colors text-center w-full">
                              <option value="">ステージを移行する...</option>
                              <optgroup label="進行中ステージ">{UI_STAGES.filter(s => s.id !== customer.currentStage).map(s => <option key={s.id} value={s.id}>{s.label} へ進む</option>)}</optgroup>
-                             <optgroup label="アーカイブ（終了）">{ARCHIVE_STAGES.filter(s => s.id !== customer.currentStage).map(s => <option key={s.id} value={s.id}>{s.label} にする</option>)}</optgroup>
+                             <optgroup label={historyIncomplete ? 'アーカイブ（終了）※履歴の記録漏れを解消してください' : 'アーカイブ（終了）'}>{ARCHIVE_STAGES.filter(s => s.id !== customer.currentStage).map(s => <option key={s.id} value={s.id} disabled={historyIncomplete}>{s.label} にする</option>)}</optgroup>
                            </select>
                            {isArchivedCard && (
                              <button onClick={() => deleteCustomer(customer.id)} className="mt-2 w-full flex items-center justify-center gap-1 text-[10px] text-gray-400 hover:text-rose-600 tracking-widest uppercase py-1.5 border border-transparent hover:border-rose-200 transition-colors"><TrashIcon className="w-3 h-3" /> この顧客データを削除</button>
