@@ -1191,12 +1191,33 @@
           handleClose();
         };
 
+        let maxExpectedIdx = UI_STAGES.findIndex(s => s.id === customer.currentStage);
+        entries.forEach(e => { const idx = UI_STAGES.findIndex(s => s.id === e.stage); if (idx > maxExpectedIdx) maxExpectedIdx = idx; });
+        const expectedStages = maxExpectedIdx >= 0 ? UI_STAGES.slice(0, maxExpectedIdx + 1) : [];
+        const missingStages = expectedStages.filter(s => !entries.some(e => e.stage === s.id));
+
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-fade-in">
             <div className="bg-white max-w-lg w-full p-8 shadow-xl border border-gray-200 max-h-[85vh] overflow-y-auto">
               <div className="flex items-center gap-2 mb-6 justify-center"><ClockIcon className="w-5 h-5 text-gray-800" /><h3 className="text-xl font-serif text-gray-800 tracking-widest">ステージ履歴の編集</h3></div>
               <p className="text-sm text-center mb-6 text-gray-600"><strong className="text-gray-900">{customer.name}</strong> 様の、各ステージに入った日付</p>
               <p className="text-[10px] text-gray-400 tracking-wider mb-4 leading-relaxed">歩留まり・リードタイム分析はこの履歴を元に集計されます。過去の分は分かる範囲で入力してください。</p>
+
+              {expectedStages.length > 0 && (
+                <div className="flex flex-wrap gap-1.5 mb-6 p-3 bg-gray-50 border border-gray-200">
+                  {expectedStages.map(s => {
+                    const has = entries.some(e => e.stage === s.id);
+                    return (
+                      <span key={s.id} className={`text-[10px] px-2 py-1 border tracking-wider ${has ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-300 font-bold'}`}>
+                        {has ? '✓' : '！'} {s.label}
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
+              {missingStages.length > 0 && (
+                <p className="text-[11px] text-rose-600 mb-4 -mt-3 tracking-wider">未入力：{missingStages.map(s => s.label).join('、')}</p>
+              )}
 
               <div className="space-y-2 mb-6">
                 {entries.length === 0 && <p className="text-center text-xs text-gray-400 py-6 border border-dashed border-gray-200">履歴がありません</p>}
