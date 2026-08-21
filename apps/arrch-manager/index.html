@@ -1050,7 +1050,11 @@
       const changeCustomerStage = (id, newStage, newNextDateStr) => {
         const customer = customers.find(c => c.id === id);
         if (!customer) return;
-        let payload = { currentStage: newStage, updatedAt: new Date().toISOString(), stageHistory: [...(customer.stageHistory || []), { stage: newStage, enteredAt: getTodayString() }] };
+        // 「次回予定日」は前ステージ在籍時に入力された、今回移行するステージの予定日にあたる。
+        // アーカイブ（完了・離脱）への移行は予定日という概念がないため、操作日をそのまま使う。
+        const isArchiveTransition = ARCHIVE_STAGES.some(s => s.id === newStage);
+        const enteredAt = (!isArchiveTransition && customer.nextDate) ? customer.nextDate.split('T')[0] : getTodayString();
+        let payload = { currentStage: newStage, updatedAt: new Date().toISOString(), stageHistory: [...(customer.stageHistory || []), { stage: newStage, enteredAt }] };
         if(newNextDateStr !== undefined && newNextDateStr !== null) payload.nextDate = newNextDateStr;
         if (!ARCHIVE_STAGES.some(s => s.id === newStage)) {
            const baseDateStr = newNextDateStr ? newNextDateStr.split('T')[0] : (customer.nextDate ? customer.nextDate.split('T')[0] : getTodayString());
