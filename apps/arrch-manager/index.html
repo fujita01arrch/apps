@@ -647,6 +647,7 @@
       const [analyticsCustomStart, setAnalyticsCustomStart] = useState('');
       const [analyticsCustomEnd, setAnalyticsCustomEnd] = useState('');
       const [forecastTargetStage, setForecastTargetStage] = useState('P申込後');
+      const [customPairSlots, setCustomPairSlots] = useState([{ from: '', to: '' }, { from: '', to: '' }, { from: '', to: '' }]);
 
       // General Task Form State
       const [newGenTaskTitle, setNewGenTaskTitle] = useState('');
@@ -984,6 +985,10 @@
         return { funnel, matrixPairs, keyConversions, forecastReached, forecastBreakdown, forecastTotal, reverseRates, reachedPMoshikomi, totalCustomers, completedCount, droppedCount };
       }, [customers, analyticsPeriod, analyticsCustomStart, analyticsCustomEnd, forecastTargetStage]);
 
+
+      const handleCustomPairSlotChange = (slotIdx, field, value) => {
+        setCustomPairSlots(prev => prev.map((s, i) => i === slotIdx ? { ...s, [field]: value } : s));
+      };
 
       const handleInputChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
       const handleHurdleChange = (option) => setFormData(prev => ({ ...prev, hurdles: prev.hurdles.includes(option) ? prev.hurdles.filter(h => h !== option) : [...prev.hurdles, option] }));
@@ -1348,16 +1353,16 @@
                   <h2 className="text-lg font-serif tracking-[0.2em] text-gray-800 flex items-center gap-2 mb-6"><BarChartIcon className="w-5 h-5" /> ファネル</h2>
                   <div className="space-y-2">
                     {analyticsData.funnel.map((f, idx) => {
-                      const maxCount = analyticsData.funnel[0] ? analyticsData.funnel[0].count : 0;
-                      const pct = maxCount > 0 ? Math.max((f.count / maxCount) * 100, f.count > 0 ? 4 : 0) : 0;
-                      const ratioOfFirst = maxCount > 0 ? Math.round((f.count / maxCount) * 100) : 0;
+                      const maxCount = Math.max(1, ...analyticsData.funnel.map(x => x.count));
+                      const pct = Math.min(100, Math.max((f.count / maxCount) * 100, f.count > 0 ? 4 : 0));
+                      const ratioOfFirst = Math.round((f.count / maxCount) * 100);
                       return (
                         <div key={f.stageId} className="flex items-center gap-3">
                           <span className="w-24 text-xs text-gray-600 tracking-wider text-right shrink-0">{f.label}</span>
-                          <div className="flex-1 bg-gray-100 h-6 relative">
+                          <div className="flex-1 bg-gray-100 h-6 relative overflow-hidden">
                             <div className="bg-gray-800 h-6 flex items-center justify-end px-2" style={{ width: `${pct}%` }}></div>
                           </div>
-                          <span className="w-28 text-xs text-gray-700 shrink-0"><strong className="font-serif text-sm">{f.count}</strong> 件（{idx === 0 ? '100' : ratioOfFirst}%）</span>
+                          <span className="w-28 text-xs text-gray-700 shrink-0"><strong className="font-serif text-sm">{f.count}</strong> 件（{ratioOfFirst}%）</span>
                         </div>
                       );
                     })}
@@ -1393,35 +1398,42 @@
                     })}
                   </div>
 
-                  <h3 className="text-xs font-bold text-gray-600 tracking-widest uppercase mb-3 border-t border-gray-200 pt-6">全ステージ間マトリクス</h3>
-                  <div className="overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
-                    <table className="w-full text-left border-collapse min-w-[700px]">
-                      <thead>
-                        <tr className="border-b border-gray-200 text-[10px] text-gray-400 uppercase tracking-widest bg-gray-50/50">
-                          <th className="p-3 font-normal">から</th><th className="p-3 font-normal">へ</th>
-                          <th className="p-3 font-normal">現状</th><th className="p-3 font-normal">確定</th>
-                          <th className="p-3 font-normal">目標</th><th className="p-3 font-normal">リードタイム</th>
-                        </tr>
-                      </thead>
-                      <tbody className="divide-y divide-gray-100">
-                        {analyticsData.matrixPairs.map(p => {
-                          const targetKey = `${p.fromId}|${p.toId}`;
-                          const target = systemConfig?.conversionTargets?.[targetKey];
-                          let colorClass = 'text-gray-800';
-                          if (target != null && p.confirmedRate != null) colorClass = p.confirmedRate >= target ? 'text-emerald-600' : 'text-rose-600';
-                          return (
-                            <tr key={targetKey} className="hover:bg-gray-50 transition-colors">
-                              <td className="p-3 text-xs text-gray-700">{p.fromLabel}</td>
-                              <td className="p-3 text-xs text-gray-700">{p.toLabel}</td>
-                              <td className="p-3 text-xs text-gray-500">{p.currentRate != null ? p.currentRate.toFixed(0) + '%' : '−'}</td>
-                              <td className={`p-3 text-xs font-medium ${colorClass}`}>{p.confirmedRate != null ? p.confirmedRate.toFixed(0) + '%' : '−'}</td>
-                              <td className="p-3 text-xs text-gray-400">{target != null ? target + '%' : '−'}</td>
-                              <td className="p-3 text-xs text-gray-500">{p.leadTime != null ? p.leadTime.toFixed(0) + '日' : '−'}</td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                  <h3 className="text-xs font-bold text-gray-600 tracking-widest uppercase mb-3 border-t border-gray-200 pt-6">任意のステージ間を見る（最大3件同時表示）</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {customPairSlots.map((slot, idx) => {
+                      const pair = slot.from && slot.to ? analyticsData.matrixPairs.find(p => p.fromId === slot.from && p.toId === slot.to) : null;
+                      const targetKey = slot.from && slot.to ? `${slot.from}|${slot.to}` : null;
+                      const target = targetKey ? systemConfig?.conversionTargets?.[targetKey] : null;
+                      let colorClass = 'text-gray-800';
+                      if (pair && target != null && pair.confirmedRate != null) colorClass = pair.confirmedRate >= target ? 'text-emerald-600' : 'text-rose-600';
+                      return (
+                        <div key={idx} className="bg-gray-50 border border-gray-200 p-4">
+                          <div className="flex items-center gap-2 mb-4">
+                            <select value={slot.from} onChange={e => handleCustomPairSlotChange(idx, 'from', e.target.value)} className="flex-1 text-xs border border-gray-300 bg-white py-1.5 px-2 outline-none">
+                              <option value="">から...</option>
+                              {MATRIX_STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                            </select>
+                            <span className="text-gray-400 text-xs">→</span>
+                            <select value={slot.to} onChange={e => handleCustomPairSlotChange(idx, 'to', e.target.value)} className="flex-1 text-xs border border-gray-300 bg-white py-1.5 px-2 outline-none">
+                              <option value="">へ...</option>
+                              {MATRIX_STAGES.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+                            </select>
+                          </div>
+                          {!slot.from || !slot.to ? (
+                            <div className="text-center text-[11px] text-gray-400 py-6">ステージを2つ選んでください</div>
+                          ) : !pair ? (
+                            <div className="text-center text-[11px] text-gray-400 py-6">「から」が「へ」より後のステージです。順序を入れ替えてください</div>
+                          ) : (
+                            <div>
+                              <div className={`text-2xl font-serif ${colorClass}`}>{pair.confirmedRate != null ? pair.confirmedRate.toFixed(0) : '−'}<span className="text-xs ml-0.5">%（確定）</span></div>
+                              <div className="text-[10px] text-gray-500 mt-1">現状 {pair.currentRate != null ? pair.currentRate.toFixed(0) + '%' : '−'} ／ 目標 {target != null ? target + '%' : '未設定'}</div>
+                              <div className="text-[10px] text-gray-500">リードタイム平均 {pair.leadTime != null ? pair.leadTime.toFixed(0) + '日' : '−'}</div>
+                              <div className="text-[10px] text-gray-400 mt-1">到達 {pair.fromCount}件 → {pair.toCount}件（進行中 {pair.inProgress}件）</div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
 
