@@ -196,7 +196,7 @@
       );
     };
 
-    const TaskItem = ({ task, contextLabel, isWarning, isPastDue, categories, onChange, onCommit, onToggleDone, onDelete }) => {
+    const TaskItem = ({ task, contextLabel, isWarning, isPastDue, categories, onChange, onCommit, onCommitField, onToggleDone, onDelete }) => {
       const [localTitle, setLocalTitle] = useState(task.title || '');
       const [localMemo, setLocalMemo] = useState(task.memo || '');
       const [isMemoOpen, setIsMemoOpen] = useState(false);
@@ -230,11 +230,11 @@
               </div>
 
               <div className="flex items-center gap-3 flex-wrap">
-                 <PriorityMeter priority={task.priority || 2} onChange={(val) => { onChange('priority', val); onCommit(); }} readOnly={task.isDone} />
-                 <input type="date" value={task.dueDate || ''} onChange={(e) => { onChange('dueDate', e.target.value); onCommit(); }} className={`text-[10px] outline-none bg-transparent w-[90px] cursor-pointer ${task.isDone ? 'text-gray-400' : (isPastDue ? 'text-rose-600 font-bold' : 'text-gray-500')}`} />
-                 
+                 <PriorityMeter priority={task.priority || 2} onChange={(val) => onCommitField('priority', val)} readOnly={task.isDone} />
+                 <input type="date" value={task.dueDate || ''} onChange={(e) => onCommitField('dueDate', e.target.value)} className={`text-[10px] outline-none bg-transparent w-[90px] cursor-pointer ${task.isDone ? 'text-gray-400' : (isPastDue ? 'text-rose-600 font-bold' : 'text-gray-500')}`} />
+
                  {/* カテゴリ選択（詳細行） */}
-                 <select value={task.categoryId || ''} onChange={(e) => { onChange('categoryId', e.target.value); onCommit(); }} disabled={task.isDone} className={`text-[10px] outline-none bg-transparent border-b border-dashed border-gray-300 max-w-[80px] truncate cursor-pointer ${task.isDone ? 'text-gray-400 border-transparent' : 'text-gray-500'}`}>
+                 <select value={task.categoryId || ''} onChange={(e) => onCommitField('categoryId', e.target.value)} disabled={task.isDone} className={`text-[10px] outline-none bg-transparent border-b border-dashed border-gray-300 max-w-[80px] truncate cursor-pointer ${task.isDone ? 'text-gray-400 border-transparent' : 'text-gray-500'}`}>
                     <option value="">未分類</option>
                     {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                  </select>
@@ -1091,6 +1091,16 @@
       };
       const updateTaskLocal = (customerId, taskId, field, value) => setCustomers(prev => prev.map(c => c.id === customerId ? { ...c, tasks: c.tasks.map(t => t.id === taskId ? { ...t, [field]: value } : t) } : c));
       const commitTaskUpdate = (customerId) => { const customer = customers.find(c => c.id === customerId); if (customer) updateCustomerTasksInDB(customerId, customer.tasks); };
+      // ローカル更新とFirestore保存を同じsetState更新関数の中で行い、
+      // 「保存時に読むcustomersがまだ更新前のまま」という競合状態を避ける
+      const commitTaskField = (customerId, taskId, field, value) => {
+        setCustomers(prev => {
+          const next = prev.map(c => c.id === customerId ? { ...c, tasks: c.tasks.map(t => t.id === taskId ? { ...t, [field]: value } : t) } : c);
+          const updated = next.find(c => c.id === customerId);
+          if (updated) updateCustomerTasksInDB(customerId, updated.tasks);
+          return next;
+        });
+      };
       const addTask = (customerId) => {
         const customer = customers.find(c => c.id === customerId);
         if (customer) updateCustomerTasksInDB(customerId, [...(customer.tasks || []), { id: Date.now().toString(), title: '', dueDate: customer.nextDate ? customer.nextDate.split('T')[0] : getTodayString(), isDone: false, priority: 2, memo: '', categoryId: '' }]);
@@ -1112,6 +1122,14 @@
          if(task) updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'general_tasks', taskId), { isDone: !task.isDone });
       };
       const updateGeneralTaskLocal = (taskId, field, value) => setGeneralTasks(prev => prev.map(t => t.id === taskId ? { ...t, [field]: value } : t));
+      const commitGeneralTaskField = (taskId, field, value) => {
+        setGeneralTasks(prev => {
+          const next = prev.map(t => t.id === taskId ? { ...t, [field]: value } : t);
+          const updated = next.find(t => t.id === taskId);
+          if (updated) updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'general_tasks', taskId), { title: updated.title, dueDate: updated.dueDate, priority: updated.priority, memo: updated.memo, categoryId: updated.categoryId || '' }).catch(e => console.error(e));
+          return next;
+        });
+      };
       const commitGeneralTaskUpdate = (taskId) => {
          const task = generalTasks.find(t => t.id === taskId);
          if(task) updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'general_tasks', taskId), { title: task.title, dueDate: task.dueDate, priority: task.priority, memo: task.memo, categoryId: task.categoryId||'' });
@@ -1741,6 +1759,7 @@
                                     isWarning={isDeadlineNear(task.dueDate)} isPastDue={isOverdue(task.dueDate)}
                                     onChange={(field, val) => updateTaskLocal(customer.id, task.id, field, val)}
                                     onCommit={() => commitTaskUpdate(customer.id)}
+                                    onCommitField={(field, val) => commitTaskField(customer.id, task.id, field, val)}
                                     onToggleDone={() => toggleTaskDone(customer.id, task.id)} onDelete={() => deleteTask(customer.id, task.id)}
                                   />
                                 ))
@@ -1841,6 +1860,7 @@
                               isWarning={isDeadlineNear(task.dueDate)} isPastDue={isOverdue(task.dueDate)}
                               onChange={(f,v) => task.type === 'customer' ? updateTaskLocal(task.customerId, task.id, f, v) : updateGeneralTaskLocal(task.id, f, v)}
                               onCommit={() => task.type === 'customer' ? commitTaskUpdate(task.customerId) : commitGeneralTaskUpdate(task.id)}
+                              onCommitField={(f,v) => task.type === 'customer' ? commitTaskField(task.customerId, task.id, f, v) : commitGeneralTaskField(task.id, f, v)}
                               onToggleDone={() => task.type === 'customer' ? toggleTaskDone(task.customerId, task.id) : toggleGeneralTaskDone(task.id)}
                               onDelete={() => task.type === 'customer' ? deleteTask(task.customerId, task.id) : deleteGeneralTask(task.id)}
                            />
@@ -1866,6 +1886,7 @@
                               isWarning={false} isPastDue={false}
                               onChange={(f,v) => task.type === 'customer' ? updateTaskLocal(task.customerId, task.id, f, v) : updateGeneralTaskLocal(task.id, f, v)}
                               onCommit={() => task.type === 'customer' ? commitTaskUpdate(task.customerId) : commitGeneralTaskUpdate(task.id)}
+                              onCommitField={(f,v) => task.type === 'customer' ? commitTaskField(task.customerId, task.id, f, v) : commitGeneralTaskField(task.id, f, v)}
                               onToggleDone={() => task.type === 'customer' ? toggleTaskDone(task.customerId, task.id) : toggleGeneralTaskDone(task.id)}
                               onDelete={() => task.type === 'customer' ? deleteTask(task.customerId, task.id) : deleteGeneralTask(task.id)}
                            />
@@ -1891,6 +1912,7 @@
                               isWarning={isDeadlineNear(task.dueDate)} isPastDue={isOverdue(task.dueDate)}
                               onChange={(f,v) => task.type === 'customer' ? updateTaskLocal(task.customerId, task.id, f, v) : updateGeneralTaskLocal(task.id, f, v)}
                               onCommit={() => task.type === 'customer' ? commitTaskUpdate(task.customerId) : commitGeneralTaskUpdate(task.id)}
+                              onCommitField={(f,v) => task.type === 'customer' ? commitTaskField(task.customerId, task.id, f, v) : commitGeneralTaskField(task.id, f, v)}
                               onToggleDone={() => task.type === 'customer' ? toggleTaskDone(task.customerId, task.id) : toggleGeneralTaskDone(task.id)}
                               onDelete={() => task.type === 'customer' ? deleteTask(task.customerId, task.id) : deleteGeneralTask(task.id)}
                            />
@@ -1916,6 +1938,7 @@
                               isWarning={false} isPastDue={false}
                               onChange={(f,v) => task.type === 'customer' ? updateTaskLocal(task.customerId, task.id, f, v) : updateGeneralTaskLocal(task.id, f, v)}
                               onCommit={() => task.type === 'customer' ? commitTaskUpdate(task.customerId) : commitGeneralTaskUpdate(task.id)}
+                              onCommitField={(f,v) => task.type === 'customer' ? commitTaskField(task.customerId, task.id, f, v) : commitGeneralTaskField(task.id, f, v)}
                               onToggleDone={() => task.type === 'customer' ? toggleTaskDone(task.customerId, task.id) : toggleGeneralTaskDone(task.id)}
                               onDelete={() => task.type === 'customer' ? deleteTask(task.customerId, task.id) : deleteGeneralTask(task.id)}
                            />
