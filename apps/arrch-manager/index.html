@@ -279,6 +279,7 @@
       // Conversion Target State（歩留まり目標。常時表示している主要7つの歩留まりのみ）
       const CONVERSION_TARGET_PAIRS = KEY_CONVERSION_PAIRS.map(([fromId, toId]) => [UI_STAGES.find(s => s.id === fromId), UI_STAGES.find(s => s.id === toId)]);
       const [conversionTargetInputs, setConversionTargetInputs] = useState({ ...(systemConfig?.conversionTargets || {}) });
+      const [includeCompletedInConversion, setIncludeCompletedInConversion] = useState(systemConfig?.includeCompletedInConversion ?? false);
 
       // P申込目標 State
       const [targetYear, setTargetYear] = useState(new Date().getFullYear());
@@ -321,6 +322,7 @@
          });
       };
       const handleSaveConversionTargets = () => saveSystemConfig({ conversionTargets: conversionTargetInputs });
+      const handleToggleIncludeCompleted = (checked) => { setIncludeCompletedInConversion(checked); saveSystemConfig({ includeCompletedInConversion: checked }); };
 
       const handleMonthlyTargetChange = (monthKey, value) => {
          setMonthlyTargetInputs(prev => {
@@ -565,7 +567,13 @@
           {selectedTab === 'conversionTargets' && (
              <div className="p-8">
                <h3 className="text-lg font-medium text-gray-800 mb-2">歩留まりの目標値</h3>
-               <p className="text-[11px] text-gray-500 tracking-wider mb-8 leading-relaxed max-w-2xl">「分析」画面の歩留まりマトリクスで、実績と比較して色分け表示するための目標値（%）を設定します。未入力のペアは色分けされません。</p>
+               <p className="text-[11px] text-gray-500 tracking-wider mb-6 leading-relaxed max-w-2xl">「分析」画面の歩留まりマトリクスで、実績と比較して色分け表示するための目標値（%）を設定します。未入力のペアは色分けされません。</p>
+
+               <label className="flex items-center gap-2 cursor-pointer mb-8 max-w-2xl bg-gray-50 border border-gray-200 p-4">
+                 <input type="checkbox" checked={includeCompletedInConversion} onChange={e => handleToggleIncludeCompleted(e.target.checked)} className="accent-gray-800 w-3.5 h-3.5" />
+                 <span className="text-xs text-gray-700 tracking-wider">引継ぎ完了済の顧客も歩留まり計算に含める<br/><span className="text-[10px] text-gray-400">（チェックなし＝既定：引継ぎ完了済の顧客は歩留まりの分母・分子から除外します）</span></span>
+               </label>
+
                <div className="max-w-3xl overflow-x-auto [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                  <table className="w-full text-left border-collapse">
                    <thead>
@@ -804,7 +812,7 @@
         const unsubCategories = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'task_categories'), (snapshot) => setCategories(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a,b)=>a.createdAt > b.createdAt ? 1 : -1)));
         const unsubConfig = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'system_config', 'default'), (doc) => {
           const data = doc.exists() ? doc.data() : {};
-          setSystemConfig({ matrixUrgentDays: data.matrixUrgentDays ?? 5, matrixImportantLevel: data.matrixImportantLevel ?? 3, conversionTargets: data.conversionTargets ?? {}, monthlyTargets: data.monthlyTargets ?? {} });
+          setSystemConfig({ matrixUrgentDays: data.matrixUrgentDays ?? 5, matrixImportantLevel: data.matrixImportantLevel ?? 3, conversionTargets: data.conversionTargets ?? {}, monthlyTargets: data.monthlyTargets ?? {}, includeCompletedInConversion: data.includeCompletedInConversion ?? false });
         });
 
         return () => { unsubCustomers(); unsubTemplates(); unsubGenTasks(); unsubCategories(); unsubConfig(); };
@@ -914,10 +922,22 @@
 
         const isActive = (custId) => { const c = customers.find(x => x.id === custId); return c && !ARCHIVE_STAGES.some(a => a.id === c.currentStage); };
 
+        // 歩留まり計算専用：設定で「含める」にしない限り、引継ぎ完了済の顧客は分母・分子から除外する
+        const includeCompleted = systemConfig?.includeCompletedInConversion ?? false;
+        const isConversionEligible = (custId) => {
+          if (includeCompleted) return true;
+          const c = customers.find(x => x.id === custId);
+          return !(c && c.currentStage === '引継ぎ完了済');
+        };
+        const reachedAllTimeConv = {};
+        MATRIX_STAGES.forEach(s => { reachedAllTimeConv[s.id] = new Set([...reachedAllTime[s.id]].filter(isConversionEligible)); });
+        const cohortByStageConv = {};
+        MATRIX_STAGES.forEach(s => { cohortByStageConv[s.id] = new Set([...cohortByStage[s.id]].filter(isConversionEligible)); });
+
         // Generic conversion calculator; useAllTime=true ignores the period filter (forecast/reverse-calc use this)
         const calcConversion = (fromId, toId, useAllTime) => {
-          const fromSet = useAllTime ? reachedAllTime[fromId] : cohortByStage[fromId];
-          const toSet = reachedAllTime[toId]; // "did they ever reach toId" regardless of date
+          const fromSet = useAllTime ? reachedAllTimeConv[fromId] : cohortByStageConv[fromId];
+          const toSet = reachedAllTimeConv[toId]; // "did they ever reach toId" regardless of date
           if (!fromSet || fromSet.size === 0) return { fromCount: 0, toCount: 0, inProgress: 0, currentRate: null, confirmedRate: null };
           let toCount = 0, inProgress = 0;
           fromSet.forEach(id => {
@@ -994,7 +1014,7 @@
         const droppedCount = customers.filter(c => c.currentStage === '離脱').length;
 
         return { funnel, matrixPairs, keyConversions, forecastReached, forecastBreakdown, forecastTotal, reverseRates, reachedPMoshikomi, totalCustomers, completedCount, droppedCount };
-      }, [customers, analyticsPeriod, analyticsCustomStart, analyticsCustomEnd, forecastTargetStage]);
+      }, [customers, analyticsPeriod, analyticsCustomStart, analyticsCustomEnd, forecastTargetStage, systemConfig]);
 
 
       const handleCustomPairSlotChange = (slotIdx, field, value) => {
@@ -1428,7 +1448,7 @@
                   <h2 className="text-lg font-serif tracking-[0.2em] text-gray-800 flex items-center gap-2 mb-1">
                     <GridIcon className="w-5 h-5" /> 歩留まり・リードタイム
                     <FormulaNote>
-                      {"現状の歩留まり = 到達数(先) ÷ 到達数(元) × 100\n\n確定歩留まり = 到達数(先) ÷ (到達数(元) − 進行中人数)\n※進行中＝元のステージには到達したが、まだ先のステージに到達しておらず、完了・離脱もしていない顧客。まだ結果が決まっていない人を分母から除くことで、進行中の人が多いために低く出過ぎるのを防ぎます。\n\nリードタイム = 先のステージに到達した顧客について、元→先の日数の平均"}
+                      {"現状の歩留まり = 到達数(先) ÷ 到達数(元) × 100\n\n確定歩留まり = 到達数(先) ÷ (到達数(元) − 進行中人数)\n※進行中＝元のステージには到達したが、まだ先のステージに到達しておらず、完了・離脱もしていない顧客。まだ結果が決まっていない人を分母から除くことで、進行中の人が多いために低く出過ぎるのを防ぎます。\n\nリードタイム = 先のステージに到達した顧客について、元→先の日数の平均\n\n※既定では、現在「引継ぎ完了済」の顧客は歩留まりの分母・分子から除外されます（「設定 > 歩留まり目標」で変更可能）"}
                     </FormulaNote>
                   </h2>
                   <p className="text-[10px] text-gray-400 tracking-wider mb-6">目標値は「設定 &gt; 歩留まり目標」で入力できます。目標未達は赤字、目標達成は緑字で表示されます。</p>
