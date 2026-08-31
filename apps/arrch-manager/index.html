@@ -196,7 +196,7 @@
       );
     };
 
-    const TaskItem = ({ task, contextLabel, isWarning, isPastDue, categories, onChange, onCommit, onCommitField, onToggleDone, onDelete }) => {
+    const TaskItem = ({ task, contextLabel, isWarning, isPastDue, categories, onChange, onCommit, onCommitField, onToggleDone, onDelete, showConfirm }) => {
       const [localTitle, setLocalTitle] = useState(task.title || '');
       const [localMemo, setLocalMemo] = useState(task.memo || '');
       const [isMemoOpen, setIsMemoOpen] = useState(false);
@@ -209,7 +209,7 @@
       const catData = getCategoryData(task.categoryId, categories);
 
       return (
-        <div className={`flex flex-col p-2.5 bg-white border ${task.isDone ? 'border-gray-200 bg-gray-50/80' : (isPastDue ? 'border-rose-300 bg-rose-50/40 shadow-sm' : (isWarning ? 'border-amber-200 shadow-sm' : 'border-gray-200 hover:border-gray-300 transition-colors'))}`}>
+        <div className={`group flex flex-col p-2.5 bg-white border ${task.isDone ? 'border-gray-200 bg-gray-50/80' : (isPastDue ? 'border-rose-300 bg-rose-50/40 shadow-sm' : (isWarning ? 'border-amber-200 shadow-sm' : 'border-gray-200 hover:border-gray-300 transition-colors'))}`}>
           
           {contextLabel && <div className="text-[9px] bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded-sm w-fit mb-1 border border-gray-200 truncate max-w-full">{contextLabel}</div>}
 
@@ -239,7 +239,7 @@
                     {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                  </select>
                  
-                 <button onClick={onDelete} className="text-gray-300 hover:text-rose-500 text-[10px] px-1 ml-auto opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100">削除</button>
+                 <button onClick={() => showConfirm('このタスクを削除しますか？\n（この操作は取り消せません）', onDelete, '削除する')} className="text-gray-300 hover:text-rose-500 text-[10px] px-1 ml-auto opacity-0 group-hover:opacity-100 transition-opacity focus:opacity-100">削除</button>
               </div>
             </div>
           </div>
@@ -1780,7 +1780,7 @@
                                     onChange={(field, val) => updateTaskLocal(customer.id, task.id, field, val)}
                                     onCommit={() => commitTaskUpdate(customer.id)}
                                     onCommitField={(field, val) => commitTaskField(customer.id, task.id, field, val)}
-                                    onToggleDone={() => toggleTaskDone(customer.id, task.id)} onDelete={() => deleteTask(customer.id, task.id)}
+                                    onToggleDone={() => toggleTaskDone(customer.id, task.id)} onDelete={() => deleteTask(customer.id, task.id)} showConfirm={showConfirm}
                                   />
                                 ))
                               }
@@ -1796,7 +1796,7 @@
                                       <div key={task.id} className="flex items-center gap-2 p-1.5 bg-gray-100 border border-gray-200">
                                         <input type="checkbox" checked={true} onChange={() => toggleTaskDone(customer.id, task.id)} className="w-3 h-3 accent-gray-500 cursor-pointer" />
                                         <span className="flex-1 text-[11px] text-gray-500 line-through truncate">{task.title}</span>
-                                        <button onClick={() => deleteTask(customer.id, task.id)} className="text-gray-400 hover:text-rose-500"><TrashIcon className="w-3 h-3" /></button>
+                                        <button onClick={() => showConfirm('このタスクを削除しますか？\n（この操作は取り消せません）', () => deleteTask(customer.id, task.id), '削除する')} className="text-gray-400 hover:text-rose-500"><TrashIcon className="w-3 h-3" /></button>
                                       </div>
                                     ))}
                                   </div>
@@ -1882,7 +1882,7 @@
                               onCommit={() => task.type === 'customer' ? commitTaskUpdate(task.customerId) : commitGeneralTaskUpdate(task.id)}
                               onCommitField={(f,v) => task.type === 'customer' ? commitTaskField(task.customerId, task.id, f, v) : commitGeneralTaskField(task.id, f, v)}
                               onToggleDone={() => task.type === 'customer' ? toggleTaskDone(task.customerId, task.id) : toggleGeneralTaskDone(task.id)}
-                              onDelete={() => task.type === 'customer' ? deleteTask(task.customerId, task.id) : deleteGeneralTask(task.id)}
+                              onDelete={() => task.type === 'customer' ? deleteTask(task.customerId, task.id) : deleteGeneralTask(task.id)} showConfirm={showConfirm}
                            />
                          ))
                        }
@@ -1908,7 +1908,7 @@
                               onCommit={() => task.type === 'customer' ? commitTaskUpdate(task.customerId) : commitGeneralTaskUpdate(task.id)}
                               onCommitField={(f,v) => task.type === 'customer' ? commitTaskField(task.customerId, task.id, f, v) : commitGeneralTaskField(task.id, f, v)}
                               onToggleDone={() => task.type === 'customer' ? toggleTaskDone(task.customerId, task.id) : toggleGeneralTaskDone(task.id)}
-                              onDelete={() => task.type === 'customer' ? deleteTask(task.customerId, task.id) : deleteGeneralTask(task.id)}
+                              onDelete={() => task.type === 'customer' ? deleteTask(task.customerId, task.id) : deleteGeneralTask(task.id)} showConfirm={showConfirm}
                            />
                          ))
                        }
@@ -1934,7 +1934,7 @@
                               onCommit={() => task.type === 'customer' ? commitTaskUpdate(task.customerId) : commitGeneralTaskUpdate(task.id)}
                               onCommitField={(f,v) => task.type === 'customer' ? commitTaskField(task.customerId, task.id, f, v) : commitGeneralTaskField(task.id, f, v)}
                               onToggleDone={() => task.type === 'customer' ? toggleTaskDone(task.customerId, task.id) : toggleGeneralTaskDone(task.id)}
-                              onDelete={() => task.type === 'customer' ? deleteTask(task.customerId, task.id) : deleteGeneralTask(task.id)}
+                              onDelete={() => task.type === 'customer' ? deleteTask(task.customerId, task.id) : deleteGeneralTask(task.id)} showConfirm={showConfirm}
                            />
                          ))
                        }
@@ -1960,7 +1960,7 @@
                               onCommit={() => task.type === 'customer' ? commitTaskUpdate(task.customerId) : commitGeneralTaskUpdate(task.id)}
                               onCommitField={(f,v) => task.type === 'customer' ? commitTaskField(task.customerId, task.id, f, v) : commitGeneralTaskField(task.id, f, v)}
                               onToggleDone={() => task.type === 'customer' ? toggleTaskDone(task.customerId, task.id) : toggleGeneralTaskDone(task.id)}
-                              onDelete={() => task.type === 'customer' ? deleteTask(task.customerId, task.id) : deleteGeneralTask(task.id)}
+                              onDelete={() => task.type === 'customer' ? deleteTask(task.customerId, task.id) : deleteGeneralTask(task.id)} showConfirm={showConfirm}
                            />
                          ))
                        }
