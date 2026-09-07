@@ -1263,6 +1263,9 @@
            }
            changeCustomerStage(customer.id, stageModalData.targetStage, finalDateStr);
            setShowStageModal(false); setStageModalData(null);
+           if (!isArchive) {
+             showConfirm('ステージ移行が完了しました。LINEメッセージを生成しますか？', () => setMessageModalCustomer(customer), 'LINEを作成する');
+           }
         };
 
         return (
@@ -1376,15 +1379,13 @@
       const MessageDraftModal = () => {
         if (!messageModalCustomer) return null;
         const customer = messageModalCustomer;
-        const [messageType, setMessageType] = useState('サンクスLINE');
-        const [intent, setIntent] = useState('');
-        const [useAlias, setUseAlias] = useState(true);
+        const [instruction, setInstruction] = useState(`${customer.name}様、`);
         const [isLoading, setIsLoading] = useState(false);
         const [resultText, setResultText] = useState('');
 
         const handleGenerate = async () => {
           setIsLoading(true); setResultText('');
-          const text = await callAI('draft_message', { stage: customer.currentStage, hurdles: customer.hurdles, intent, messageType, useAlias });
+          const text = await callAI('generate_line_message', { instruction });
           setIsLoading(false);
           if (text) setResultText(text);
         };
@@ -1394,26 +1395,15 @@
         return (
           <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-fade-in">
             <div className="bg-white max-w-lg w-full p-8 shadow-xl border border-gray-200 max-h-[85vh] overflow-y-auto">
-              <div className="flex items-center gap-2 mb-6 justify-center"><MessageIcon className="w-5 h-5 text-gray-800" /><h3 className="text-xl font-serif text-gray-800 tracking-widest">メッセージ下書き生成</h3></div>
-              <p className="text-sm text-center mb-6 text-gray-600"><strong className="text-gray-900">{customer.name}</strong> 様向けの文案をAIで下書きします</p>
+              <div className="flex items-center gap-2 mb-6 justify-center"><MessageIcon className="w-5 h-5 text-gray-800" /><h3 className="text-xl font-serif text-gray-800 tracking-widest">LINEメッセージ生成</h3></div>
+              <p className="text-sm text-center mb-6 text-gray-600"><strong className="text-gray-900">{customer.name}</strong> 様向けのLINE文章をAIで生成します</p>
 
               <div className="space-y-4 mb-6">
                 <div>
-                  <label className="block text-[10px] text-gray-500 tracking-widest uppercase mb-1">メッセージ種別</label>
-                  <select value={messageType} onChange={e => setMessageType(e.target.value)} className="w-full text-sm border border-gray-300 bg-white py-2 px-3 outline-none">
-                    <option value="サンクスLINE">サンクスLINE</option>
-                    <option value="議事録送付の添え文">議事録送付の添え文</option>
-                    <option value="自由入力">自由入力</option>
-                  </select>
+                  <label className="block text-[10px] text-gray-500 tracking-widest uppercase mb-1">藤田さんからの指示</label>
+                  <textarea value={instruction} onChange={e => setInstruction(e.target.value)} placeholder="例：初回接客後アポあり、山田様、8/25 10:00、鴨江" className="w-full text-sm p-2 border border-gray-300 resize-none h-24 outline-none" />
+                  <p className="text-[10px] text-gray-400 mt-1 leading-relaxed">テンプレート種別・お客様の名前・日時・場所（該当する場合）を含めてください</p>
                 </div>
-                <div>
-                  <label className="block text-[10px] text-gray-500 tracking-widest uppercase mb-1">伝えたい内容</label>
-                  <textarea value={intent} onChange={e => setIntent(e.target.value)} placeholder="例：本日はご来場ありがとうございました、次回はLPの日程を..." className="w-full text-sm p-2 border border-gray-300 resize-none h-20 outline-none" />
-                </div>
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input type="checkbox" checked={useAlias} onChange={e => setUseAlias(e.target.checked)} className="accent-gray-800 w-3.5 h-3.5" />
-                  <span className="text-xs text-gray-600 tracking-wider">顧客名を伏せて生成する（「お客様」と表記）</span>
-                </label>
               </div>
 
               <button onClick={handleGenerate} disabled={isLoading} className="w-full bg-gray-800 text-white px-6 py-2.5 text-xs tracking-widest hover:bg-gray-900 transition-colors shadow-sm disabled:opacity-50 mb-4">{isLoading ? '生成中...' : '生成する'}</button>
