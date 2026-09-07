@@ -1007,8 +1007,13 @@
 
         // Generic conversion calculator; useAllTime=true ignores the period filter (forecast/reverse-calc use this)
         const calcConversion = (fromId, toId, useAllTime) => {
-          const fromSet = useAllTime ? reachedAllTimeConv[fromId] : cohortByStageConv[fromId];
-          const toSet = reachedAllTimeConv[toId]; // "did they ever reach toId" regardless of date
+          // 引継ぎは「おうちカフェ」到達のタイミングで行われるため、初回→おうちカフェの歩留まりだけは
+          // 「引継ぎ完了済を除外する」設定に関わらず、引継ぎ完了済の顧客も含めて計算する
+          const isHandoverPair = fromId === '初回' && toId === 'おうちカフェ';
+          const fromSet = isHandoverPair
+            ? (useAllTime ? reachedAllTime[fromId] : cohortByStage[fromId])
+            : (useAllTime ? reachedAllTimeConv[fromId] : cohortByStageConv[fromId]);
+          const toSet = isHandoverPair ? reachedAllTime[toId] : reachedAllTimeConv[toId]; // "did they ever reach toId" regardless of date
           if (!fromSet || fromSet.size === 0) return { fromCount: 0, toCount: 0, inProgress: 0, currentRate: null, confirmedRate: null };
           let toCount = 0, inProgress = 0;
           fromSet.forEach(id => {
@@ -1712,7 +1717,7 @@
                   <h2 className="text-lg font-serif tracking-[0.2em] text-gray-800 flex items-center gap-2 mb-1">
                     <GridIcon className="w-5 h-5" /> 歩留まり・リードタイム
                     <FormulaNote>
-                      {"現状の歩留まり = 到達数(先) ÷ 到達数(元) × 100\n\n確定歩留まり = 到達数(先) ÷ (到達数(元) − 進行中人数)\n※進行中＝元のステージには到達したが、まだ先のステージに到達しておらず、完了・離脱もしていない顧客。まだ結果が決まっていない人を分母から除くことで、進行中の人が多いために低く出過ぎるのを防ぎます。\n\nリードタイム = 先のステージに到達した顧客について、元→先の日数の平均\n\n※既定では、現在「引継ぎ完了済」の顧客は歩留まりの分母・分子から除外されます（「設定 > 歩留まり目標」で変更可能）"}
+                      {"現状の歩留まり = 到達数(先) ÷ 到達数(元) × 100\n\n確定歩留まり = 到達数(先) ÷ (到達数(元) − 進行中人数)\n※進行中＝元のステージには到達したが、まだ先のステージに到達しておらず、完了・離脱もしていない顧客。まだ結果が決まっていない人を分母から除くことで、進行中の人が多いために低く出過ぎるのを防ぎます。\n\nリードタイム = 先のステージに到達した顧客について、元→先の日数の平均\n\n※既定では、現在「引継ぎ完了済」の顧客は歩留まりの分母・分子から除外されます（「設定 > 歩留まり目標」で変更可能）。ただし「初回→おうちカフェ」は引継ぎがおうちカフェ到達のタイミングで行われるため、この設定に関わらず引継ぎ完了済の顧客も含めて計算します"}
                     </FormulaNote>
                   </h2>
                   <p className="text-[10px] text-gray-400 tracking-wider mb-6">目標値は「設定 &gt; 歩留まり目標」で入力できます。目標未達は赤字、目標達成は緑字で表示されます。</p>
