@@ -68,6 +68,10 @@
     const BarChartIcon = ({ className = "w-5 h-5" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="12" y1="20" x2="12" y2="10"></line><line x1="18" y1="20" x2="18" y2="4"></line><line x1="6" y1="20" x2="6" y2="16"></line></svg>;
     const ClockIcon = ({ className = "w-5 h-5" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>;
     const InfoIcon = ({ className = "w-5 h-5" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>;
+    const SparkleIcon = ({ className = "w-5 h-5" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2.5 2.5M15.5 15.5L18 18M18 6l-2.5 2.5M8.5 15.5L6 18"></path></svg>;
+    const MessageIcon = ({ className = "w-5 h-5" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"></path></svg>;
+    const ClipboardIcon = ({ className = "w-5 h-5" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}><rect x="8" y="2" width="8" height="4" rx="1" ry="1"></rect><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"></path><line x1="9" y1="12" x2="15" y2="12"></line><line x1="9" y1="16" x2="15" y2="16"></line></svg>;
+    const ShieldIcon = ({ className = "w-5 h-5" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M12 2l8 4v6c0 5-3.5 8.5-8 10-4.5-1.5-8-5-8-10V6l8-4z"></path></svg>;
 
     const STAGES = [
       { id: '全体', label: '全体' },
@@ -283,6 +287,26 @@
 
       // P申込目標 State
       const [targetYear, setTargetYear] = useState(new Date().getFullYear());
+
+      // AI連携 State
+      const [aiWebAppUrlInput, setAiWebAppUrlInput] = useState(systemConfig?.aiWebAppUrl || '');
+      const [aiSharedTokenInput, setAiSharedTokenInput] = useState(systemConfig?.aiSharedToken || '');
+      const [aiTestLoading, setAiTestLoading] = useState(false);
+      const handleSaveAiConfig = () => saveSystemConfig({ aiWebAppUrl: aiWebAppUrlInput.trim(), aiSharedToken: aiSharedTokenInput.trim() });
+      const handleTestAiConnection = async () => {
+        if (!aiWebAppUrlInput.trim()) { showAlert('URLを入力してください。'); return; }
+        setAiTestLoading(true);
+        try {
+          const res = await fetch(aiWebAppUrlInput.trim(), {
+            method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({ token: aiSharedTokenInput.trim(), action: 'ping', payload: {} })
+          });
+          const data = await res.json();
+          if (data.error) showAlert('接続はできましたが、エラーが返されました：' + data.error);
+          else showAlert('接続成功！AIからの応答：\n' + data.text);
+        } catch (e) { showAlert('接続に失敗しました。URLが正しいか、デプロイが完了しているかご確認ください。'); }
+        setAiTestLoading(false);
+      };
       const [monthlyTargetInputs, setMonthlyTargetInputs] = useState({ ...(systemConfig?.monthlyTargets || {}) });
 
       // Categories State
@@ -363,6 +387,7 @@
                <button onClick={() => setSelectedTab('categories')} className={`px-4 py-1 text-xs tracking-widest ${selectedTab === 'categories' ? 'bg-gray-800 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}>タスク分類（タグ）</button>
                <button onClick={() => setSelectedTab('conversionTargets')} className={`px-4 py-1 text-xs tracking-widest whitespace-nowrap ${selectedTab === 'conversionTargets' ? 'bg-gray-800 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}>歩留まり目標</button>
                <button onClick={() => setSelectedTab('salesTargets')} className={`px-4 py-1 text-xs tracking-widest whitespace-nowrap ${selectedTab === 'salesTargets' ? 'bg-gray-800 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}>P申込目標</button>
+               <button onClick={() => setSelectedTab('aiIntegration')} className={`px-4 py-1 text-xs tracking-widest whitespace-nowrap ${selectedTab === 'aiIntegration' ? 'bg-gray-800 text-white shadow-sm' : 'text-gray-500 hover:bg-gray-50'}`}>AI連携</button>
             </div>
           </div>
           
@@ -630,6 +655,33 @@
                </div>
              </div>
           )}
+
+          {selectedTab === 'aiIntegration' && (
+             <div className="p-8">
+               <h3 className="text-lg font-medium text-gray-800 mb-2">AI連携（Google Apps Script + Gemini）</h3>
+               <p className="text-[11px] text-gray-500 tracking-wider mb-6 leading-relaxed max-w-2xl">顧客カードの「文案」「タスク抽出」「案件対策」、分析タブの「AIで要約する」機能を使うには、Google Apps ScriptでデプロイしたWebアプリのURLとここで設定した合言葉が必要です。</p>
+
+               <div className="bg-amber-50 border border-amber-200 p-4 mb-6 max-w-2xl flex items-start gap-2">
+                 <ShieldIcon className="w-4 h-4 text-amber-600 flex-shrink-0 mt-0.5" />
+                 <p className="text-[11px] text-amber-800 leading-relaxed">無料のGemini APIを使う場合、入力内容がGoogle側の製品改善に使われる可能性があります。会社の情報セキュリティ方針に従い、顧客の氏名・住所等の個人情報は入力しないようにしてください。</p>
+               </div>
+
+               <div className="max-w-2xl bg-gray-50 p-6 border border-gray-200 space-y-4">
+                 <div>
+                   <label className="block text-[10px] text-gray-500 tracking-widest uppercase mb-1">GAS WebアプリURL</label>
+                   <input type="text" value={aiWebAppUrlInput} onChange={e => setAiWebAppUrlInput(e.target.value)} placeholder="https://script.google.com/macros/s/.../exec" className="w-full border border-gray-300 px-3 py-2 outline-none focus:border-gray-800 bg-white text-sm" />
+                 </div>
+                 <div>
+                   <label className="block text-[10px] text-gray-500 tracking-widest uppercase mb-1">合言葉（SHARED_TOKEN）</label>
+                   <input type="text" value={aiSharedTokenInput} onChange={e => setAiSharedTokenInput(e.target.value)} placeholder="GAS側のスクリプトプロパティに設定した値と同じもの" className="w-full border border-gray-300 px-3 py-2 outline-none focus:border-gray-800 bg-white text-sm" />
+                 </div>
+                 <div className="flex flex-col sm:flex-row gap-3 pt-2">
+                   <button onClick={handleSaveAiConfig} className="bg-gray-800 text-white px-8 py-2.5 text-xs tracking-widest hover:bg-gray-900 transition-colors shadow-sm flex-1">設定を保存する</button>
+                   <button onClick={handleTestAiConnection} disabled={aiTestLoading} className="border border-gray-800 text-gray-800 px-8 py-2.5 text-xs tracking-widest hover:bg-gray-50 transition-colors disabled:opacity-50 flex-1">{aiTestLoading ? '接続中...' : '接続テスト'}</button>
+                 </div>
+               </div>
+             </div>
+          )}
         </div>
       );
     };
@@ -664,6 +716,11 @@
       const [stageModalData, setStageModalData] = useState(null);
       const [showStageHistoryModal, setShowStageHistoryModal] = useState(false);
       const [stageHistoryModalData, setStageHistoryModalData] = useState(null);
+      const [aiSummaryText, setAiSummaryText] = useState('');
+      const [aiSummaryLoading, setAiSummaryLoading] = useState(false);
+      const [messageModalCustomer, setMessageModalCustomer] = useState(null);
+      const [taskExtractModalCustomer, setTaskExtractModalCustomer] = useState(null);
+      const [caseNotesModalCustomer, setCaseNotesModalCustomer] = useState(null);
 
       // Analytics View State
       const [analyticsPeriod, setAnalyticsPeriod] = useState('all'); // 'all', 'thisMonth', 'thisYear', 'custom'
@@ -687,6 +744,20 @@
 
       const showAlert = (message) => setDialog({ isOpen: true, message, type: 'alert', onConfirm: () => setDialog({ ...dialog, isOpen: false }) });
       const showConfirm = (message, onConfirm, confirmLabel) => setDialog({ isOpen: true, message, type: 'confirm', confirmLabel, onConfirm: () => { onConfirm(); setDialog({ ...dialog, isOpen: false }); } });
+
+      // GAS + Gemini 経由のAI呼び出し（設定 > AI連携 でURL・合言葉を登録している場合のみ使える）
+      const callAI = async (action, payload) => {
+        if (!systemConfig?.aiWebAppUrl) { showAlert('設定 > AI連携 でAI機能のURLを登録してください。'); return null; }
+        try {
+          const res = await fetch(systemConfig.aiWebAppUrl, {
+            method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({ token: systemConfig.aiSharedToken, action, payload })
+          });
+          const data = await res.json();
+          if (data.error) { showAlert('AI機能でエラーが発生しました：' + data.error); return null; }
+          return data.text;
+        } catch (e) { showAlert('AI機能への接続に失敗しました。URL・合言葉の設定をご確認ください。'); return null; }
+      };
 
       useEffect(() => {
         const initAuth = async () => { try { if (isPreviewEnv) await signInWithCustomToken(auth, __initial_auth_token); } catch (e) {} };
@@ -812,7 +883,7 @@
         const unsubCategories = onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'task_categories'), (snapshot) => setCategories(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })).sort((a,b)=>a.createdAt > b.createdAt ? 1 : -1)));
         const unsubConfig = onSnapshot(doc(db, 'artifacts', appId, 'public', 'data', 'system_config', 'default'), (doc) => {
           const data = doc.exists() ? doc.data() : {};
-          setSystemConfig({ matrixUrgentDays: data.matrixUrgentDays ?? 5, matrixImportantLevel: data.matrixImportantLevel ?? 3, conversionTargets: data.conversionTargets ?? {}, monthlyTargets: data.monthlyTargets ?? {}, includeCompletedInConversion: data.includeCompletedInConversion ?? false });
+          setSystemConfig({ matrixUrgentDays: data.matrixUrgentDays ?? 5, matrixImportantLevel: data.matrixImportantLevel ?? 3, conversionTargets: data.conversionTargets ?? {}, monthlyTargets: data.monthlyTargets ?? {}, includeCompletedInConversion: data.includeCompletedInConversion ?? false, aiWebAppUrl: data.aiWebAppUrl ?? '', aiSharedToken: data.aiSharedToken ?? '' });
         });
 
         return () => { unsubCustomers(); unsubTemplates(); unsubGenTasks(); unsubCategories(); unsubConfig(); };
@@ -1125,6 +1196,21 @@
         const customer = customers.find(c => c.id === customerId);
         if (customer) updateCustomerTasksInDB(customerId, [...(customer.tasks || []), { id: Date.now().toString(), title: '', dueDate: customer.nextDate ? customer.nextDate.split('T')[0] : getTodayString(), isDone: false, priority: 2, memo: '', categoryId: '' }]);
       };
+      const addExtractedTasks = (customerId, extractedTasks) => {
+        const customer = customers.find(c => c.id === customerId);
+        if (!customer) return;
+        const today = new Date();
+        const newTasks = extractedTasks.map((t, i) => {
+          const d = new Date(today); d.setDate(d.getDate() + (parseInt(t.daysOffset, 10) || 0));
+          return { id: Date.now().toString() + '_' + i, title: t.title || '', dueDate: d.toISOString().split('T')[0], isDone: false, priority: t.priority || 2, memo: '', categoryId: '' };
+        });
+        updateCustomerTasksInDB(customerId, [...(customer.tasks || []), ...newTasks]);
+      };
+      const addCaseNote = (customerId, note) => {
+        const customer = customers.find(c => c.id === customerId);
+        if (!customer) return;
+        updateDoc(doc(db, 'artifacts', appId, 'public', 'data', 'customers', customerId), { caseNotes: [...(customer.caseNotes || []), { note, createdAt: getTodayString() }] }).catch(e => console.error(e));
+      };
       const deleteTask = (customerId, taskId) => {
         const customer = customers.find(c => c.id === customerId);
         if (customer) updateCustomerTasksInDB(customerId, customer.tasks.filter(t => t.id !== taskId));
@@ -1287,6 +1373,178 @@
         );
       };
 
+      const MessageDraftModal = () => {
+        if (!messageModalCustomer) return null;
+        const customer = messageModalCustomer;
+        const [messageType, setMessageType] = useState('サンクスLINE');
+        const [intent, setIntent] = useState('');
+        const [useAlias, setUseAlias] = useState(true);
+        const [isLoading, setIsLoading] = useState(false);
+        const [resultText, setResultText] = useState('');
+
+        const handleGenerate = async () => {
+          setIsLoading(true); setResultText('');
+          const text = await callAI('draft_message', { stage: customer.currentStage, hurdles: customer.hurdles, intent, messageType, useAlias });
+          setIsLoading(false);
+          if (text) setResultText(text);
+        };
+        const handleClose = () => setMessageModalCustomer(null);
+        const handleCopy = () => { navigator.clipboard.writeText(resultText).then(() => showAlert('コピーしました。')).catch(() => showAlert('コピーに失敗しました。')); };
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-fade-in">
+            <div className="bg-white max-w-lg w-full p-8 shadow-xl border border-gray-200 max-h-[85vh] overflow-y-auto">
+              <div className="flex items-center gap-2 mb-6 justify-center"><MessageIcon className="w-5 h-5 text-gray-800" /><h3 className="text-xl font-serif text-gray-800 tracking-widest">メッセージ下書き生成</h3></div>
+              <p className="text-sm text-center mb-6 text-gray-600"><strong className="text-gray-900">{customer.name}</strong> 様向けの文案をAIで下書きします</p>
+
+              <div className="space-y-4 mb-6">
+                <div>
+                  <label className="block text-[10px] text-gray-500 tracking-widest uppercase mb-1">メッセージ種別</label>
+                  <select value={messageType} onChange={e => setMessageType(e.target.value)} className="w-full text-sm border border-gray-300 bg-white py-2 px-3 outline-none">
+                    <option value="サンクスLINE">サンクスLINE</option>
+                    <option value="議事録送付の添え文">議事録送付の添え文</option>
+                    <option value="自由入力">自由入力</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-[10px] text-gray-500 tracking-widest uppercase mb-1">伝えたい内容</label>
+                  <textarea value={intent} onChange={e => setIntent(e.target.value)} placeholder="例：本日はご来場ありがとうございました、次回はLPの日程を..." className="w-full text-sm p-2 border border-gray-300 resize-none h-20 outline-none" />
+                </div>
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" checked={useAlias} onChange={e => setUseAlias(e.target.checked)} className="accent-gray-800 w-3.5 h-3.5" />
+                  <span className="text-xs text-gray-600 tracking-wider">顧客名を伏せて生成する（「お客様」と表記）</span>
+                </label>
+              </div>
+
+              <button onClick={handleGenerate} disabled={isLoading} className="w-full bg-gray-800 text-white px-6 py-2.5 text-xs tracking-widest hover:bg-gray-900 transition-colors shadow-sm disabled:opacity-50 mb-4">{isLoading ? '生成中...' : '生成する'}</button>
+
+              {resultText && (
+                <div className="mb-4">
+                  <textarea value={resultText} onChange={e => setResultText(e.target.value)} className="w-full text-sm p-3 border border-gray-300 resize-none h-32 outline-none bg-gray-50" />
+                  <button onClick={handleCopy} className="mt-2 w-full border border-gray-300 text-gray-700 px-4 py-2 text-xs tracking-widest hover:bg-gray-50 transition-colors flex items-center justify-center gap-1"><ClipboardIcon className="w-3.5 h-3.5" /> コピーする</button>
+                </div>
+              )}
+
+              <div className="flex justify-center"><button onClick={handleClose} className="px-6 py-2 text-xs tracking-widest text-gray-500 hover:bg-gray-50 transition-colors border border-transparent">閉じる</button></div>
+            </div>
+          </div>
+        );
+      };
+
+      const TaskExtractModal = () => {
+        if (!taskExtractModalCustomer) return null;
+        const customer = taskExtractModalCustomer;
+        const [notes, setNotes] = useState('');
+        const [isLoading, setIsLoading] = useState(false);
+        const [extractedTasks, setExtractedTasks] = useState(null);
+        const [selected, setSelected] = useState({});
+
+        const handleExtract = async () => {
+          setIsLoading(true); setExtractedTasks(null);
+          const text = await callAI('extract_tasks', { notes });
+          setIsLoading(false);
+          if (!text) return;
+          try {
+            const cleaned = text.replace(/```json|```/g, '').trim();
+            const parsed = JSON.parse(cleaned);
+            setExtractedTasks(parsed);
+            const sel = {}; parsed.forEach((_, i) => { sel[i] = true; }); setSelected(sel);
+          } catch (e) { showAlert('AIの応答を読み取れませんでした。もう一度お試しください。'); }
+        };
+        const handleClose = () => setTaskExtractModalCustomer(null);
+        const handleAdd = () => {
+          const toAdd = (extractedTasks || []).filter((_, i) => selected[i]);
+          if (toAdd.length === 0) { handleClose(); return; }
+          addExtractedTasks(customer.id, toAdd);
+          handleClose();
+        };
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-fade-in">
+            <div className="bg-white max-w-lg w-full p-8 shadow-xl border border-gray-200 max-h-[85vh] overflow-y-auto">
+              <div className="flex items-center gap-2 mb-6 justify-center"><ClipboardIcon className="w-5 h-5 text-gray-800" /><h3 className="text-xl font-serif text-gray-800 tracking-widest">商談メモからタスク抽出</h3></div>
+              <p className="text-sm text-center mb-6 text-gray-600"><strong className="text-gray-900">{customer.name}</strong> 様の商談メモから、次にやるべきタスクをAIが提案します</p>
+
+              <textarea value={notes} onChange={e => setNotes(e.target.value)} placeholder="商談メモを貼り付けてください" className="w-full text-sm p-3 border border-gray-300 resize-none h-28 outline-none mb-4" />
+              <button onClick={handleExtract} disabled={isLoading || !notes.trim()} className="w-full bg-gray-800 text-white px-6 py-2.5 text-xs tracking-widest hover:bg-gray-900 transition-colors shadow-sm disabled:opacity-50 mb-4">{isLoading ? '抽出中...' : '抽出する'}</button>
+
+              {extractedTasks && (
+                <div className="mb-4 space-y-2">
+                  {extractedTasks.length === 0 && <p className="text-center text-xs text-gray-400 py-4">提案できるタスクがありませんでした</p>}
+                  {extractedTasks.map((t, i) => (
+                    <label key={i} className="flex items-start gap-2 bg-gray-50 border border-gray-200 p-2 cursor-pointer">
+                      <input type="checkbox" checked={!!selected[i]} onChange={e => setSelected(prev => ({ ...prev, [i]: e.target.checked }))} className="mt-0.5 accent-gray-800 w-3.5 h-3.5" />
+                      <span className="flex-1 text-xs text-gray-800">{t.title} <span className="text-gray-400">（{t.daysOffset >= 0 ? `${t.daysOffset}日後` : `${-t.daysOffset}日前`}・重要度{t.priority}）</span></span>
+                    </label>
+                  ))}
+                </div>
+              )}
+
+              <div className="flex justify-center gap-4">
+                <button onClick={handleClose} className="px-6 py-2 text-xs tracking-widest text-gray-500 hover:bg-gray-50 transition-colors border border-transparent">キャンセル</button>
+                {extractedTasks && extractedTasks.length > 0 && <button onClick={handleAdd} className="px-8 py-2 text-xs tracking-widest text-white bg-gray-800 hover:bg-gray-900 transition-colors shadow-sm">選択したタスクを追加する</button>}
+              </div>
+            </div>
+          </div>
+        );
+      };
+
+      const CaseNotesModal = () => {
+        if (!caseNotesModalCustomer) return null;
+        const customer = caseNotesModalCustomer;
+        const [newNote, setNewNote] = useState('');
+        const [situation, setSituation] = useState('');
+        const [isLoading, setIsLoading] = useState(false);
+        const [suggestion, setSuggestion] = useState('');
+        const notes = customer.caseNotes || [];
+
+        const handleAddNote = () => {
+          if (!newNote.trim()) return;
+          addCaseNote(customer.id, newNote.trim());
+          setNewNote('');
+        };
+        const handleClose = () => setCaseNotesModalCustomer(null);
+        const handleSuggest = async () => {
+          setIsLoading(true); setSuggestion('');
+          const pastCases = [];
+          customers.forEach(c => (c.caseNotes || []).forEach(n => pastCases.push(n.note)));
+          const text = await callAI('suggest_cases', { stage: customer.currentStage, hurdles: customer.hurdles, situation, pastCases: pastCases.slice(-30) });
+          setIsLoading(false);
+          if (text) setSuggestion(text);
+        };
+
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4 animate-fade-in">
+            <div className="bg-white max-w-lg w-full p-8 shadow-xl border border-gray-200 max-h-[85vh] overflow-y-auto">
+              <div className="flex items-center gap-2 mb-6 justify-center"><SparkleIcon className="w-5 h-5 text-gray-800" /><h3 className="text-xl font-serif text-gray-800 tracking-widest">案件対策</h3></div>
+              <p className="text-sm text-center mb-6 text-gray-600"><strong className="text-gray-900">{customer.name}</strong> 様の案件対策を記録・参照します</p>
+
+              <h4 className="text-xs font-bold text-gray-600 tracking-widest uppercase mb-2 border-b border-gray-200 pb-2">記録</h4>
+              <div className="space-y-2 mb-4 max-h-32 overflow-y-auto">
+                {notes.length === 0 && <p className="text-center text-xs text-gray-400 py-2">記録がありません</p>}
+                {notes.map((n, i) => (
+                  <div key={i} className="bg-gray-50 border border-gray-200 p-2 text-xs text-gray-700">
+                    <span className="text-gray-400 mr-2">{n.createdAt}</span>{n.note}
+                  </div>
+                ))}
+              </div>
+              <div className="flex gap-2 mb-2">
+                <input type="text" value={newNote} onChange={e => setNewNote(e.target.value)} placeholder="例：競合A社と比較され、性能面を訴求して継続" className="flex-1 text-xs border border-gray-300 px-2 py-2 outline-none" />
+                <button onClick={handleAddNote} className="bg-gray-800 text-white px-4 py-2 text-xs tracking-widest hover:bg-gray-900 transition-colors whitespace-nowrap">追加</button>
+              </div>
+              <p className="text-[10px] text-rose-500 tracking-wider mb-6">※顧客の氏名・住所等の個人情報は書かないでください</p>
+
+              <h4 className="text-xs font-bold text-gray-600 tracking-widest uppercase mb-2 border-b border-gray-200 pb-2">類似事例の提案</h4>
+              <textarea value={situation} onChange={e => setSituation(e.target.value)} placeholder="今の状況（例：他社と比較検討中で決め手に欠けている）" className="w-full text-sm p-2 border border-gray-300 resize-none h-16 outline-none mb-3" />
+              <button onClick={handleSuggest} disabled={isLoading} className="w-full bg-gray-800 text-white px-6 py-2.5 text-xs tracking-widest hover:bg-gray-900 transition-colors shadow-sm disabled:opacity-50 mb-4">{isLoading ? '検索中...' : '類似事例を提案'}</button>
+              {suggestion && <div className="p-3 bg-gray-50 border border-gray-200 text-xs text-gray-700 whitespace-pre-wrap leading-relaxed mb-4">{suggestion}</div>}
+
+              <div className="flex justify-center"><button onClick={handleClose} className="px-6 py-2 text-xs tracking-widest text-gray-500 hover:bg-gray-50 transition-colors border border-transparent">閉じる</button></div>
+            </div>
+          </div>
+        );
+      };
+
       if (authChecking) return <div className="min-h-screen bg-[#f9f9f9] flex flex-col items-center justify-center font-serif tracking-widest text-gray-500"><div className="w-10 h-10 border-4 border-gray-200 border-t-gray-800 rounded-full animate-spin mb-4"></div>Loading...</div>;
       if (!user) return (
           <div className="min-h-screen bg-[#f9f9f9] flex items-center justify-center font-sans">
@@ -1308,6 +1566,9 @@
           <CustomDialog {...dialog} onCancel={() => setDialog({ ...dialog, isOpen: false })} />
           <StageModal />
           <StageHistoryModal />
+          <MessageDraftModal />
+          <TaskExtractModal />
+          <CaseNotesModal />
           
           <header className="bg-white border-b border-gray-200 sticky top-0 z-20 shadow-sm">
             <div className="max-w-[1400px] mx-auto px-4 py-3 flex flex-col xl:flex-row xl:justify-between xl:items-center gap-4">
@@ -1420,6 +1681,19 @@
                     </div>
                   )}
                   <span className="text-[10px] text-gray-400 tracking-wider">※各ステージへ「その期間内に入った顧客」を対象に集計します（予想着地・必要数の逆算は期間の影響を受けません）</span>
+                </div>
+
+                {/* AIサマリー */}
+                <div className="bg-white border border-gray-200 shadow-sm p-4">
+                  <button onClick={async () => {
+                    setAiSummaryLoading(true); setAiSummaryText('');
+                    const text = await callAI('summarize_analytics', { funnel: analyticsData.funnel, keyConversions: analyticsData.keyConversions.map(k => ({ from: k.fromLabel, to: k.toLabel, confirmedRate: k.confirmedRate })), forecastTotal: analyticsData.forecastTotal });
+                    setAiSummaryLoading(false);
+                    if (text) setAiSummaryText(text);
+                  }} disabled={aiSummaryLoading} className="flex items-center gap-1.5 text-xs tracking-widest text-gray-700 hover:text-gray-900 disabled:opacity-50">
+                    <SparkleIcon className="w-4 h-4" /> {aiSummaryLoading ? '生成中...' : 'AIで要約する'}
+                  </button>
+                  {aiSummaryText && <p className="mt-3 text-sm text-gray-700 leading-relaxed whitespace-pre-wrap border-t border-gray-100 pt-3">{aiSummaryText}</p>}
                 </div>
 
                 {/* 1. ファネル */}
@@ -1751,6 +2025,11 @@
                              <optgroup label="進行中ステージ">{UI_STAGES.filter(s => s.id !== customer.currentStage).map(s => <option key={s.id} value={s.id}>{s.label} へ進む</option>)}</optgroup>
                              <optgroup label="アーカイブ（終了）">{ARCHIVE_STAGES.filter(s => s.id !== customer.currentStage).map(s => <option key={s.id} value={s.id}>{s.label} にする</option>)}</optgroup>
                            </select>
+                           <div className="mt-2 grid grid-cols-3 gap-1">
+                             <button onClick={() => setMessageModalCustomer(customer)} className="flex flex-col items-center gap-0.5 text-[9px] text-gray-500 hover:text-gray-800 tracking-wider py-1.5 border border-gray-200 hover:border-gray-400 transition-colors"><MessageIcon className="w-3.5 h-3.5" /> 文案</button>
+                             <button onClick={() => setTaskExtractModalCustomer(customer)} className="flex flex-col items-center gap-0.5 text-[9px] text-gray-500 hover:text-gray-800 tracking-wider py-1.5 border border-gray-200 hover:border-gray-400 transition-colors"><ClipboardIcon className="w-3.5 h-3.5" /> タスク抽出</button>
+                             <button onClick={() => setCaseNotesModalCustomer(customer)} className="flex flex-col items-center gap-0.5 text-[9px] text-gray-500 hover:text-gray-800 tracking-wider py-1.5 border border-gray-200 hover:border-gray-400 transition-colors"><SparkleIcon className="w-3.5 h-3.5" /> 案件対策</button>
+                           </div>
                            {isArchivedCard && (
                              <button onClick={() => deleteCustomer(customer.id)} className="mt-2 w-full flex items-center justify-center gap-1 text-[10px] text-gray-400 hover:text-rose-600 tracking-widest uppercase py-1.5 border border-transparent hover:border-rose-200 transition-colors"><TrashIcon className="w-3 h-3" /> この顧客データを削除</button>
                            )}
