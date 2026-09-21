@@ -65,6 +65,8 @@
     const ChevronDownIcon = ({ className = "w-5 h-5" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="6 9 12 15 18 9"></polyline></svg>;
     const ChevronUpIcon = ({ className = "w-5 h-5" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}><polyline points="18 15 12 9 6 15"></polyline></svg>;
     const FilterIcon = ({ className = "w-5 h-5" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}><polygon points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"></polygon></svg>;
+    const SearchIcon = ({ className = "w-5 h-5" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="11" cy="11" r="7"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>;
+    const XIcon = ({ className = "w-5 h-5" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="18" y1="6" x2="6" y2="18"></line><line x1="6" y1="6" x2="18" y2="18"></line></svg>;
     const BarChartIcon = ({ className = "w-5 h-5" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="12" y1="20" x2="12" y2="10"></line><line x1="18" y1="20" x2="18" y2="4"></line><line x1="6" y1="20" x2="6" y2="16"></line></svg>;
     const ClockIcon = ({ className = "w-5 h-5" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>;
     const InfoIcon = ({ className = "w-5 h-5" }) => <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="16" x2="12" y2="12"></line><line x1="12" y1="8" x2="12.01" y2="8"></line></svg>;
@@ -702,6 +704,7 @@
       const [currentView, setCurrentView] = useState('board'); // 'board', 'matrix', 'taskList', 'remind', 'settings'
       const [boardTab, setBoardTab] = useState('全体');
       const [sortOrder, setSortOrder] = useState('nextDateAsc');
+      const [boardSearchQuery, setBoardSearchQuery] = useState('');
       const [taskListSort, setTaskListSort] = useState('dueDateAsc');
       const [filterCategory, setFilterCategory] = useState('all'); // matrix filter
       
@@ -1973,15 +1976,32 @@
                        </button>
                      ))}
                    </div>
-                   <div className="flex items-center gap-2 self-end md:self-auto bg-white border border-gray-200 p-1">
-                      <select value={sortOrder} onChange={(e) => setSortOrder(e.target.value)} className="text-xs tracking-widest text-gray-600 bg-transparent outline-none p-1 cursor-pointer">
-                         <option value="nextDateAsc">次回予定日が近い順</option><option value="taskDueDateAsc">タスク期日が近い順</option>
-                      </select>
+                   <div className="flex items-center gap-2 self-end md:self-auto">
+                      <div className="flex items-center gap-1.5 bg-white border border-gray-200 px-2 py-1">
+                        <SearchIcon className="w-3.5 h-3.5 text-gray-400 flex-shrink-0" />
+                        <input type="text" value={boardSearchQuery} onChange={e => setBoardSearchQuery(e.target.value)} placeholder="顧客名・担当で検索" className="text-xs text-gray-700 bg-transparent outline-none w-32 sm:w-40" />
+                        {boardSearchQuery && <button onClick={() => setBoardSearchQuery('')} className="text-gray-300 hover:text-gray-600"><XIcon className="w-3 h-3" /></button>}
+                      </div>
+                      <div className="flex items-center gap-2 bg-white border border-gray-200 p-1">
+                        <select value={sortOrder} onChange={(e) => setSortOrder(e.target.value)} className="text-xs tracking-widest text-gray-600 bg-transparent outline-none p-1 cursor-pointer">
+                           <option value="nextDateAsc">次回予定日が近い順</option><option value="taskDueDateAsc">タスク期日が近い順</option>
+                        </select>
+                      </div>
                    </div>
                 </div>
 
+                {boardSearchQuery.trim() && (
+                  <p className="text-[11px] text-gray-400 tracking-wider mb-4">「{boardSearchQuery.trim()}」で検索中（全ステージ対象）</p>
+                )}
+
                 <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6 items-start">
-                  {[...customers].filter(c => boardTab !== '全体' ? c.currentStage === boardTab : !ARCHIVE_STAGES.some(s => s.id === c.currentStage)).sort((a, b) => {
+                  {[...customers].filter(c => {
+                     if (boardSearchQuery.trim()) {
+                       const q = boardSearchQuery.trim().toLowerCase();
+                       return (c.name || '').toLowerCase().includes(q) || (c.assignee || '').toLowerCase().includes(q);
+                     }
+                     return boardTab !== '全体' ? c.currentStage === boardTab : !ARCHIVE_STAGES.some(s => s.id === c.currentStage);
+                  }).sort((a, b) => {
                      if (sortOrder === 'nextDateAsc') return (a.nextDate ? new Date(a.nextDate) : Infinity) - (b.nextDate ? new Date(b.nextDate) : Infinity);
                      const getEarliest = (cust) => { const undone = (cust.tasks||[]).filter(t => !t.isDone && t.dueDate); return undone.length===0 ? Infinity : Math.min(...undone.map(t => new Date(t.dueDate).getTime())); };
                      return getEarliest(a) - getEarliest(b);
