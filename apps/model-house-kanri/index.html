@@ -1,0 +1,1439 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>モデルハウス備品管理</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+</head>
+<body class="selection:bg-gray-200 bg-[#f9f9f9]">
+  <div id="root">
+    <div style="display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;color:#999;font-size:13px;">読み込み中...</div>
+  </div>
+
+  <script type="text/babel" data-type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
+    import {
+      getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut,
+      setPersistence, browserLocalPersistence
+    } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
+    import {
+      initializeFirestore, persistentLocalCache, persistentSingleTabManager,
+      collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot, getDoc, getDocs, addDoc, query
+    } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
+
+    const { useState, useEffect, useMemo, useRef } = React;
+
+    // ============================================================
+    // Firebase初期化
+    // ============================================================
+    const isPreviewEnv = typeof __firebase_config !== 'undefined' && typeof __initial_auth_token !== 'undefined';
+
+    const firebaseConfig = isPreviewEnv ? JSON.parse(__firebase_config) : {
+      apiKey: "AIzaSyAiPsqDOP-Pkt1x-z-H1qwkUTWGW2W1tgA",
+      authDomain: "model-house-kanri.firebaseapp.com",
+      projectId: "model-house-kanri",
+      storageBucket: "model-house-kanri.firebasestorage.app",
+      messagingSenderId: "98646380216",
+      appId: "1:98646380216:web:4b24e889db3e0a58bdae4d"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const auth = getAuth(app);
+    try { setPersistence(auth, browserLocalPersistence); } catch (e) { /* noop */ }
+
+    // 現地の電波不安定対策：オフラインキャッシュを有効化
+    const db = initializeFirestore(app, {
+      localCache: persistentLocalCache({ tabManager: persistentSingleTabManager() })
+    });
+
+    const appId = typeof __app_id !== 'undefined' ? __app_id : 'mh-equipment';
+    const col = (name) => collection(db, 'artifacts', appId, 'public', 'data', name);
+    const docRef = (name, id) => doc(db, 'artifacts', appId, 'public', 'data', name, id);
+
+    // 管理者メールアドレス（藤田さん・染矢さん）。染矢さんのメールアドレスが判明したら追加すること。
+    const ADMIN_EMAILS = ['fujita.e@hakuto-k.jp'];
+
+    const nowIso = () => new Date().toISOString();
+
+    // ============================================================
+    // アイコン（lucide風インラインSVG。外部ライブラリを読み込まないための自前定義）
+    // ============================================================
+    const iconProps = { fill: "none", stroke: "currentColor", strokeWidth: "1.5", strokeLinecap: "round", strokeLinejoin: "round" };
+    const BoxIcon = ({ className = "w-5 h-5" }) => (
+      <svg viewBox="0 0 24 24" className={className} {...iconProps}>
+        <path d="M21 8L12 3 3 8v8l9 5 9-5V8z" /><path d="M3 8l9 5 9-5" /><path d="M12 13v8" />
+      </svg>
+    );
+    const TruckIcon = ({ className = "w-5 h-5" }) => (
+      <svg viewBox="0 0 24 24" className={className} {...iconProps}>
+        <rect x="1" y="6" width="13" height="11" /><path d="M14 9h4l3 3v5h-7z" />
+        <circle cx="5.5" cy="18.5" r="1.5" /><circle cx="17.5" cy="18.5" r="1.5" />
+      </svg>
+    );
+    const BookOpenIcon = ({ className = "w-5 h-5" }) => (
+      <svg viewBox="0 0 24 24" className={className} {...iconProps}>
+        <path d="M2 5c2-1 5-1 7 0v14c-2-1-5-1-7 0V5z" /><path d="M22 5c-2-1-5-1-7 0v14c2-1 5-1 7 0V5z" />
+      </svg>
+    );
+    const CheckIcon = ({ className = "w-5 h-5" }) => (
+      <svg viewBox="0 0 24 24" className={className} {...iconProps}><path d="M20 6L9 17l-5-5" /></svg>
+    );
+    const ChevronRightIcon = ({ className = "w-4 h-4" }) => (
+      <svg viewBox="0 0 24 24" className={className} {...iconProps}><path d="M9 18l6-6-6-6" /></svg>
+    );
+    const ChevronDownIcon = ({ className = "w-4 h-4" }) => (
+      <svg viewBox="0 0 24 24" className={className} {...iconProps}><path d="M6 9l6 6 6-6" /></svg>
+    );
+    const SettingsIcon = ({ className = "w-5 h-5" }) => (
+      <svg viewBox="0 0 24 24" className={className} {...iconProps}>
+        <circle cx="12" cy="12" r="3" />
+        <path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 11-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 11-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 11-2.83-2.83l.06-.06A1.65 1.65 0 004.6 15a1.65 1.65 0 00-1.51-1H3a2 2 0 110-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 112.83-2.83l.06.06A1.65 1.65 0 009 4.6a1.65 1.65 0 001-1.51V3a2 2 0 114 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 112.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 110 4h-.09a1.65 1.65 0 00-1.51 1z" />
+      </svg>
+    );
+    const ListIcon = ({ className = "w-5 h-5" }) => (
+      <svg viewBox="0 0 24 24" className={className} {...iconProps}>
+        <path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01" />
+      </svg>
+    );
+    const BellIcon = ({ className = "w-5 h-5" }) => (
+      <svg viewBox="0 0 24 24" className={className} {...iconProps}>
+        <path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 01-3.46 0" />
+      </svg>
+    );
+    const PlusIcon = ({ className = "w-5 h-5" }) => (
+      <svg viewBox="0 0 24 24" className={className} {...iconProps}><path d="M12 5v14M5 12h14" /></svg>
+    );
+    const TrashIcon = ({ className = "w-5 h-5" }) => (
+      <svg viewBox="0 0 24 24" className={className} {...iconProps}>
+        <path d="M3 6h18M8 6V4a2 2 0 012-2h4a2 2 0 012 2v2m3 0v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6h14z" />
+      </svg>
+    );
+    const EditIcon = ({ className = "w-5 h-5" }) => (
+      <svg viewBox="0 0 24 24" className={className} {...iconProps}>
+        <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7" />
+        <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z" />
+      </svg>
+    );
+    const XIcon = ({ className = "w-5 h-5" }) => (
+      <svg viewBox="0 0 24 24" className={className} {...iconProps}><path d="M18 6L6 18M6 6l12 12" /></svg>
+    );
+    const LogOutIcon = ({ className = "w-5 h-5" }) => (
+      <svg viewBox="0 0 24 24" className={className} {...iconProps}>
+        <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" /><path d="M16 17l5-5-5-5" /><path d="M21 12H9" />
+      </svg>
+    );
+
+    // ============================================================
+    // 共通コンポーネント：確認/アラートダイアログ
+    // ============================================================
+    const CustomDialog = ({ dialog, onClose }) => {
+      if (!dialog) return null;
+      const { type, message, onConfirm, confirmLabel } = dialog;
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white max-w-sm w-full p-6 shadow-xl border border-gray-200">
+            <p className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">{message}</p>
+            <div className="flex justify-end gap-2 mt-6">
+              {type === 'confirm' && (
+                <button
+                  onClick={onClose}
+                  className="px-4 py-2 text-xs tracking-widest border border-gray-300 text-gray-600 hover:bg-gray-100 transition-colors"
+                >キャンセル</button>
+              )}
+              <button
+                onClick={() => { if (onConfirm) onConfirm(); onClose(); }}
+                className="px-4 py-2 text-xs tracking-widest bg-gray-800 text-white hover:bg-gray-900 transition-colors"
+              >{confirmLabel || 'OK'}</button>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    // ============================================================
+    // 共通コンポーネント：Stepper（ADV入力手間最小化の中核）
+    // ============================================================
+    const Stepper = ({ value, onChange, min = 0, unit }) => {
+      const v = value ?? 0;
+      const dec = () => onChange(Math.max(min, v - 1));
+      const inc = () => onChange(v + 1);
+      return (
+        <div className="flex items-center gap-1.5 shrink-0">
+          <button
+            onClick={dec}
+            className="w-10 h-10 flex items-center justify-center border border-gray-300 text-gray-600 text-lg active:bg-gray-200 hover:bg-gray-100 transition-colors"
+          >−</button>
+          <input
+            type="number" inputMode="numeric" value={v}
+            onChange={(e) => onChange(Math.max(min, Number(e.target.value) || 0))}
+            className="w-14 h-10 text-center border border-gray-300 text-sm focus:outline-none focus:border-gray-500"
+          />
+          <button
+            onClick={inc}
+            className="w-10 h-10 flex items-center justify-center border border-gray-300 text-gray-600 text-lg active:bg-gray-200 hover:bg-gray-100 transition-colors"
+          >＋</button>
+          {unit && <span className="text-[10px] text-gray-400 ml-1 w-6">{unit}</span>}
+        </div>
+      );
+    };
+
+    // ============================================================
+    // 共通コンポーネント：TapRow
+    // タップするたびに発注必要数（×N）が増え、上限（tapMax）でクランプされる。
+    // 隣の×ボタンで0に戻す（在庫OKへキャンセル）。ADVが正確な残数を数えず、
+    // 「どのくらい足りなそうか」を体感でワンタップだけで伝えられるようにする。
+    // ============================================================
+    const TapRow = ({ item, count, onTap, onReset, children }) => {
+      const isLow = count > 0;
+      return (
+        <div className={`border-b border-gray-100 last:border-b-0 ${isLow ? 'bg-rose-50' : ''}`}>
+          <div className="w-full flex items-center justify-between py-3.5 px-3">
+            <button onClick={onTap} className="flex-1 min-w-0 text-left pr-3">
+              <div className={`text-sm ${isLow ? 'text-rose-600 font-medium' : 'text-gray-800'}`}>{item.name}</div>
+              <div className="text-[10px] text-gray-400 tracking-wide mt-0.5">
+                必要在庫数：{item.reorderPoint != null ? `${item.reorderPoint}${item.unit}以上` : '未設定'}
+              </div>
+            </button>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                onClick={onTap}
+                className={`text-[11px] tracking-widest px-3 py-1.5 transition-colors ${isLow ? 'bg-rose-500 text-white' : 'border border-gray-300 text-gray-400'}`}
+              >{isLow ? `発注が必要 ×${count}` : '在庫OK'}</button>
+              {isLow && (
+                <button
+                  onClick={onReset} aria-label="取り消し"
+                  className="w-8 h-8 flex items-center justify-center text-gray-400 hover:text-rose-500 border border-gray-300 hover:border-rose-300 transition-colors"
+                ><XIcon className="w-4 h-4" /></button>
+              )}
+            </div>
+          </div>
+          {isLow && <div className="px-3 pb-3 -mt-1">{children}</div>}
+        </div>
+      );
+    };
+
+    // ============================================================
+    // ユーティリティ
+    // ============================================================
+    function daysSince(isoString) {
+      if (!isoString) return Infinity;
+      const diffMs = Date.now() - new Date(isoString).getTime();
+      return Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    }
+    function formatRelativeDate(isoString) {
+      if (!isoString) return '未確認';
+      const d = daysSince(isoString);
+      if (d <= 0) return '今日';
+      if (d === 1) return '昨日';
+      return `${d}日前`;
+    }
+    function stockDocId(locationId, itemId) { return `${locationId}_${itemId}`; }
+
+    // ============================================================
+    // 初期投入データ（seed）：Googleドキュメント記載の備品一覧をベースにした暫定値。
+    // reorderPoint / reorderLot / orderRole は暫定であり、設定画面から後日調整する前提。
+    // ============================================================
+    const SEED_VERSION = 1;
+
+    const SEED_LOCATIONS = [
+      { id: 'nishigasaki', name: '西ヶ崎モデルハウス', type: 'model_house', keywords: ['西ヶ崎'], order: 1 },
+      { id: 'handa-lohas', name: '半田LOHASモデルハウス', type: 'model_house', keywords: ['半田LOHAS', '半田ロハス'], order: 2 },
+      { id: 'kasai-shinden', name: '笠井新田モデルハウス', type: 'model_house', keywords: ['笠井新田'], order: 3 },
+      { id: 'miyawake', name: '宮分様邸（浜名区内野）', type: 'completion_viewing', keywords: ['宮分', '浜名区内野', '内野'], order: 4 },
+      { id: 'morishita', name: '森下様邸（中央区寺脇）', type: 'completion_viewing', keywords: ['森下', '中央区寺脇', '寺脇'], order: 5 },
+      { id: 'kamoe-office', name: '鴨江事務所（予備在庫）', type: 'office_reserve', keywords: [], order: 6 },
+    ];
+
+    // 各行: [category, name, unit, fullStockQty, orderRole, note]
+    const SEED_ITEM_ROWS = [
+      // 商談用（印刷物・ノベルティ系は暫定でADV本人手配に分類。要確認）
+      ['商談用', 'スリッパ', '足', 50, '業務管理', '0.5箱=50足'],
+      ['商談用', 'スケッチブック', '冊', 3, 'ADV本人手配', ''],
+      ['商談用', '資料セット', '部', 15, 'ADV本人手配', ''],
+      ['商談用', 'ルールブック', '部', 15, 'ADV本人手配', ''],
+      ['商談用', 'コミコミ価格表', '部', 15, 'ADV本人手配', ''],
+      ['商談用', 'コーディネートブック', '冊', 8, 'ADV本人手配', '4種類×各2冊'],
+      ['商談用', '間取り', '枚', 3, 'ADV本人手配', ''],
+      ['商談用', 'QRコード類', 'セット', 2, '業務管理', ''],
+      ['商談用', 'アーチバッグ', '袋', 15, '集客・マーケ', ''],
+      ['商談用', 'LPヒアリングシート', '部', 10, 'ADV本人手配', ''],
+      ['商談用', 'セレクトブック', '部', 10, 'ADV本人手配', ''],
+      ['商談用', 'ヒアリングブック', '部', 10, 'ADV本人手配', ''],
+      // 消耗品
+      ['消耗品', '水', '箱', 1, '業務管理', '未開封1箱'],
+      ['消耗品', 'トイレットペーパー', 'ロール', 4, '業務管理', ''],
+      ['消耗品', 'ペーパータオル', '袋', 2, '業務管理', ''],
+      ['消耗品', 'ゴミ袋', '袋', 1, '業務管理', '未開封1袋'],
+      ['消耗品', '手袋', '袋', 4, '業務管理', '未開封4袋'],
+      // 掃除用品
+      ['掃除用品', 'ウエットティッシュ', '個', 1, '業務管理', ''],
+      ['掃除用品', 'トイレ掃除シート', '個', 1, '業務管理', '未開封1個'],
+      ['掃除用品', 'マイクロファイバー', '箱', 0.5, '業務管理', ''],
+      ['掃除用品', '激落ちくん', '袋', 0.5, '業務管理', ''],
+      ['掃除用品', 'サニタリーポリ袋', '袋', 1, '業務管理', '未開封1袋'],
+      ['掃除用品', 'トイレマジックリン', '本', 0.5, '業務管理', ''],
+      ['掃除用品', 'ガラスクリーナー', '本', 0.5, '業務管理', ''],
+      ['掃除用品', '蜘蛛の巣ジェット', '本', null, '業務管理', '無くなり次第発注'],
+      ['掃除用品', 'ゴキブリジェット', '本', null, '業務管理', '無くなり次第発注'],
+      ['掃除用品', 'カメムシジェット', '本', null, '業務管理', '無くなり次第発注'],
+      ['掃除用品', '掃除機の紙パック', '袋', 0.5, '業務管理', ''],
+      ['掃除用品', 'クイックルワイパーシート', '袋', 0.5, '業務管理', ''],
+      ['掃除用品', 'キッチン用スポンジ', '個', 2, '業務管理', ''],
+      ['掃除用品', 'キッチン用スプレー', '本', 0.5, '業務管理', ''],
+      ['掃除用品', 'コロコロ替え', '個', 1, '業務管理', ''],
+      // 鴨江個人用（自動発注対象外、在庫の見える化のみ）
+      ['鴨江個人用', '個人用ゴミ袋', '袋', null, 'ADV本人手配', ''],
+      ['鴨江個人用', '個人用ウェットティッシュ', '個', null, 'ADV本人手配', ''],
+    ];
+
+    function buildSeedItems() {
+      return SEED_ITEM_ROWS.map(([category, name, unit, fullStockQty, orderRole, note], idx) => ({
+        id: `item-${idx + 1}`,
+        category, name, unit,
+        fullStockQty: fullStockQty,
+        reorderPoint: fullStockQty != null ? Math.max(1, Math.ceil(fullStockQty / 2)) : null,
+        reorderLot: fullStockQty != null ? fullStockQty : null,
+        tapIncrement: 1, tapMax: 3, // 1タップあたりの発注ロット数の増分／タップの上限（設定画面から品目ごとに調整可）
+        orderRole, note, isActive: true, order: idx,
+      }));
+    }
+
+    async function ensureSeedData(setSeeding) {
+      const configSnap = await getDoc(docRef('system_config', 'default'));
+      if (configSnap.exists() && (configSnap.data().seedVersion || 0) >= SEED_VERSION) return;
+      setSeeding && setSeeding(true);
+      try {
+        for (const loc of SEED_LOCATIONS) {
+          const exists = await getDoc(docRef('locations', loc.id));
+          if (!exists.exists()) {
+            await setDoc(docRef('locations', loc.id), { ...loc, isActive: true, lastCheckedAt: null, lastCheckedBy: null, createdAt: nowIso(), updatedAt: nowIso() });
+          }
+        }
+        const items = buildSeedItems();
+        for (const item of items) {
+          const exists = await getDoc(docRef('equipmentItems', item.id));
+          if (!exists.exists()) {
+            await setDoc(docRef('equipmentItems', item.id), { ...item, createdAt: nowIso(), updatedAt: nowIso() });
+          }
+        }
+        await setDoc(docRef('system_config', 'default'), {
+          staleCheckDays: 14,
+          chatworkRoomIds: { operations: '', marketing: '' },
+          autoSendEnabled: false,
+          seedVersion: SEED_VERSION,
+        }, { merge: true });
+      } finally {
+        setSeeding && setSeeding(false);
+      }
+    }
+
+    // ============================================================
+    // ログイン画面
+    // ============================================================
+    const LoginView = () => {
+      const [error, setError] = useState('');
+      const handleLogin = async () => {
+        setError('');
+        try {
+          await signInWithPopup(auth, new GoogleAuthProvider());
+        } catch (e) {
+          setError('ログインに失敗しました。もう一度お試しください。');
+        }
+      };
+      return (
+        <div className="min-h-screen flex items-center justify-center bg-[#f9f9f9] px-6">
+          <div className="max-w-sm w-full text-center">
+            <BoxIcon className="w-10 h-10 mx-auto text-gray-700 mb-4" />
+            <h1 className="font-serif tracking-[0.15em] text-xl text-gray-800 mb-1">モデルハウス備品管理</h1>
+            <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-8">Equipment Manager</p>
+            <button
+              onClick={handleLogin}
+              className="w-full bg-gray-800 text-white hover:bg-gray-900 transition-colors px-6 py-3 text-xs tracking-widest shadow-sm"
+            >Googleアカウントでログイン</button>
+            {error && <p className="text-rose-500 text-xs mt-4">{error}</p>}
+          </div>
+        </div>
+      );
+    };
+
+    // ============================================================
+    // 拠点選択
+    // ============================================================
+    const LocationPicker = ({ locations, staleCheckDays, onSelect }) => {
+      const list = locations.filter(l => l.isActive).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+      return (
+        <div className="p-4 space-y-2 max-w-xl mx-auto">
+          {list.map(loc => {
+            const stale = daysSince(loc.lastCheckedAt) >= staleCheckDays;
+            return (
+              <button
+                key={loc.id}
+                onClick={() => onSelect(loc)}
+                className="w-full flex items-center justify-between bg-white border border-gray-200 hover:border-gray-400 hover:shadow-sm transition-all px-4 py-4 text-left"
+              >
+                <div className="min-w-0">
+                  <div className="text-sm text-gray-800">{loc.name}</div>
+                  <div className={`text-[10px] tracking-wide mt-1 ${stale ? 'text-rose-500' : 'text-gray-400'}`}>
+                    最終確認：{formatRelativeDate(loc.lastCheckedAt)}
+                    {loc.lastCheckedBy ? `（${loc.lastCheckedBy.name}）` : ''}
+                    {stale && ' ・要確認'}
+                  </div>
+                </div>
+                <ChevronRightIcon className="w-4 h-4 text-gray-300 shrink-0" />
+              </button>
+            );
+          })}
+          {list.length === 0 && <p className="text-center text-xs text-gray-400 py-10">拠点が登録されていません（設定から追加してください）</p>}
+        </div>
+      );
+    };
+
+    // ============================================================
+    // 在庫確認フォーム（ADVの主要動線。入力手間最小化を最優先に設計）
+    // ============================================================
+    const StockCheckForm = ({ location, items, stockLevels, user, onBack, onSubmitted, showAlert, showConfirm }) => {
+      const isWithdrawal = location.type === 'office_reserve';
+      const relevantItems = items.filter(i => i.isActive).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+      // 持ち出しモード（鴨江事務所）は従来通り数量を直接入力する
+      const initialWithdrawValues = useMemo(() => {
+        const v = {};
+        relevantItems.forEach(item => { v[item.id] = 0; });
+        return v;
+      }, [location.id, items]);
+
+      // 在庫確認モード（モデルハウス／見学会）は「在庫OK／発注が必要×N」のワンタップ判定に統一。
+      // 正確な残数を毎回数える負担をなくし、タップ回数＝発注してほしい度合い（ロット数の目安）を記録する。
+      // N（tapCount）は品目ごとに設定した tapIncrement 刻みで増え、tapMax で頭打ちになる。
+      const initialTapCounts = useMemo(() => {
+        const v = {};
+        relevantItems.forEach(item => { v[item.id] = 0; });
+        return v;
+      }, [location.id, items]);
+
+      const [withdrawValues, setWithdrawValues] = useState(initialWithdrawValues);
+      const [tapCounts, setTapCounts] = useState(initialTapCounts);
+      const [detailValues, setDetailValues] = useState({});
+      const [detailOpen, setDetailOpen] = useState({});
+      const [submitting, setSubmitting] = useState(false);
+
+      useEffect(() => { setWithdrawValues(initialWithdrawValues); }, [initialWithdrawValues]);
+      useEffect(() => { setTapCounts(initialTapCounts); setDetailValues({}); setDetailOpen({}); }, [initialTapCounts]);
+
+      const tapItem = (item) => {
+        const increment = item.tapIncrement ?? 1;
+        const max = item.tapMax ?? 3;
+        setTapCounts(prev => ({ ...prev, [item.id]: Math.min((prev[item.id] ?? 0) + increment, max) }));
+      };
+      const resetItem = (itemId) => {
+        setTapCounts(prev => ({ ...prev, [itemId]: 0 }));
+        setDetailOpen(prev => ({ ...prev, [itemId]: false }));
+      };
+      const setWithdrawValue = (itemId, v) => setWithdrawValues(prev => ({ ...prev, [itemId]: v }));
+      const setDetailValue = (itemId, v) => setDetailValues(prev => ({ ...prev, [itemId]: v }));
+      const toggleDetailOpen = (itemId, item) => {
+        setDetailOpen(prev => {
+          const next = !prev[itemId];
+          if (next && detailValues[itemId] === undefined) {
+            setDetailValues(dv => ({ ...dv, [itemId]: item.reorderPoint ?? 0 }));
+          }
+          return { ...prev, [itemId]: next };
+        });
+      };
+
+      const submit = async (allUnchanged) => {
+        setSubmitting(true);
+        try {
+          const submittedBy = { uid: user.uid, name: user.displayName || user.email, email: user.email };
+          const ts = nowIso();
+          const mode = isWithdrawal ? 'withdrawal' : 'checkin';
+
+          const lines = relevantItems.map(item => {
+            const level = stockLevels[stockDocId(location.id, item.id)];
+            const previousCount = level ? level.currentCount : (item.fullStockQty ?? null);
+
+            if (isWithdrawal) {
+              const taken = withdrawValues[item.id] ?? 0;
+              const newCount = Math.max(0, (previousCount ?? 0) - taken);
+              const belowReorderPoint = item.reorderPoint != null && newCount <= item.reorderPoint;
+              return { itemId: item.id, itemName: item.name, unit: item.unit, previousCount, newCount, delta: -taken, belowReorderPoint };
+            }
+            if (allUnchanged) {
+              return { itemId: item.id, itemName: item.name, unit: item.unit, previousCount, newCount: previousCount, delta: 0, belowReorderPoint: !!(level && level.belowReorderPoint), requestedLots: 0 };
+            }
+            const requestedLots = tapCounts[item.id] ?? 0;
+            const isLow = requestedLots > 0;
+            if (!isLow) {
+              // 在庫OK：触っていないので前回値を維持したまま「確認済み」だけ記録する
+              return { itemId: item.id, itemName: item.name, unit: item.unit, previousCount, newCount: previousCount, delta: 0, belowReorderPoint: false, requestedLots: 0 };
+            }
+            const hasDetail = detailOpen[item.id] && detailValues[item.id] !== undefined;
+            const newCount = hasDetail ? detailValues[item.id] : (item.reorderPoint ?? 0);
+            return { itemId: item.id, itemName: item.name, unit: item.unit, previousCount, newCount, delta: (previousCount != null ? newCount - previousCount : null), belowReorderPoint: true, requestedLots };
+          });
+
+          await addDoc(col('stockCheckSessions'), {
+            locationId: location.id, locationName: location.name, mode,
+            allUnchanged: !!allUnchanged, submittedBy, submittedAt: ts,
+            linkedOrderId: null, lines, memo: '',
+          });
+
+          for (const line of lines) {
+            await setDoc(docRef('stockLevels', stockDocId(location.id, line.itemId)), {
+              locationId: location.id, itemId: line.itemId,
+              currentCount: line.newCount, belowReorderPoint: line.belowReorderPoint,
+              requestedLots: line.requestedLots ?? 0,
+              lastCheckedAt: ts, lastCheckedBy: submittedBy, lastCheckMode: mode,
+            }, { merge: true });
+          }
+
+          await updateDoc(docRef('locations', location.id), {
+            lastCheckedAt: ts, lastCheckedBy: submittedBy, updatedAt: ts,
+          });
+
+          onSubmitted();
+        } catch (e) {
+          showAlert('保存に失敗しました。通信状態をご確認のうえ、もう一度お試しください。\n' + (e && e.message ? e.message : ''));
+        } finally {
+          setSubmitting(false);
+        }
+      };
+
+      const lowCount = Object.values(tapCounts).filter(c => c > 0).length;
+
+      return (
+        <div className="max-w-xl mx-auto pb-24">
+          <div className="sticky top-0 bg-[#f9f9f9]/95 backdrop-blur-sm z-10 px-4 py-3 border-b border-gray-200 flex items-center gap-2">
+            <button onClick={onBack} className="text-gray-400 hover:text-gray-700 text-xs">← 拠点選択に戻る</button>
+          </div>
+          <div className="px-4 pt-4 pb-2">
+            <h2 className="font-serif tracking-wide text-base text-gray-800">{location.name}</h2>
+            <p className="text-[10px] text-gray-400 tracking-widest uppercase mt-1">
+              {isWithdrawal ? '予備在庫の持ち出し・棚卸' : '発注が必要な品目をタップしてください'}
+            </p>
+          </div>
+
+          {!isWithdrawal && (
+            <div className="px-4 py-2">
+              <button
+                onClick={() => showConfirm('この拠点は全品目「在庫OK」として記録します。よろしいですか？', () => submit(true), '在庫OKで記録')}
+                disabled={submitting}
+                className="w-full flex items-center justify-center gap-2 bg-white border border-gray-300 text-gray-700 hover:bg-gray-100 transition-colors px-4 py-3 text-xs tracking-widest disabled:opacity-50"
+              >
+                <CheckIcon className="w-4 h-4" /> この拠点は全品目在庫OK
+              </button>
+            </div>
+          )}
+
+          <div className="bg-white border border-gray-200 mx-4 mt-2">
+            {relevantItems.map(item => {
+              if (isWithdrawal) {
+                const level = stockLevels[stockDocId(location.id, item.id)];
+                const prevCount = level ? level.currentCount : (item.fullStockQty ?? null);
+                return (
+                  <div key={item.id} className="flex items-center justify-between py-3 px-3 border-b border-gray-100 last:border-b-0">
+                    <div className="flex-1 min-w-0 pr-3">
+                      <div className="text-sm text-gray-800">{item.name}</div>
+                      <div className="text-[10px] text-gray-400 tracking-wide mt-0.5">事務所在庫: {prevCount ?? '未確認'}{item.unit}</div>
+                    </div>
+                    <Stepper value={withdrawValues[item.id]} onChange={(v) => setWithdrawValue(item.id, v)} unit={item.unit} />
+                  </div>
+                );
+              }
+              const count = tapCounts[item.id] ?? 0;
+              return (
+                <React.Fragment key={item.id}>
+                  <TapRow item={item} count={count} onTap={() => tapItem(item)} onReset={() => resetItem(item.id)}>
+                    <button onClick={() => toggleDetailOpen(item.id, item)} className="text-[10px] text-gray-400 underline shrink-0">
+                      {detailOpen[item.id] ? '詳細入力を閉じる' : '正確な残数を入力（任意）'}
+                    </button>
+                  </TapRow>
+                  {count > 0 && detailOpen[item.id] && (
+                    <div className="bg-white px-3 pb-3 border-b border-gray-100 last:border-b-0">
+                      <Stepper value={detailValues[item.id]} onChange={(v) => setDetailValue(item.id, v)} unit={item.unit} />
+                    </div>
+                  )}
+                </React.Fragment>
+              );
+            })}
+            {relevantItems.length === 0 && <p className="text-center text-xs text-gray-400 py-10">この拠点に紐づく備品がありません</p>}
+          </div>
+
+          <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-3 z-10">
+            <div className="max-w-xl mx-auto">
+              <button
+                onClick={() => submit(false)}
+                disabled={submitting}
+                className="w-full bg-gray-800 text-white hover:bg-gray-900 transition-colors px-6 py-3 text-xs tracking-widest shadow-sm disabled:opacity-50"
+              >{submitting ? '送信中...' : (isWithdrawal ? 'この内容で記録する' : (lowCount > 0 ? `この内容で送信する（発注 ${lowCount}件）` : 'この内容で送信する'))}</button>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    const StockCheckView = (props) => {
+      const [selected, setSelected] = useState(null);
+      if (selected) {
+        return (
+          <StockCheckForm
+            {...props}
+            location={selected}
+            onBack={() => setSelected(null)}
+            onSubmitted={() => { props.showAlert('記録しました。ありがとうございます。'); setSelected(null); }}
+          />
+        );
+      }
+      return <LocationPicker locations={props.locations} staleCheckDays={props.staleCheckDays} onSelect={setSelected} />;
+    };
+
+    // ============================================================
+    // 配置報告（ADV向け：配達待ちの発注を「配置しました」で完了させる）
+    // ============================================================
+    const DeliveryReportView = ({ user, showAlert, showConfirm }) => {
+      const [orders, setOrders] = useState([]);
+      const [submittingId, setSubmittingId] = useState(null);
+
+      useEffect(() => {
+        const unsub = onSnapshot(col('orders'), (snap) => {
+          setOrders(snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(o => o.status === '配達待ち'));
+        });
+        return () => unsub();
+      }, []);
+
+      const reportDelivered = async (order) => {
+        setSubmittingId(order.id);
+        try {
+          const ts = nowIso();
+          const deliveredBy = { uid: user.uid, name: user.displayName || user.email };
+
+          await updateDoc(docRef('orders', order.id), { status: '配達済み', deliveredAt: ts, deliveredBy, updatedAt: ts });
+
+          const lines = order.items.map(i => ({
+            itemId: i.itemId, itemName: i.itemName, unit: i.unit,
+            previousCount: null, newCount: i.reorderLot ?? i.countAtRequest, delta: null, belowReorderPoint: false,
+          }));
+          await addDoc(col('stockCheckSessions'), {
+            locationId: order.locationId, locationName: order.locationName, mode: 'restock',
+            allUnchanged: false, submittedBy: deliveredBy, submittedAt: ts,
+            linkedOrderId: order.id, lines, memo: '発注品の配置完了報告',
+          });
+          for (const line of lines) {
+            await setDoc(docRef('stockLevels', stockDocId(order.locationId, line.itemId)), {
+              locationId: order.locationId, itemId: line.itemId,
+              currentCount: line.newCount, belowReorderPoint: false,
+              lastCheckedAt: ts, lastCheckedBy: deliveredBy, lastCheckMode: 'restock',
+            }, { merge: true });
+          }
+          await updateDoc(docRef('locations', order.locationId), { lastCheckedAt: ts, lastCheckedBy: deliveredBy, updatedAt: ts });
+
+          showAlert('配置完了を記録しました。ありがとうございます。');
+        } catch (e) {
+          showAlert('記録に失敗しました。\n' + (e && e.message ? e.message : ''));
+        } finally {
+          setSubmittingId(null);
+        }
+      };
+
+      return (
+        <div className="max-w-xl mx-auto">
+          <SectionLabel>配達待ちの発注（{orders.length}件）</SectionLabel>
+          <div className="bg-white border border-gray-200 mx-4 divide-y divide-gray-100">
+            {orders.length === 0 && <p className="px-4 py-10 text-center text-xs text-gray-400">現在、配置待ちの発注はありません</p>}
+            {orders.map(o => (
+              <div key={o.id} className="px-4 py-4">
+                <div className="text-sm text-gray-800">{o.locationName}</div>
+                <div className="text-[10px] text-gray-400 mt-0.5">{o.items.map(i => i.itemName).join('、')}</div>
+                {o.deliveryScheduledDate && <div className="text-[10px] text-gray-400 mt-0.5">到着予定：{o.deliveryScheduledDate}</div>}
+                <button
+                  onClick={() => showConfirm(`${o.locationName}へ備品を配置しましたか？`, () => reportDelivered(o), '配置しました')}
+                  disabled={submittingId === o.id}
+                  className="mt-2 w-full bg-gray-800 text-white hover:bg-gray-900 transition-colors px-4 py-2.5 text-xs tracking-widest disabled:opacity-50"
+                >{submittingId === o.id ? '記録中...' : '配置しました'}</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    };
+
+    // ============================================================
+    // 手順・印刷方法ページ（閲覧）
+    // ============================================================
+    const GuidesView = () => {
+      const [guides, setGuides] = useState([]);
+      const [openId, setOpenId] = useState(null);
+
+      useEffect(() => {
+        const unsub = onSnapshot(col('guides'), (snap) => {
+          setGuides(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)));
+        });
+        return () => unsub();
+      }, []);
+
+      return (
+        <div className="max-w-xl mx-auto px-4 space-y-2">
+          {guides.length === 0 && <p className="text-center text-xs text-gray-400 py-10">手順ページはまだ登録されていません（設定から追加してください）</p>}
+          {guides.map(g => (
+            <div key={g.id} className="bg-white border border-gray-200">
+              <button
+                onClick={() => setOpenId(openId === g.id ? null : g.id)}
+                className="w-full flex items-center justify-between px-4 py-3 text-left"
+              >
+                <span className="text-sm text-gray-800">{g.title}</span>
+                <ChevronDownIcon className={`w-4 h-4 text-gray-400 transition-transform ${openId === g.id ? 'rotate-180' : ''}`} />
+              </button>
+              {openId === g.id && (
+                <div className="px-4 pb-4 text-sm text-gray-600 whitespace-pre-wrap leading-relaxed border-t border-gray-100 pt-3">{g.bodyText}</div>
+              )}
+            </div>
+          ))}
+        </div>
+      );
+    };
+
+    // ============================================================
+    // 設定（管理者向け）：拠点 / 備品テンプレート / 手順ページ / 全般
+    // ============================================================
+    const FormField = ({ label, children }) => (
+      <label className="block mb-3">
+        <span className="block text-[10px] text-gray-400 tracking-widest uppercase mb-1">{label}</span>
+        {children}
+      </label>
+    );
+    const inputCls = "w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:border-gray-500";
+
+    const LocationEditModal = ({ location, onClose, showAlert }) => {
+      const isNew = !location;
+      const [name, setName] = useState(location?.name || '');
+      const [type, setType] = useState(location?.type || 'model_house');
+      const [keywordsText, setKeywordsText] = useState((location?.keywords || []).join(', '));
+      const [saving, setSaving] = useState(false);
+
+      const save = async () => {
+        if (!name.trim()) { showAlert('拠点名を入力してください。'); return; }
+        setSaving(true);
+        try {
+          const keywords = keywordsText.split(',').map(s => s.trim()).filter(Boolean);
+          const ts = nowIso();
+          if (isNew) {
+            const id = 'loc-' + Date.now();
+            await setDoc(docRef('locations', id), { id, name, type, keywords, isActive: true, order: 999, lastCheckedAt: null, lastCheckedBy: null, createdAt: ts, updatedAt: ts });
+          } else {
+            await updateDoc(docRef('locations', location.id), { name, type, keywords, updatedAt: ts });
+          }
+          onClose();
+        } catch (e) {
+          showAlert('保存に失敗しました。\n' + (e && e.message ? e.message : ''));
+        } finally {
+          setSaving(false);
+        }
+      };
+
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white max-w-md w-full p-6 shadow-xl border border-gray-200">
+            <h3 className="font-serif tracking-wide text-sm text-gray-800 mb-4">{isNew ? '拠点を追加' : '拠点を編集'}</h3>
+            <FormField label="拠点名"><input className={inputCls} value={name} onChange={e => setName(e.target.value)} /></FormField>
+            <FormField label="種別">
+              <select className={inputCls} value={type} onChange={e => setType(e.target.value)}>
+                <option value="model_house">常設モデルハウス</option>
+                <option value="completion_viewing">完成見学会</option>
+                <option value="office_reserve">事務所予備在庫</option>
+              </select>
+            </FormField>
+            <FormField label="カレンダー識別キーワード（カンマ区切り、複数可）">
+              <input className={inputCls} value={keywordsText} onChange={e => setKeywordsText(e.target.value)} placeholder="例：森下, 内野" />
+            </FormField>
+            <div className="flex justify-end gap-2 mt-4">
+              <button onClick={onClose} className="px-4 py-2 text-xs tracking-widest border border-gray-300 text-gray-600 hover:bg-gray-100">キャンセル</button>
+              <button onClick={save} disabled={saving} className="px-4 py-2 text-xs tracking-widest bg-gray-800 text-white hover:bg-gray-900 disabled:opacity-50">{saving ? '保存中...' : '保存'}</button>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    const LocationsSettingsPanel = ({ locations, showAlert, showConfirm }) => {
+      const [editing, setEditing] = useState(undefined); // undefined=閉じている, null=新規, obj=編集
+
+      const toggleActive = async (loc) => {
+        await updateDoc(docRef('locations', loc.id), { isActive: !loc.isActive, updatedAt: nowIso() });
+      };
+
+      const typeLabel = { model_house: '常設モデルハウス', completion_viewing: '完成見学会', office_reserve: '事務所予備在庫' };
+
+      return (
+        <div>
+          <div className="flex justify-end px-4 mb-2">
+            <button onClick={() => setEditing(null)} className="flex items-center gap-1 text-[11px] tracking-widest bg-gray-800 text-white hover:bg-gray-900 px-3 py-1.5">
+              <PlusIcon className="w-3.5 h-3.5" />拠点を追加
+            </button>
+          </div>
+          <div className="bg-white border border-gray-200 mx-4 divide-y divide-gray-100">
+            {locations.sort((a, b) => (a.order ?? 0) - (b.order ?? 0)).map(loc => (
+              <div key={loc.id} className={`flex items-center justify-between px-4 py-3 ${!loc.isActive ? 'opacity-50' : ''}`}>
+                <div>
+                  <div className="text-sm text-gray-800">{loc.name}{!loc.isActive && '（無効）'}</div>
+                  <div className="text-[10px] text-gray-400 mt-0.5">{typeLabel[loc.type] || loc.type} ／ キーワード：{(loc.keywords || []).join('、') || 'なし'}</div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button onClick={() => setEditing(loc)} className="text-gray-400 hover:text-gray-700"><EditIcon className="w-4 h-4" /></button>
+                  <button
+                    onClick={() => showConfirm(`「${loc.name}」を${loc.isActive ? '無効化' : '再度有効化'}しますか？`, () => toggleActive(loc), loc.isActive ? '無効化する' : '有効化する')}
+                    className="text-gray-400 hover:text-rose-500"
+                  ><TrashIcon className="w-4 h-4" /></button>
+                </div>
+              </div>
+            ))}
+          </div>
+          {editing !== undefined && (
+            <LocationEditModal location={editing} onClose={() => setEditing(undefined)} showAlert={showAlert} />
+          )}
+        </div>
+      );
+    };
+
+    const ORDER_ROLES = ['業務管理', '集客・マーケ', 'ADV本人手配'];
+    const ITEM_CATEGORIES = ['商談用', '消耗品', '掃除用品', '鴨江個人用'];
+
+    const ItemEditModal = ({ item, onClose, showAlert }) => {
+      const isNew = !item;
+      const [category, setCategory] = useState(item?.category || ITEM_CATEGORIES[0]);
+      const [name, setName] = useState(item?.name || '');
+      const [unit, setUnit] = useState(item?.unit || '個');
+      const [orderRole, setOrderRole] = useState(item?.orderRole || ORDER_ROLES[0]);
+      const [reorderPoint, setReorderPoint] = useState(item?.reorderPoint ?? '');
+      const [reorderLot, setReorderLot] = useState(item?.reorderLot ?? '');
+      const [tapIncrement, setTapIncrement] = useState(item?.tapIncrement ?? 1);
+      const [tapMax, setTapMax] = useState(item?.tapMax ?? 3);
+      const [note, setNote] = useState(item?.note || '');
+      const [saving, setSaving] = useState(false);
+
+      const save = async () => {
+        if (!name.trim()) { showAlert('品目名を入力してください。'); return; }
+        setSaving(true);
+        try {
+          const ts = nowIso();
+          const payload = {
+            category, name, unit, orderRole,
+            reorderPoint: reorderPoint === '' ? null : Number(reorderPoint),
+            reorderLot: reorderLot === '' ? null : Number(reorderLot),
+            tapIncrement: Math.max(1, Number(tapIncrement) || 1),
+            tapMax: Math.max(1, Number(tapMax) || 1),
+            note, updatedAt: ts,
+          };
+          if (isNew) {
+            const id = 'item-' + Date.now();
+            await setDoc(docRef('equipmentItems', id), { id, ...payload, fullStockQty: payload.reorderLot, isActive: true, order: 999, createdAt: ts });
+          } else {
+            await updateDoc(docRef('equipmentItems', item.id), payload);
+          }
+          onClose();
+        } catch (e) {
+          showAlert('保存に失敗しました。\n' + (e && e.message ? e.message : ''));
+        } finally {
+          setSaving(false);
+        }
+      };
+
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white max-w-md w-full p-6 shadow-xl border border-gray-200 max-h-[85vh] overflow-y-auto">
+            <h3 className="font-serif tracking-wide text-sm text-gray-800 mb-4">{isNew ? '備品を追加' : '備品を編集'}</h3>
+            <FormField label="カテゴリ">
+              <select className={inputCls} value={category} onChange={e => setCategory(e.target.value)}>
+                {ITEM_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </FormField>
+            <FormField label="品目名"><input className={inputCls} value={name} onChange={e => setName(e.target.value)} /></FormField>
+            <FormField label="単位"><input className={inputCls} value={unit} onChange={e => setUnit(e.target.value)} /></FormField>
+            <FormField label="発注担当区分">
+              <select className={inputCls} value={orderRole} onChange={e => setOrderRole(e.target.value)}>
+                {ORDER_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
+              </select>
+            </FormField>
+            <div className="grid grid-cols-2 gap-3">
+              <FormField label="必要在庫数（これ以上を目安に。空欄可）"><input type="number" className={inputCls} value={reorderPoint} onChange={e => setReorderPoint(e.target.value)} /></FormField>
+              <FormField label="発注ロット（空欄可）"><input type="number" className={inputCls} value={reorderLot} onChange={e => setReorderLot(e.target.value)} /></FormField>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <FormField label="1タップの増分"><input type="number" min="1" className={inputCls} value={tapIncrement} onChange={e => setTapIncrement(e.target.value)} /></FormField>
+              <FormField label="タップ上限（×いくつまで）"><input type="number" min="1" className={inputCls} value={tapMax} onChange={e => setTapMax(e.target.value)} /></FormField>
+            </div>
+            <FormField label="備考"><input className={inputCls} value={note} onChange={e => setNote(e.target.value)} /></FormField>
+            <div className="flex justify-end gap-2 mt-4">
+              <button onClick={onClose} className="px-4 py-2 text-xs tracking-widest border border-gray-300 text-gray-600 hover:bg-gray-100">キャンセル</button>
+              <button onClick={save} disabled={saving} className="px-4 py-2 text-xs tracking-widest bg-gray-800 text-white hover:bg-gray-900 disabled:opacity-50">{saving ? '保存中...' : '保存'}</button>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    const EquipmentSettingsPanel = ({ items, showAlert, showConfirm }) => {
+      const [category, setCategory] = useState(ITEM_CATEGORIES[0]);
+      const [editing, setEditing] = useState(undefined);
+
+      const toggleActive = async (item) => {
+        await updateDoc(docRef('equipmentItems', item.id), { isActive: !item.isActive, updatedAt: nowIso() });
+      };
+
+      const filtered = items.filter(i => i.category === category).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+      return (
+        <div>
+          <div className="flex gap-1 px-4 mb-2 overflow-x-auto">
+            {ITEM_CATEGORIES.map(c => (
+              <button key={c} onClick={() => setCategory(c)} className={`text-[11px] tracking-widest px-3 py-1.5 whitespace-nowrap ${category === c ? 'bg-gray-800 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>{c}</button>
+            ))}
+          </div>
+          <div className="flex justify-end px-4 mb-2">
+            <button onClick={() => setEditing(null)} className="flex items-center gap-1 text-[11px] tracking-widest bg-gray-800 text-white hover:bg-gray-900 px-3 py-1.5">
+              <PlusIcon className="w-3.5 h-3.5" />備品を追加
+            </button>
+          </div>
+          <div className="bg-white border border-gray-200 mx-4 divide-y divide-gray-100">
+            {filtered.map(item => (
+              <div key={item.id} className={`flex items-center justify-between px-4 py-3 ${!item.isActive ? 'opacity-50' : ''}`}>
+                <div>
+                  <div className="text-sm text-gray-800">{item.name}{!item.isActive && '（無効）'}</div>
+                  <div className="text-[10px] text-gray-400 mt-0.5">{item.orderRole} ／ 必要在庫数 {item.reorderPoint ?? '—'}{item.unit}以上 ／ ロット {item.reorderLot ?? '—'}{item.unit}</div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button onClick={() => setEditing(item)} className="text-gray-400 hover:text-gray-700"><EditIcon className="w-4 h-4" /></button>
+                  <button
+                    onClick={() => showConfirm(`「${item.name}」を${item.isActive ? '無効化' : '再度有効化'}しますか？`, () => toggleActive(item), item.isActive ? '無効化する' : '有効化する')}
+                    className="text-gray-400 hover:text-rose-500"
+                  ><TrashIcon className="w-4 h-4" /></button>
+                </div>
+              </div>
+            ))}
+            {filtered.length === 0 && <p className="px-4 py-6 text-center text-xs text-gray-400">このカテゴリの品目はまだありません</p>}
+          </div>
+          {editing !== undefined && <ItemEditModal item={editing} onClose={() => setEditing(undefined)} showAlert={showAlert} />}
+        </div>
+      );
+    };
+
+    const GuideEditModal = ({ guide, onClose, showAlert, user }) => {
+      const isNew = !guide;
+      const [title, setTitle] = useState(guide?.title || '');
+      const [bodyText, setBodyText] = useState(guide?.bodyText || '');
+      const [saving, setSaving] = useState(false);
+
+      const save = async () => {
+        if (!title.trim()) { showAlert('タイトルを入力してください。'); return; }
+        setSaving(true);
+        try {
+          const ts = nowIso();
+          const updatedBy = user.displayName || user.email;
+          if (isNew) {
+            const id = 'guide-' + Date.now();
+            await setDoc(docRef('guides', id), { id, title, bodyText, order: 999, updatedAt: ts, updatedBy });
+          } else {
+            await updateDoc(docRef('guides', guide.id), { title, bodyText, updatedAt: ts, updatedBy });
+          }
+          onClose();
+        } catch (e) {
+          showAlert('保存に失敗しました。\n' + (e && e.message ? e.message : ''));
+        } finally {
+          setSaving(false);
+        }
+      };
+
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white max-w-lg w-full p-6 shadow-xl border border-gray-200 max-h-[85vh] overflow-y-auto">
+            <h3 className="font-serif tracking-wide text-sm text-gray-800 mb-4">{isNew ? '手順ページを追加' : '手順ページを編集'}</h3>
+            <FormField label="タイトル"><input className={inputCls} value={title} onChange={e => setTitle(e.target.value)} /></FormField>
+            <FormField label="本文"><textarea rows={10} className={inputCls} value={bodyText} onChange={e => setBodyText(e.target.value)} /></FormField>
+            <div className="flex justify-end gap-2 mt-4">
+              <button onClick={onClose} className="px-4 py-2 text-xs tracking-widest border border-gray-300 text-gray-600 hover:bg-gray-100">キャンセル</button>
+              <button onClick={save} disabled={saving} className="px-4 py-2 text-xs tracking-widest bg-gray-800 text-white hover:bg-gray-900 disabled:opacity-50">{saving ? '保存中...' : '保存'}</button>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    const GuidesSettingsPanel = ({ showAlert, showConfirm, user }) => {
+      const [guides, setGuides] = useState([]);
+      const [editing, setEditing] = useState(undefined);
+
+      useEffect(() => {
+        const unsub = onSnapshot(col('guides'), (snap) => setGuides(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.order ?? 0) - (b.order ?? 0))));
+        return () => unsub();
+      }, []);
+
+      const remove = async (guide) => { await deleteDoc(docRef('guides', guide.id)); };
+
+      return (
+        <div>
+          <div className="flex justify-end px-4 mb-2">
+            <button onClick={() => setEditing(null)} className="flex items-center gap-1 text-[11px] tracking-widest bg-gray-800 text-white hover:bg-gray-900 px-3 py-1.5">
+              <PlusIcon className="w-3.5 h-3.5" />手順ページを追加
+            </button>
+          </div>
+          <div className="bg-white border border-gray-200 mx-4 divide-y divide-gray-100">
+            {guides.map(g => (
+              <div key={g.id} className="flex items-center justify-between px-4 py-3">
+                <span className="text-sm text-gray-800">{g.title}</span>
+                <div className="flex items-center gap-2">
+                  <button onClick={() => setEditing(g)} className="text-gray-400 hover:text-gray-700"><EditIcon className="w-4 h-4" /></button>
+                  <button onClick={() => showConfirm(`「${g.title}」を削除しますか？`, () => remove(g), '削除する')} className="text-gray-400 hover:text-rose-500"><TrashIcon className="w-4 h-4" /></button>
+                </div>
+              </div>
+            ))}
+            {guides.length === 0 && <p className="px-4 py-6 text-center text-xs text-gray-400">手順ページはまだありません</p>}
+          </div>
+          {editing !== undefined && <GuideEditModal guide={editing} onClose={() => setEditing(undefined)} showAlert={showAlert} user={user} />}
+        </div>
+      );
+    };
+
+    const GeneralSettingsPanel = ({ config, showAlert }) => {
+      const [staleCheckDays, setStaleCheckDays] = useState(config.staleCheckDays ?? 14);
+      const [saving, setSaving] = useState(false);
+
+      const save = async () => {
+        setSaving(true);
+        try {
+          await updateDoc(docRef('system_config', 'default'), { staleCheckDays: Number(staleCheckDays) });
+          showAlert('保存しました。');
+        } catch (e) {
+          showAlert('保存に失敗しました。\n' + (e && e.message ? e.message : ''));
+        } finally {
+          setSaving(false);
+        }
+      };
+
+      return (
+        <div className="bg-white border border-gray-200 mx-4 p-4">
+          <FormField label="未確認とみなす日数（この日数を超えるとダッシュボード等で警告表示）">
+            <input type="number" className={inputCls} value={staleCheckDays} onChange={e => setStaleCheckDays(e.target.value)} />
+          </FormField>
+          <div className="mt-4 border-t border-gray-100 pt-3">
+            <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-1">Phase2予定項目（現時点では未使用）</p>
+            <p className="text-xs text-gray-400">Chatwork自動送信・カレンダー連携によるAI自動化は今後追加予定です。</p>
+          </div>
+          <button onClick={save} disabled={saving} className="mt-4 bg-gray-800 text-white hover:bg-gray-900 transition-colors px-4 py-2 text-xs tracking-widest disabled:opacity-50">{saving ? '保存中...' : '保存'}</button>
+        </div>
+      );
+    };
+
+    const SettingsView = ({ locations, items, config, user, showAlert, showConfirm }) => {
+      const [tab, setTab] = useState('locations');
+      const tabs = [
+        { key: 'locations', label: '拠点' },
+        { key: 'items', label: '備品テンプレート' },
+        { key: 'guides', label: '手順ページ' },
+        { key: 'general', label: '全般' },
+      ];
+      return (
+        <div className="max-w-2xl mx-auto">
+          <div className="flex gap-1 px-4 mb-3 overflow-x-auto">
+            {tabs.map(t => (
+              <button key={t.key} onClick={() => setTab(t.key)} className={`text-[11px] tracking-widest px-3 py-1.5 whitespace-nowrap ${tab === t.key ? 'bg-gray-800 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>{t.label}</button>
+            ))}
+          </div>
+          {tab === 'locations' && <LocationsSettingsPanel locations={locations} showAlert={showAlert} showConfirm={showConfirm} />}
+          {tab === 'items' && <EquipmentSettingsPanel items={items} showAlert={showAlert} showConfirm={showConfirm} />}
+          {tab === 'guides' && <GuidesSettingsPanel showAlert={showAlert} showConfirm={showConfirm} user={user} />}
+          {tab === 'general' && <GeneralSettingsPanel config={config} showAlert={showAlert} />}
+        </div>
+      );
+    };
+
+    // ============================================================
+    // ヘッダー / ナビゲーション
+    // ============================================================
+    const NAV_ITEMS = [
+      { key: 'stock', label: '在庫確認', icon: BoxIcon, adminOnly: false },
+      { key: 'delivery', label: '配置報告', icon: TruckIcon, adminOnly: false },
+      { key: 'guides', label: '手順', icon: BookOpenIcon, adminOnly: false },
+      { key: 'dashboard', label: 'ダッシュボード', icon: ListIcon, adminOnly: true },
+      { key: 'orders', label: '発注管理', icon: BellIcon, adminOnly: true },
+      { key: 'settings', label: '設定', icon: SettingsIcon, adminOnly: true },
+    ];
+
+    const Header = ({ view, setView, isAdmin, onLogout, userName }) => {
+      const items = NAV_ITEMS.filter(i => !i.adminOnly || isAdmin);
+      return (
+        <header className="bg-white border-b border-gray-200 sticky top-0 z-20">
+          <div className="max-w-4xl mx-auto px-4 py-3 flex items-center justify-between">
+            <div className="font-serif tracking-[0.1em] text-sm text-gray-800">モデルハウス備品管理</div>
+            <div className="flex items-center gap-3">
+              <span className="text-[10px] text-gray-400 hidden sm:inline">{userName}</span>
+              <button onClick={onLogout} className="text-gray-400 hover:text-gray-700"><LogOutIcon className="w-4 h-4" /></button>
+            </div>
+          </div>
+          <nav className="max-w-4xl mx-auto px-4 flex gap-1 overflow-x-auto pb-2 -mt-1">
+            {items.map(item => {
+              const Icon = item.icon;
+              const active = view === item.key;
+              return (
+                <button
+                  key={item.key}
+                  onClick={() => setView(item.key)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 text-[11px] tracking-widest whitespace-nowrap transition-colors ${active ? 'bg-gray-800 text-white' : 'text-gray-500 hover:bg-gray-100'}`}
+                >
+                  <Icon className="w-3.5 h-3.5" />{item.label}
+                </button>
+              );
+            })}
+          </nav>
+        </header>
+      );
+    };
+
+    // ============================================================
+    // プレースホルダービュー（後続で実装）
+    // ============================================================
+    const PlaceholderView = ({ title }) => (
+      <div className="max-w-xl mx-auto p-8 text-center text-gray-400 text-xs">
+        <p className="mb-2">{title}</p>
+        <p>この画面は実装中です。</p>
+      </div>
+    );
+
+    // ============================================================
+    // ダッシュボード（管理者向け）
+    // ============================================================
+    const SectionLabel = ({ children }) => (
+      <div className="text-[10px] text-gray-400 tracking-widest uppercase px-4 mb-2">{children}</div>
+    );
+
+    const DashboardView = ({ locations, items, stockLevels, staleCheckDays }) => {
+      const itemById = useMemo(() => Object.fromEntries(items.map(i => [i.id, i])), [items]);
+      const sortedLocations = [...locations].filter(l => l.isActive).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+      const belowReorderList = useMemo(() => {
+        return Object.values(stockLevels)
+          .filter(s => s.belowReorderPoint)
+          .map(s => ({ ...s, item: itemById[s.itemId], location: locations.find(l => l.id === s.locationId) }))
+          .filter(s => s.item && s.location);
+      }, [stockLevels, itemById, locations]);
+
+      return (
+        <div className="max-w-2xl mx-auto space-y-6">
+          <section>
+            <SectionLabel>拠点の確認状況</SectionLabel>
+            <div className="bg-white border border-gray-200 mx-4 divide-y divide-gray-100">
+              {sortedLocations.map(loc => {
+                const stale = daysSince(loc.lastCheckedAt) >= staleCheckDays;
+                return (
+                  <div key={loc.id} className="flex items-center justify-between px-4 py-3">
+                    <span className="text-sm text-gray-800">{loc.name}</span>
+                    <span className={`text-[11px] tracking-wide ${stale ? 'text-rose-500' : 'text-gray-400'}`}>
+                      {formatRelativeDate(loc.lastCheckedAt)}{loc.lastCheckedBy ? `（${loc.lastCheckedBy.name}）` : ''}{stale ? ' ・要確認' : ''}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+
+          <section>
+            <SectionLabel>必要在庫数を下回っている品目（{belowReorderList.length}件）</SectionLabel>
+            <div className="bg-white border border-gray-200 mx-4 divide-y divide-gray-100">
+              {belowReorderList.length === 0 && <p className="px-4 py-6 text-center text-xs text-gray-400">現在、必要在庫数を下回っている品目はありません</p>}
+              {belowReorderList.map(s => (
+                <div key={s.locationId + '_' + s.itemId} className="flex items-center justify-between px-4 py-3">
+                  <div>
+                    <div className="text-sm text-rose-600 font-medium">{s.item.name}</div>
+                    <div className="text-[10px] text-gray-400">{s.location.name}</div>
+                  </div>
+                  <span className="text-xs text-rose-500">残 {s.currentCount}{s.item.unit}（必要在庫数 {s.item.reorderPoint}{s.item.unit}以上）</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
+      );
+    };
+
+    // ============================================================
+    // 発注管理（管理者向け）
+    // ============================================================
+    function buildOrderRequestText(location, role, lines) {
+      const itemLines = lines.map(l => `・${l.itemName}：残り${l.currentCount}${l.unit}（目安${l.item.reorderPoint ?? '—'}${l.unit}）`).join('\n');
+      if (role === '業務管理') {
+        return `お世話になっております。${location.name}の下記備品が少なくなってきましたので、発注をお願いいたします。\n\n${itemLines}\n\n到着予定日が分かりましたら、このメッセージへの返信で教えていただけますと助かります（普段のお返事の書き方のままで大丈夫です）。\nよろしくお願いいたします。`;
+      }
+      if (role === '集客・マーケ') {
+        return `お疲れ様です。${location.name}の下記備品、在庫が少なくなってきましたのでご用意をお願いできますでしょうか。\n\n${itemLines}\n\nご用意いただけそうな時期が分かりましたらお知らせください。よろしくお願いいたします。`;
+      }
+      return `${location.name}の下記備品はADV本人手配のため、必要に応じてご準備をお願いします。\n\n${itemLines}`;
+    }
+
+    const OrderDraftModal = ({ group, onClose, onConfirmed, showAlert, user }) => {
+      const [text, setText] = useState(buildOrderRequestText(group.location, group.role, group.lines));
+      const [saving, setSaving] = useState(false);
+      const textareaRef = useRef(null);
+
+      const copyText = async () => {
+        try {
+          await navigator.clipboard.writeText(text);
+          showAlert('依頼文をコピーしました。Chatworkに貼り付けて送信してください。');
+        } catch (e) {
+          textareaRef.current && textareaRef.current.select();
+        }
+      };
+
+      const markRequested = async () => {
+        setSaving(true);
+        try {
+          const ts = nowIso();
+          await addDoc(col('orders'), {
+            locationId: group.location.id, locationName: group.location.name, orderRole: group.role,
+            items: group.lines.map(l => ({ itemId: l.itemId, itemName: l.itemName, unit: l.unit, countAtRequest: l.currentCount, reorderPoint: l.item.reorderPoint, reorderLot: l.item.reorderLot })),
+            status: '依頼送信済み', requestDraftText: text,
+            requestedAt: ts, requestedBy: { uid: user.uid, name: user.displayName || user.email },
+            deliveryScheduledDate: null, deliveredAt: null, deliveredBy: null, updatedAt: ts,
+            chatworkRoomId: null, chatworkMessageId: null, autoSendStatus: null, deliveryAssignment: null, needsReview: false,
+          });
+          onConfirmed();
+        } catch (e) {
+          showAlert('記録に失敗しました。\n' + (e && e.message ? e.message : ''));
+        } finally {
+          setSaving(false);
+        }
+      };
+
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white max-w-lg w-full p-6 shadow-xl border border-gray-200 max-h-[85vh] overflow-y-auto">
+            <h3 className="font-serif tracking-wide text-sm text-gray-800 mb-1">{group.location.name}｜{group.role}</h3>
+            <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-4">発注依頼文（内容確認のうえChatworkへコピー）</p>
+            <textarea
+              ref={textareaRef}
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              rows={10}
+              className="w-full border border-gray-300 p-3 text-sm leading-relaxed focus:outline-none focus:border-gray-500"
+            />
+            <div className="flex flex-wrap justify-end gap-2 mt-4">
+              <button onClick={onClose} className="px-4 py-2 text-xs tracking-widest border border-gray-300 text-gray-600 hover:bg-gray-100">閉じる</button>
+              <button onClick={copyText} className="px-4 py-2 text-xs tracking-widest border border-gray-300 text-gray-600 hover:bg-gray-100">文面をコピー</button>
+              <button onClick={markRequested} disabled={saving} className="px-4 py-2 text-xs tracking-widest bg-gray-800 text-white hover:bg-gray-900 disabled:opacity-50">
+                {saving ? '記録中...' : '送信済みとして記録する'}
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    const ORDER_STATUS_LABELS = ['未発注', '依頼送信済み', '配達待ち', '配達済み'];
+
+    const OrderStatusUpdateRow = ({ order, showAlert }) => {
+      const [scheduledDate, setScheduledDate] = useState(order.deliveryScheduledDate || '');
+
+      const advance = async (nextStatus) => {
+        const ts = nowIso();
+        const patch = { status: nextStatus, updatedAt: ts };
+        if (nextStatus === '配達待ち') patch.deliveryScheduledDate = scheduledDate || null;
+        if (nextStatus === '配達済み') patch.deliveredAt = ts;
+        try {
+          await updateDoc(docRef('orders', order.id), patch);
+        } catch (e) {
+          showAlert('更新に失敗しました。\n' + (e && e.message ? e.message : ''));
+        }
+      };
+
+      return (
+        <div className="px-4 py-3 border-b border-gray-100 last:border-b-0">
+          <div className="flex items-center justify-between">
+            <div>
+              <div className="text-sm text-gray-800">{order.locationName}｜{order.orderRole}</div>
+              <div className="text-[10px] text-gray-400 mt-0.5">{order.items.map(i => i.itemName).join('、')}</div>
+            </div>
+            <span className="text-[10px] tracking-widest uppercase bg-gray-800 text-white px-2 py-0.5">{order.status}</span>
+          </div>
+          <div className="flex items-center gap-2 mt-2">
+            {order.status === '依頼送信済み' && (
+              <>
+                <input
+                  type="date" value={scheduledDate} onChange={(e) => setScheduledDate(e.target.value)}
+                  className="border border-gray-300 text-xs px-2 py-1"
+                />
+                <button onClick={() => advance('配達待ち')} className="text-[11px] tracking-widest border border-gray-300 text-gray-600 hover:bg-gray-100 px-3 py-1">到着予定日を登録</button>
+              </>
+            )}
+            {order.status === '配達待ち' && (
+              <button onClick={() => advance('配達済み')} className="text-[11px] tracking-widest border border-gray-300 text-gray-600 hover:bg-gray-100 px-3 py-1">配達済みにする</button>
+            )}
+          </div>
+        </div>
+      );
+    };
+
+    const OrderManagementView = ({ locations, items, stockLevels, user, showAlert }) => {
+      const [orders, setOrders] = useState([]);
+      const [modalGroup, setModalGroup] = useState(null);
+
+      useEffect(() => {
+        const unsub = onSnapshot(col('orders'), (snap) => {
+          setOrders(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.requestedAt || '').localeCompare(a.requestedAt || '')));
+        });
+        return () => unsub();
+      }, []);
+
+      const itemById = useMemo(() => Object.fromEntries(items.map(i => [i.id, i])), [items]);
+      const locationById = useMemo(() => Object.fromEntries(locations.map(l => [l.id, l])), [locations]);
+
+      // 未発注（発注点割れかつ、進行中の発注に含まれていない品目）を拠点×発注担当区分でグルーピング
+      const openOrderItemKeys = useMemo(() => {
+        const set = new Set();
+        orders.filter(o => o.status !== '配達済み').forEach(o => o.items.forEach(i => set.add(o.locationId + '_' + i.itemId)));
+        return set;
+      }, [orders]);
+
+      const pendingGroups = useMemo(() => {
+        const groups = {};
+        Object.values(stockLevels).forEach(s => {
+          if (!s.belowReorderPoint) return;
+          const item = itemById[s.itemId];
+          const location = locationById[s.locationId];
+          if (!item || !location || item.orderRole === 'ADV本人手配') return;
+          if (openOrderItemKeys.has(s.locationId + '_' + s.itemId)) return;
+          const key = s.locationId + '|' + item.orderRole;
+          groups[key] = groups[key] || { location, role: item.orderRole, lines: [] };
+          groups[key].lines.push({ ...s, item, itemName: item.name, unit: item.unit });
+        });
+        return Object.values(groups);
+      }, [stockLevels, itemById, locationById, openOrderItemKeys]);
+
+      const openOrders = orders.filter(o => o.status !== '配達済み');
+      const closedOrders = orders.filter(o => o.status === '配達済み').slice(0, 10);
+
+      return (
+        <div className="max-w-2xl mx-auto space-y-6">
+          <section>
+            <SectionLabel>発注が必要な状態（{pendingGroups.length}件）</SectionLabel>
+            <div className="bg-white border border-gray-200 mx-4 divide-y divide-gray-100">
+              {pendingGroups.length === 0 && <p className="px-4 py-6 text-center text-xs text-gray-400">現在、新規に発注が必要な品目はありません</p>}
+              {pendingGroups.map((g, idx) => (
+                <div key={idx} className="flex items-center justify-between px-4 py-3">
+                  <div>
+                    <div className="text-sm text-gray-800">{g.location.name}｜{g.role}</div>
+                    <div className="text-[10px] text-gray-400 mt-0.5">{g.lines.map(l => l.itemName).join('、')}</div>
+                  </div>
+                  <button onClick={() => setModalGroup(g)} className="text-[11px] tracking-widest bg-gray-800 text-white hover:bg-gray-900 px-3 py-1.5 shrink-0">依頼文を作成</button>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section>
+            <SectionLabel>進行中の発注（{openOrders.length}件）</SectionLabel>
+            <div className="bg-white border border-gray-200 mx-4 divide-y divide-gray-100">
+              {openOrders.length === 0 && <p className="px-4 py-6 text-center text-xs text-gray-400">進行中の発注はありません</p>}
+              {openOrders.map(o => <OrderStatusUpdateRow key={o.id} order={o} showAlert={showAlert} />)}
+            </div>
+          </section>
+
+          <section>
+            <SectionLabel>最近の配達済み</SectionLabel>
+            <div className="bg-white border border-gray-200 mx-4 divide-y divide-gray-100">
+              {closedOrders.length === 0 && <p className="px-4 py-6 text-center text-xs text-gray-400">履歴はまだありません</p>}
+              {closedOrders.map(o => (
+                <div key={o.id} className="px-4 py-3 flex items-center justify-between">
+                  <span className="text-sm text-gray-600">{o.locationName}｜{o.orderRole}</span>
+                  <span className="text-[10px] text-gray-400">{o.deliveredAt ? o.deliveredAt.slice(0, 10) : ''}</span>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          {modalGroup && (
+            <OrderDraftModal
+              group={modalGroup} user={user} showAlert={showAlert}
+              onClose={() => setModalGroup(null)}
+              onConfirmed={() => { setModalGroup(null); showAlert('発注依頼を記録しました。'); }}
+            />
+          )}
+        </div>
+      );
+    };
+
+    // ============================================================
+    // App本体
+    // ============================================================
+    function App() {
+      const [user, setUser] = useState(undefined); // undefined=判定中, null=未ログイン
+      const [seeding, setSeeding] = useState(false);
+      const [view, setView] = useState('stock');
+      const [dialog, setDialog] = useState(null);
+
+      const [locations, setLocations] = useState([]);
+      const [items, setItems] = useState([]);
+      const [stockLevels, setStockLevels] = useState({});
+      const [config, setConfig] = useState({ staleCheckDays: 14 });
+
+      const showAlert = (message) => setDialog({ type: 'alert', message, confirmLabel: 'OK' });
+      const showConfirm = (message, onConfirm, confirmLabel) => setDialog({ type: 'confirm', message, onConfirm, confirmLabel });
+
+      useEffect(() => {
+        const unsub = onAuthStateChanged(auth, (u) => setUser(u));
+        return () => unsub();
+      }, []);
+
+      useEffect(() => {
+        if (!user) return;
+        ensureSeedData(setSeeding);
+
+        const unsubs = [
+          onSnapshot(col('locations'), (snap) => setLocations(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
+          onSnapshot(col('equipmentItems'), (snap) => setItems(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
+          onSnapshot(col('stockLevels'), (snap) => {
+            const map = {};
+            snap.docs.forEach(d => { map[d.id] = d.data(); });
+            setStockLevels(map);
+          }),
+          onSnapshot(docRef('system_config', 'default'), (snap) => { if (snap.exists()) setConfig(snap.data()); }),
+        ];
+        return () => unsubs.forEach(u => u());
+      }, [user]);
+
+      if (user === undefined) {
+        return <div className="min-h-screen flex items-center justify-center text-gray-300 text-xs">読み込み中...</div>;
+      }
+      if (!user) {
+        return <LoginView />;
+      }
+
+      const isAdmin = ADMIN_EMAILS.includes((user.email || '').toLowerCase());
+      const commonProps = { locations, items, stockLevels, config, staleCheckDays: config.staleCheckDays ?? 14, user, isAdmin, showAlert, showConfirm };
+
+      const renderView = () => {
+        switch (view) {
+          case 'stock': return <StockCheckView {...commonProps} />;
+          case 'delivery': return <DeliveryReportView {...commonProps} />;
+          case 'guides': return <GuidesView />;
+          case 'dashboard': return isAdmin ? <DashboardView {...commonProps} /> : null;
+          case 'orders': return isAdmin ? <OrderManagementView {...commonProps} /> : null;
+          case 'settings': return isAdmin ? <SettingsView {...commonProps} /> : null;
+          default: return null;
+        }
+      };
+
+      return (
+        <div className="min-h-screen bg-[#f9f9f9]">
+          <Header view={view} setView={setView} isAdmin={isAdmin} onLogout={() => signOut(auth)} userName={user.displayName || user.email} />
+          {seeding && <div className="text-center text-[10px] text-gray-400 py-2">初期データを準備しています...</div>}
+          <main className="py-4">{renderView()}</main>
+          <CustomDialog dialog={dialog} onClose={() => setDialog(null)} />
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+  </script>
+</body>
+</html>
