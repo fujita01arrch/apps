@@ -1655,7 +1655,8 @@
         case 'checkChatworkReplies': {
           if (result.openOrders === 0) return result.message || '到着日の返答待ちの発注がありませんでした。';
           if (result.messagesChecked === 0) return result.message || '新着メッセージはありませんでした（まだ返信が来ていない可能性があります）。';
-          return `新着メッセージ${result.messagesChecked}件を確認し、${result.matched}件を「配達待ち」に反映しました（要確認：${result.needsReview}件／対象外：${result.other}件）。`;
+          const byReply = result.matchedByReply ? `うちRe返信で判定：${result.matchedByReply}件／` : '';
+          return `新着メッセージ${result.messagesChecked}件を確認し、${result.matched}件を「配達待ち」に反映しました（${byReply}要確認：${result.needsReview}件／対象外：${result.other}件）。`;
         }
         case 'assignDeliveries': {
           if (result.candidateOrders === 0) return result.message || '到着日確定済みで担当者未設定の発注はありませんでした。';
@@ -2035,11 +2036,15 @@
 
       // 対象拠点ごとに発注ステータスは個別管理する（到着日・配達担当は拠点ごとに異なるため）。
       // 依頼文（1通にまとめたもの）は各拠点のordersドキュメントに同じ内容を記録しておく。
+      // 作成した発注ドキュメントのIDを返す（GAS送信後に、実際のChatworkメッセージIDを
+      // 書き戻してもらうために使う。Chatworkで「返信」された時にどの発注宛かを機械的に
+      // 判定できるようにするため）。
       const recordOrders = async (chatworkRoomId) => {
         const ts = nowIso();
         const batch = writeBatch(db);
-        group.locationGroups.forEach(g => {
-          batch.set(doc(col('orders')), {
+        const refs = group.locationGroups.map(() => doc(col('orders')));
+        group.locationGroups.forEach((g, idx) => {
+          batch.set(refs[idx], {
             locationId: g.location.id, locationName: g.location.name, orderRole: group.role,
             items: g.lines.map(l => ({
               itemId: l.itemId, itemName: l.itemName, requestedLots: l.requestedLots ?? 1,
@@ -2053,6 +2058,7 @@
           });
         });
         await batch.commit();
+        return refs.map(r => r.id);
       };
 
       const markRequested = async () => {
@@ -2090,6 +2096,7 @@
           return;
         }
         setAutoSending(true);
+        let createdOrderIds = [];
         try {
           const alreadyCovered = await findAlreadyCoveredItemNames();
           if (alreadyCovered.length > 0) {
@@ -2097,16 +2104,28 @@
             onClose();
             return;
           }
+          // 先に発注ドキュメントを作ってIDを確定させ、GASにそのIDを渡す。GAS側で実際に
+          // Chatworkへ送信できた時点で、それぞれの発注にchatworkMessageIdが書き戻される
+          // （後日Chatworkで「返信」された時に、どの発注宛かを機械的に判定できるようにするため）。
+          createdOrderIds = await recordOrders(roomIdForRole);
           const res = await fetch(config.gasWebAppUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify({ action: 'sendOrderRequest', token: config.gasSharedToken, roomId: roomIdForRole, body: text }),
+            body: JSON.stringify({ action: 'sendOrderRequest', token: config.gasSharedToken, roomId: roomIdForRole, body: text, orderIds: createdOrderIds }),
           });
           const json = await res.json();
           if (!json.ok) throw new Error(json.error || '不明なエラー');
-          await recordOrders(roomIdForRole);
           onConfirmed();
         } catch (e) {
+          // Chatworkへの送信に失敗した場合、既に作成した発注記録だけが残ると実態と食い違うため
+          // 巻き戻す（ベストエフォート。巻き戻し自体が失敗しても元のエラーは表示する）。
+          if (createdOrderIds.length > 0) {
+            try {
+              const rollback = writeBatch(db);
+              createdOrderIds.forEach(id => rollback.delete(docRef('orders', id)));
+              await rollback.commit();
+            } catch (_) { /* ベストエフォートのため無視 */ }
+          }
           showAlert('送信に失敗しました。\n' + (e && e.message ? e.message : ''));
         } finally {
           setAutoSending(false);
