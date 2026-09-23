@@ -363,7 +363,7 @@
         }
         await setDoc(docRef('system_config', 'default'), {
           staleCheckDays: 14,
-          chatworkRoomIds: { operations: '', marketing: '' },
+          chatworkRoomIds: { operations: '', marketing: '', advShortageReport: '' },
           autoSendEnabled: false,
           seedVersion: SEED_VERSION,
         }, { merge: true });
@@ -2052,7 +2052,7 @@
           batch.set(refs[idx], {
             locationId: g.location.id, locationName: g.location.name, orderRole: group.role,
             items: g.lines.map(l => ({
-              itemId: l.itemId, itemName: l.itemName, requestedLots: l.requestedLots ?? 1,
+              itemId: l.itemId, itemName: l.itemName, requestedLots: l.requestedLots || 1,
               stockUnit: l.item.stockUnit, orderUnit: l.item.orderUnit, orderUnitLabel: l.item.orderUnitLabel || '',
               reorderPoint: l.item.reorderPoint, fullStockQty: l.item.fullStockQty,
             })),
