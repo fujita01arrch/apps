@@ -22,7 +22,8 @@
     } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
     import {
       initializeFirestore, persistentLocalCache, persistentSingleTabManager,
-      collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot, getDoc, getDocs, addDoc, query
+      collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot, getDoc, getDocs, addDoc,
+      query, orderBy, limit, writeBatch
     } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
 
     const { useState, useEffect, useMemo, useRef } = React;
@@ -220,6 +221,13 @@
     // ============================================================
     // ユーティリティ
     // ============================================================
+    // 拠点タイプごとに、その拠点で扱う備品カテゴリを絞り込む。
+    // 鴨江事務所（予備在庫）は「鴨江個人用」品目のみ、それ以外の拠点（モデルハウス・完成見学会）は
+    // 「鴨江個人用」以外の品目のみを対象にする（無関係な品目が入り混じって表示されるのを防ぐ）。
+    function isItemApplicableToLocation(item, location) {
+      const isPersonalOnly = item.category === '鴨江個人用';
+      return location.type === 'office_reserve' ? isPersonalOnly : !isPersonalOnly;
+    }
     function daysSince(isoString) {
       if (!isoString) return Infinity;
       const diffMs = Date.now() - new Date(isoString).getTime();
@@ -406,7 +414,9 @@
 
     const StockCheckForm = ({ location, items, stockLevels, orders, user, onBack, onSubmitted, showAlert, showConfirm }) => {
       const isWithdrawal = location.type === 'office_reserve';
-      const relevantItems = items.filter(i => i.isActive).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+      const relevantItems = items
+        .filter(i => i.isActive && isItemApplicableToLocation(i, location))
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
       // 拠点×品目ごとに、進行中（配達済みでない）の発注があるかを引けるようにしておく。
       // 「発注が必要」とタップして送信した後、他の人がこの画面を開いても
@@ -480,7 +490,7 @@
           const mode = isWithdrawal ? 'withdrawal' : 'checkin';
 
           const lines = relevantItems
-            .filter(item => isWithdrawal || !orderByItemId[item.id]) // 発注処理中の品目は在庫確認の対象から除外（二重記録防止）
+            .filter(item => !orderByItemId[item.id]) // 発注処理中の品目は在庫確認の対象から除外（二重記録防止。持ち出しモードも対象）
             .map(item => {
             const level = stockLevels[stockDocId(location.id, item.id)];
             const previousCount = level ? level.currentCount : (item.fullStockQty ?? null);
@@ -507,24 +517,26 @@
             return { itemId: item.id, itemName: item.name, unit: item.unit, previousCount, newCount, delta: (previousCount != null ? newCount - previousCount : null), belowReorderPoint: true, requestedLots };
           });
 
-          await addDoc(col('stockCheckSessions'), {
+          // 複数ドキュメントへの書き込みを1つのバッチにまとめ、途中で通信が切れても
+          // 「一部だけ反映された中途半端な状態」にならないようにする（全部成功 or 全部失敗）。
+          const batch = writeBatch(db);
+          batch.set(doc(col('stockCheckSessions')), {
             locationId: location.id, locationName: location.name, mode,
             allUnchanged: !!allUnchanged, submittedBy, submittedAt: ts,
             linkedOrderId: null, lines, memo: '',
           });
-
           for (const line of lines) {
-            await setDoc(docRef('stockLevels', stockDocId(location.id, line.itemId)), {
+            batch.set(docRef('stockLevels', stockDocId(location.id, line.itemId)), {
               locationId: location.id, itemId: line.itemId,
               currentCount: line.newCount, belowReorderPoint: line.belowReorderPoint,
               requestedLots: line.requestedLots ?? 0,
               lastCheckedAt: ts, lastCheckedBy: submittedBy, lastCheckMode: mode,
             }, { merge: true });
           }
-
-          await updateDoc(docRef('locations', location.id), {
+          batch.update(docRef('locations', location.id), {
             lastCheckedAt: ts, lastCheckedBy: submittedBy, updatedAt: ts,
           });
+          await batch.commit();
 
           onSubmitted();
         } catch (e) {
@@ -562,19 +574,9 @@
 
           <div className="bg-white border border-gray-200 mx-4 mt-2">
             {relevantItems.map(item => {
-              if (isWithdrawal) {
-                const level = stockLevels[stockDocId(location.id, item.id)];
-                const prevCount = level ? level.currentCount : (item.fullStockQty ?? null);
-                return (
-                  <div key={item.id} className="flex items-center justify-between py-3 px-3 border-b border-gray-100 last:border-b-0">
-                    <div className="flex-1 min-w-0 pr-3">
-                      <div className="text-sm text-gray-800">{item.name}</div>
-                      <div className="text-[10px] text-gray-400 tracking-wide mt-0.5">事務所在庫: {prevCount ?? '未確認'}{item.unit}</div>
-                    </div>
-                    <Stepper value={withdrawValues[item.id]} onChange={(v) => setWithdrawValue(item.id, v)} unit={item.unit} />
-                  </div>
-                );
-              }
+              // 進行中の発注がある品目は、持ち出しモードかどうかに関わらずステータス表示を優先する
+              // （持ち出しモード側だけこのチェックを飛ばしていたため、発注中の品目でも数量入力できてしまう
+              // 不整合があった。常にここで先に判定する）。
               const inProgress = orderByItemId[item.id];
               if (inProgress) {
                 const { order, line } = inProgress;
@@ -591,6 +593,19 @@
                     <span className={`text-[11px] tracking-widest px-3 py-1.5 shrink-0 ${STATUS_BADGE_CLS[order.status] || 'bg-gray-100 text-gray-500'}`}>
                       {order.status === '依頼送信済み' ? '発注済み・返答待ち' : order.status}
                     </span>
+                  </div>
+                );
+              }
+              if (isWithdrawal) {
+                const level = stockLevels[stockDocId(location.id, item.id)];
+                const prevCount = level ? level.currentCount : (item.fullStockQty ?? null);
+                return (
+                  <div key={item.id} className="flex items-center justify-between py-3 px-3 border-b border-gray-100 last:border-b-0">
+                    <div className="flex-1 min-w-0 pr-3">
+                      <div className="text-sm text-gray-800">{item.name}</div>
+                      <div className="text-[10px] text-gray-400 tracking-wide mt-0.5">事務所在庫: {prevCount ?? '未確認'}{item.unit}</div>
+                    </div>
+                    <Stepper value={withdrawValues[item.id]} onChange={(v) => setWithdrawValue(item.id, v)} unit={item.unit} />
                   </div>
                 );
               }
@@ -712,27 +727,31 @@
             patch.missedBy = actor;
             patch.missedItemIds = missedItemIds;
           }
-          await updateDoc(docRef('orders', order.id), patch);
 
+          // 発注ステータス更新・在庫確認ログ・在庫現在値・拠点の最終確認日時を1つのバッチにまとめ、
+          // 途中で失敗して一部だけ反映される不整合を防ぐ。
+          const batch = writeBatch(db);
+          batch.update(docRef('orders', order.id), patch);
           if (deliveredItems.length > 0) {
             const lines = deliveredItems.map(i => ({
               itemId: i.itemId, itemName: i.itemName, unit: i.unit,
               previousCount: null, newCount: i.reorderLot ?? i.reorderPoint ?? null, delta: null, belowReorderPoint: false,
             }));
-            await addDoc(col('stockCheckSessions'), {
+            batch.set(doc(col('stockCheckSessions')), {
               locationId: order.locationId, locationName: order.locationName, mode: 'restock',
               allUnchanged: false, submittedBy: actor, submittedAt: ts,
               linkedOrderId: order.id, lines, memo: allDelivered ? '発注品の配置完了報告' : '発注品の一部配置完了報告',
             });
             for (const line of lines) {
-              await setDoc(docRef('stockLevels', stockDocId(order.locationId, line.itemId)), {
+              batch.set(docRef('stockLevels', stockDocId(order.locationId, line.itemId)), {
                 locationId: order.locationId, itemId: line.itemId,
                 currentCount: line.newCount, belowReorderPoint: false,
                 lastCheckedAt: ts, lastCheckedBy: actor, lastCheckMode: 'restock',
               }, { merge: true });
             }
           }
-          await updateDoc(docRef('locations', order.locationId), { lastCheckedAt: ts, lastCheckedBy: actor, updatedAt: ts });
+          batch.update(docRef('locations', order.locationId), { lastCheckedAt: ts, lastCheckedBy: actor, updatedAt: ts });
+          await batch.commit();
 
           showAlert(allDelivered ? '配置完了を記録しました。ありがとうございます。' : '未配置の品目を記録しました。次にこの拠点へ行く方への連絡は、現状は藤田さん・染矢さんへ別途ご連絡ください（自動通知はPhase2で対応予定です）。');
         } catch (e) {
@@ -1266,8 +1285,18 @@
         return Object.values(stockLevels)
           .filter(s => s.belowReorderPoint)
           .map(s => ({ ...s, item: itemById[s.itemId], location: locations.find(l => l.id === s.locationId) }))
-          .filter(s => s.item && s.location);
+          // 無効化された拠点・備品の古い警告が消えずに残り続けないようにする
+          .filter(s => s.item && s.item.isActive && s.location && s.location.isActive);
       }, [stockLevels, itemById, locations]);
+
+      const [recentSessions, setRecentSessions] = useState([]);
+      useEffect(() => {
+        const q = query(col('stockCheckSessions'), orderBy('submittedAt', 'desc'), limit(20));
+        const unsub = onSnapshot(q, (snap) => setRecentSessions(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
+        return () => unsub();
+      }, []);
+
+      const SESSION_MODE_LABEL = { checkin: '在庫確認', withdrawal: '予備持ち出し', adjustment: '棚卸修正', restock: '配置完了' };
 
       return (
         <div className="max-w-2xl mx-auto space-y-6">
@@ -1299,6 +1328,25 @@
                     <div className="text-[10px] text-gray-400">{s.location.name}</div>
                   </div>
                   <span className="text-xs text-rose-500">残 {s.currentCount}{s.item.unit}（必要在庫数 {s.item.reorderPoint}{s.item.unit}以上）</span>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section>
+            <SectionLabel>最近の確認・配置履歴（直近{recentSessions.length}件）</SectionLabel>
+            <div className="bg-white border border-gray-200 mx-4 divide-y divide-gray-100">
+              {recentSessions.length === 0 && <p className="px-4 py-6 text-center text-xs text-gray-400">まだ記録がありません</p>}
+              {recentSessions.map(s => (
+                <div key={s.id} className="px-4 py-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-800">{s.locationName}</span>
+                    <span className="text-[10px] tracking-widest uppercase text-gray-400">{SESSION_MODE_LABEL[s.mode] || s.mode}</span>
+                  </div>
+                  <div className="text-[10px] text-gray-400 mt-0.5">
+                    {s.submittedBy?.name || '不明'}／{s.submittedAt ? s.submittedAt.slice(0, 16).replace('T', ' ') : ''}
+                    {s.allUnchanged ? '／全品目変化なし' : ''}
+                  </div>
                 </div>
               ))}
             </div>
@@ -1499,7 +1547,10 @@
               {closedOrders.length === 0 && <p className="px-4 py-6 text-center text-xs text-gray-400">履歴はまだありません</p>}
               {closedOrders.map(o => (
                 <div key={o.id} className="px-4 py-3 flex items-center justify-between">
-                  <span className="text-sm text-gray-600">{o.locationName}｜{o.orderRole}</span>
+                  <div>
+                    <div className="text-sm text-gray-600">{o.locationName}｜{o.orderRole}</div>
+                    <div className="text-[10px] text-gray-400 mt-0.5">配置：{o.deliveredBy?.name || '不明'}</div>
+                  </div>
                   <span className="text-[10px] text-gray-400">{o.deliveredAt ? o.deliveredAt.slice(0, 10) : ''}</span>
                 </div>
               ))}
