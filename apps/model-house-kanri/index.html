@@ -277,8 +277,11 @@
       { id: 'nishigasaki', name: '西ヶ崎モデルハウス', type: 'model_house', keywords: ['西ヶ崎'], order: 1 },
       { id: 'handa-lohas', name: '半田LOHASモデルハウス', type: 'model_house', keywords: ['半田LOHAS', '半田ロハス'], order: 2 },
       { id: 'kasai-shinden', name: '笠井新田モデルハウス', type: 'model_house', keywords: ['笠井新田'], order: 3 },
-      { id: 'miyawake', name: '宮分様邸（浜名区内野）', type: 'completion_viewing', keywords: ['宮分', '浜名区内野', '内野'], order: 4 },
-      { id: 'morishita', name: '森下様邸（中央区寺脇）', type: 'completion_viewing', keywords: ['森下', '中央区寺脇', '寺脇'], order: 5 },
+      // 完成見学会は実運用では顧客の苗字が拠点名に使われる業務慣行があるが（Firestore上のデータとして
+      // 保持すること自体は了承済み）、このシードはソースコードとして公開・配布されるため、
+      // 個人情報が含まれる実名を初期値として直書きしない。実際の拠点名は設定画面から入力する。
+      { id: 'completion-a', name: '完成見学会①（浜名区内野）', type: 'completion_viewing', keywords: ['浜名区内野', '内野'], order: 4 },
+      { id: 'completion-b', name: '完成見学会②（中央区寺脇）', type: 'completion_viewing', keywords: ['中央区寺脇', '寺脇'], order: 5 },
       { id: 'kamoe-office', name: '鴨江事務所（予備在庫）', type: 'office_reserve', keywords: [], order: 6 },
     ];
 
@@ -1982,7 +1985,8 @@
         const itemLines = g.lines.map(l => {
           const orderUnit = l.item.orderUnit || l.item.stockUnit || '';
           const label = l.item.orderUnitLabel ? `（${l.item.orderUnitLabel}）` : '';
-          return `・${l.itemName}：${l.requestedLots ?? 1}${orderUnit}${label}`;
+          // GAS側（AutoOrderRequest.gs buildOrderRequestTextGas_）と演算子を完全に一致させること
+          return `・${l.itemName}：${l.requestedLots || 1}${orderUnit}${label}`;
         }).join('\n');
         return `▼${g.location.name}\n${itemLines}`;
       }).join('\n\n');
@@ -2396,7 +2400,9 @@
 
       useEffect(() => {
         if (!user) return;
-        ensureSeedData(setSeeding);
+        // 未登録者（users未登録）はFirestoreルール上そもそも書き込みできないため、
+        // シード投入は静かに失敗させる（コンソールに未処理rejectionのノイズを出さない）。
+        ensureSeedData(setSeeding).catch(() => {});
 
         const unsubs = [
           onSnapshot(col('locations'), (snap) => setLocations(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
