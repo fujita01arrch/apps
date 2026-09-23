@@ -259,6 +259,7 @@
       orderRequestAdvSelf: '下記備品はADV本人手配のため、必要に応じてご準備をお願いします。\n\n{{sections}}',
       deliveryRequest: '{{to}}{{staffName}}さん\nお疲れ様です。{{locationName}}宛の備品が事務所に届く予定です。\n{{visitSentence}}\n品目：\n{{items}}\nご都合が合わない場合はお手数ですがご一報ください。',
       staleCheckNotice: '{{to}}{{staffName}}さん\nお疲れ様です。{{locationName}}は、{{daysSince}}日以上備品の在庫確認が行われていません。\n近く訪問される際に、アプリから在庫確認をお願いできますでしょうか。',
+      staleOrderReplyNotice: '{{to}}お疲れ様です。\n{{locationName}}宛の発注（{{orderRole}}）について、依頼から{{daysSince}}日経っても到着予定日のご連絡が確認できていません。\n要確認です。業者へのご確認をお願いします。',
       advShortageNotice: '{{advName}}さんより、{{locationName}}の備品不足報告がアプリに届きました。\n{{items}}\n※このメッセージは共有目的のみです。発注要否の判断・発注依頼は別途アプリ側で行われます。',
     };
     function messageTemplateOf(config, key) {
@@ -1459,17 +1460,22 @@
       { key: 'checkChatworkReplies', label: 'Chatwork返信を確認（到着日を反映）' },
       { key: 'assignDeliveries', label: '配達担当を自動割当' },
       { key: 'checkStaleLocations', label: '未確認アラートを送信' },
+      { key: 'checkStaleOrderReplies', label: '到着日未確定の発注に要確認アラート' },
       { key: 'cleanupOldLogs', label: '古い履歴ログを削除（35日以上前）' },
     ];
 
     const BasicSettingsPanel = ({ config, showAlert }) => {
       const [staleCheckDays, setStaleCheckDays] = useState(config.staleCheckDays ?? 14);
+      const [orderReplyStaleDays, setOrderReplyStaleDays] = useState(config.orderReplyStaleDays ?? 4);
       const [saving, setSaving] = useState(false);
 
       const save = async () => {
         setSaving(true);
         try {
-          await updateDoc(docRef('system_config', 'default'), { staleCheckDays: Number(staleCheckDays) });
+          await updateDoc(docRef('system_config', 'default'), {
+            staleCheckDays: Number(staleCheckDays),
+            orderReplyStaleDays: Number(orderReplyStaleDays),
+          });
           showAlert('保存しました。');
         } catch (e) {
           showAlert('保存に失敗しました。\n' + (e && e.message ? e.message : ''));
@@ -1482,6 +1488,9 @@
         <div className="bg-white border border-gray-200 mx-4 p-4">
           <FormField label="未確認とみなす日数（この日数を超えるとダッシュボード等で警告表示）">
             <input type="number" className={inputCls} value={staleCheckDays} onChange={e => setStaleCheckDays(e.target.value)} />
+          </FormField>
+          <FormField label="発注後、到着日未確定を要確認とみなす日数（業務管理・集客マーケ宛のみ。ADV本人手配は対象外）">
+            <input type="number" className={inputCls} value={orderReplyStaleDays} onChange={e => setOrderReplyStaleDays(e.target.value)} />
           </FormField>
           <button onClick={save} disabled={saving} className="mt-2 bg-gray-800 text-white hover:bg-gray-900 transition-colors px-4 py-2 text-xs tracking-widest disabled:opacity-50">{saving ? '保存中...' : '保存'}</button>
         </div>
@@ -1569,6 +1578,7 @@
       { key: 'orderRequestAdvSelf', label: '準備依頼文（ADV本人手配）', vars: '{{sections}}＝品目一覧（拠点ごとにまとめた文字列）' },
       { key: 'deliveryRequest', label: '運搬依頼文（配達担当ADVへ）', vars: '{{to}}＝Chatwork TOメンション／{{staffName}}＝担当者名／{{locationName}}＝拠点名／{{visitSentence}}＝訪問日の一文／{{items}}＝品目一覧' },
       { key: 'staleCheckNotice', label: '未確認アラート文（次の訪問者へ）', vars: '{{to}}＝Chatwork TOメンション／{{staffName}}＝担当者名／{{locationName}}＝拠点名／{{daysSince}}＝未確認日数' },
+      { key: 'staleOrderReplyNotice', label: '到着日未確定の要確認通知文（藤田さん宛）', vars: '{{to}}＝Chatwork TOメンション／{{locationName}}＝拠点名／{{orderRole}}＝発注担当区分／{{daysSince}}＝発注からの経過日数' },
       { key: 'advShortageNotice', label: 'ADV不足報告の共有通知文', vars: '{{advName}}＝報告したADV名／{{locationName}}＝拠点名／{{items}}＝品目一覧' },
     ];
 
@@ -1671,6 +1681,13 @@
         }
         case 'checkStaleLocations':
           return `未確認候補${result.staleCandidates}件のうち${result.notified}件に通知しました。`;
+        case 'checkStaleOrderReplies': {
+          if (result.candidateOrders === 0) return '対象となる発注はありませんでした（全て返答待ち日数以内です）。';
+          if (result.flagged === 0) return `返答待ちの発注${result.candidateOrders}件を確認しましたが、まだ設定日数以内でした。`;
+          let t3 = `${result.candidateOrders}件のうち${result.flagged}件を要確認にしました（通知：${result.notified}件）。`;
+          if (!result.roomConfigured) t3 += '\n※ADV備品発注依頼ルームが未設定のため、Chatworkへの通知は送られていません。';
+          return t3;
+        }
         case 'cleanupOldLogs': {
           if (result.deleted === 0) return '削除対象の古いログはありませんでした。';
           const parts = Object.entries(result.byCollection || {}).filter(([, n]) => n > 0).map(([c, n]) => `${c}：${n}件`);
@@ -1854,6 +1871,11 @@
           .filter(s => s.item && s.item.isActive && s.location && s.location.isActive);
       }, [stockLevels, itemById, locations]);
 
+      const needsReviewOrders = useMemo(
+        () => orders.filter(o => o.needsReview).sort((a, b) => (a.updatedAt || '').localeCompare(b.updatedAt || '')),
+        [orders]
+      );
+
       const sortedRecentSessions = useMemo(
         () => [...recentSessions].sort((a, b) => (b.submittedAt || '').localeCompare(a.submittedAt || '')).slice(0, 20),
         [recentSessions]
@@ -1918,6 +1940,29 @@
                 </div>
               ))}
             </div>
+          </section>
+
+          <section>
+            <SectionLabel>要確認の発注（{needsReviewOrders.length}件）</SectionLabel>
+            <div className="bg-white border border-amber-200 mx-4 divide-y divide-amber-100">
+              {needsReviewOrders.length === 0 && <p className="px-4 py-6 text-center text-xs text-gray-400">現在、要確認の発注はありません</p>}
+              {needsReviewOrders.map(o => (
+                <div key={o.id} className="flex items-center justify-between px-4 py-3 bg-amber-50">
+                  <div>
+                    <div className="text-sm text-amber-800 font-medium">{o.locationName}｜{o.orderRole}</div>
+                    <div className="text-[10px] text-amber-700 mt-0.5">{(o.items || []).map(i => i.itemName).join('、')}</div>
+                    <div className="text-[10px] text-amber-600 mt-0.5">
+                      発注日：{o.requestedAt ? o.requestedAt.slice(0, 10) : '不明'}
+                      {o.deliveryScheduledDate ? `／鴨江到着予定 ${o.deliveryScheduledDate}` : '／到着予定日 未確定'}
+                    </div>
+                  </div>
+                  <span className="text-[10px] tracking-widest uppercase px-2 py-0.5 bg-amber-500 text-white shrink-0">要確認</span>
+                </div>
+              ))}
+            </div>
+            {needsReviewOrders.length > 0 && (
+              <p className="text-[10px] text-gray-400 mt-1 mx-4">発注管理画面から内容を確認し、到着日が分かり次第「鴨江到着予定を登録」してください。</p>
+            )}
           </section>
 
           <section>
@@ -2219,8 +2264,14 @@
                   未配置あり：{order.items.filter(i => order.missedItemIds.includes(i.itemId)).map(i => i.itemName).join('、')}（要フォロー）
                 </div>
               )}
+              {order.needsReview && (
+                <div className="text-[10px] text-amber-700 mt-0.5">要確認：到着日の返答が確認できていません</div>
+              )}
             </div>
-            <span className={`text-[10px] tracking-widest uppercase px-2 py-0.5 shrink-0 ${STATUS_BADGE_CLS[order.status] || 'bg-gray-800 text-white'}`}>{ORDER_STATUS_DISPLAY[order.status] || order.status}</span>
+            <div className="flex flex-col items-end gap-1 shrink-0">
+              <span className={`text-[10px] tracking-widest uppercase px-2 py-0.5 ${STATUS_BADGE_CLS[order.status] || 'bg-gray-800 text-white'}`}>{ORDER_STATUS_DISPLAY[order.status] || order.status}</span>
+              {order.needsReview && <span className="text-[10px] tracking-widest uppercase px-2 py-0.5 bg-amber-500 text-white">要確認</span>}
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-2 mt-2">
             {order.status === '依頼送信済み' && order.orderRole === 'ADV本人手配' && (
