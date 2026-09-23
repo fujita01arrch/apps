@@ -1059,6 +1059,51 @@
       );
     };
 
+    // 自分のChatwork個人APIトークンを登録する自己申告カード。userSecrets/{自分のメール}に
+    // 保存する（artifacts配下の共通データ置き場とは別のコレクション。Firestoreセキュリティ
+    // ルールで本人しか読み書きできないよう制限している。他のスタッフの分は見えない・触れない）。
+    const MyChatworkTokenCard = ({ user, showAlert }) => {
+      const [token, setToken] = useState('');
+      const [loaded, setLoaded] = useState(false);
+      const [saving, setSaving] = useState(false);
+      const myId = userDocId(user.email);
+
+      useEffect(() => {
+        let cancelled = false;
+        getDoc(doc(db, 'userSecrets', myId)).then(snap => {
+          if (cancelled) return;
+          setToken((snap.exists() && snap.data().chatworkApiToken) || '');
+          setLoaded(true);
+        }).catch(() => setLoaded(true));
+        return () => { cancelled = true; };
+      }, [myId]);
+
+      const save = async () => {
+        setSaving(true);
+        try {
+          await setDoc(doc(db, 'userSecrets', myId), { email: user.email, chatworkApiToken: token.trim(), updatedAt: nowIso() }, { merge: true });
+          showAlert('保存しました。');
+        } catch (e) {
+          showAlert('保存に失敗しました。\n' + (e && e.message ? e.message : ''));
+        } finally {
+          setSaving(false);
+        }
+      };
+
+      return (
+        <div className="bg-white border border-gray-200 mx-4 p-4 mb-3">
+          <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-1">あなたのChatwork APIトークン</p>
+          <p className="text-[11px] text-gray-400 mb-2">ここに入力した内容は、あなた以外（管理者を含む）には見えません。「連携設定」タブで代理送信者としてあなたが選ばれている場合のみ使われます。</p>
+          {loaded ? (
+            <>
+              <input type="password" className={inputCls} value={token} onChange={e => setToken(e.target.value)} placeholder="Chatworkの個人APIトークン" />
+              <button onClick={save} disabled={saving} className="mt-2 bg-gray-800 text-white hover:bg-gray-900 transition-colors px-4 py-2 text-xs tracking-widest disabled:opacity-50">{saving ? '保存中...' : '保存'}</button>
+            </>
+          ) : <p className="text-xs text-gray-400">読み込み中...</p>}
+        </div>
+      );
+    };
+
     const StaffSettingsPanel = ({ staffList, user, showAlert, showConfirm }) => {
       const [editing, setEditing] = useState(undefined); // undefined=閉じている, null=新規, obj=編集
 
@@ -1074,6 +1119,7 @@
 
       return (
         <div>
+          <MyChatworkTokenCard user={user} showAlert={showAlert} />
           <div className="flex justify-end px-4 mb-2">
             <button onClick={() => setEditing(null)} className="flex items-center gap-1 text-[11px] tracking-widest bg-gray-800 text-white hover:bg-gray-900 px-3 py-1.5">
               <PlusIcon className="w-3.5 h-3.5" />スタッフを追加
@@ -1380,7 +1426,7 @@
       );
     };
 
-    const IntegrationSettingsPanel = ({ config, showAlert }) => {
+    const IntegrationSettingsPanel = ({ config, staffList, showAlert }) => {
       const [gasWebAppUrl, setGasWebAppUrl] = useState(config.gasWebAppUrl || '');
       const [gasSharedToken, setGasSharedToken] = useState(config.gasSharedToken || '');
       const [roomOperations, setRoomOperations] = useState(config.chatworkRoomIds?.operations || '');
@@ -1388,6 +1434,8 @@
       const [roomAdvShortage, setRoomAdvShortage] = useState(config.chatworkRoomIds?.advShortageReport || '');
       const [autoSendEnabled, setAutoSendEnabled] = useState(!!config.autoSendEnabled);
       const [orderRequestAutoSendEnabled, setOrderRequestAutoSendEnabled] = useState(!!config.orderRequestAutoSendEnabled);
+      const [primaryAccountId, setPrimaryAccountId] = useState(config.chatworkPrimaryAccountId || '');
+      const [fallbackSenderEmail, setFallbackSenderEmail] = useState(config.chatworkFallbackSenderEmail || '');
       const [saving, setSaving] = useState(false);
 
       const save = async () => {
@@ -1399,6 +1447,8 @@
             chatworkRoomIds: { operations: roomOperations.trim(), marketing: roomMarketing.trim(), advShortageReport: roomAdvShortage.trim() },
             autoSendEnabled,
             orderRequestAutoSendEnabled,
+            chatworkPrimaryAccountId: primaryAccountId.trim(),
+            chatworkFallbackSenderEmail: fallbackSenderEmail.trim().toLowerCase(),
           });
           showAlert('保存しました。');
         } catch (e) {
@@ -1417,6 +1467,19 @@
             <FormField label="業務管理ルームID"><input className={inputCls} value={roomOperations} onChange={e => setRoomOperations(e.target.value)} /></FormField>
             <FormField label="集客・マーケルームID"><input className={inputCls} value={roomMarketing} onChange={e => setRoomMarketing(e.target.value)} /></FormField>
             <FormField label="ADV備品発注依頼ルームID"><input className={inputCls} value={roomAdvShortage} onChange={e => setRoomAdvShortage(e.target.value)} /></FormField>
+          </div>
+          <div className="mt-3 border border-gray-100 p-3 bg-gray-50">
+            <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-2">Chatwork TOメンション（自分宛の例外対応）</p>
+            <FormField label="主送信アカウントのChatworkアカウントID（GAS_CHATWORK_API_TOKENの持ち主）">
+              <input className={inputCls} value={primaryAccountId} onChange={e => setPrimaryAccountId(e.target.value)} placeholder="例：10652422" />
+            </FormField>
+            <FormField label="代理送信するスタッフ（宛先が上記本人の時だけ、この人のトークンで送信）">
+              <select className={inputCls} value={fallbackSenderEmail} onChange={e => setFallbackSenderEmail(e.target.value)}>
+                <option value="">（未設定：切り替えない）</option>
+                {(staffList || []).map(s => <option key={s.id} value={s.email}>{s.displayName}（{s.email}）</option>)}
+              </select>
+              <p className="text-[10px] text-gray-400 mt-1">選んだ人が「スタッフ」タブの自分の画面で、あらかじめChatwork APIトークンを登録しておく必要があります。</p>
+            </FormField>
           </div>
           <div className="mt-3 border border-gray-100 p-3 bg-gray-50">
             <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-2">① GASが自動生成するメッセージ（配達依頼・未確認アラート等）</p>
@@ -1513,7 +1576,7 @@
           {tab === 'guides' && <GuidesSettingsPanel showAlert={showAlert} showConfirm={showConfirm} user={user} />}
           {tab === 'staff' && <StaffSettingsPanel staffList={staffList} user={user} showAlert={showAlert} showConfirm={showConfirm} />}
           {tab === 'templates' && <MessageTemplatesSettingsPanel config={config} showAlert={showAlert} />}
-          {tab === 'integration' && <IntegrationSettingsPanel config={config} showAlert={showAlert} />}
+          {tab === 'integration' && <IntegrationSettingsPanel config={config} staffList={staffList} showAlert={showAlert} />}
           {tab === 'basic' && <BasicSettingsPanel config={config} showAlert={showAlert} />}
         </div>
       );
