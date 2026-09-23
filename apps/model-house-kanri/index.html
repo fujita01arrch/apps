@@ -254,8 +254,8 @@
       return String(tpl || '').replace(/\{\{(\w+)\}\}/g, (_, key) => (vars[key] !== undefined && vars[key] !== null) ? String(vars[key]) : '');
     }
     const DEFAULT_MESSAGE_TEMPLATES = {
-      orderRequestOperations: 'お世話になっております。下記備品が少なくなってきましたので、発注をお願いいたします。\n\n{{sections}}\n\n到着予定日が分かりましたら、このメッセージへの返信で教えていただけますと助かります（普段のお返事の書き方のままで大丈夫です）。\nよろしくお願いいたします。',
-      orderRequestMarketing: 'お疲れ様です。下記備品、在庫が少なくなってきましたのでご用意をお願いできますでしょうか。\n\n{{sections}}\n\nご用意いただけそうな時期が分かりましたらお知らせください。よろしくお願いいたします。',
+      orderRequestOperations: 'お世話になっております。下記備品が少なくなってきましたので、発注をお願いいたします。\n\n{{sections}}\n\n到着予定日が分かりましたら、このメッセージを選択して「返信（Re）」機能でお知らせいただけますと、システムが自動で反映できて助かります（文面はいつも通りで大丈夫です。例：「9/24着です」）。\nよろしくお願いいたします。',
+      orderRequestMarketing: 'お疲れ様です。下記備品、在庫が少なくなってきましたのでご用意をお願いできますでしょうか。\n\n{{sections}}\n\nご用意いただけそうな時期が分かりましたら、このメッセージを選択して「返信（Re）」機能でお知らせいただけますと、システムが自動で反映できて助かります。よろしくお願いいたします。',
       orderRequestAdvSelf: '下記備品はADV本人手配のため、必要に応じてご準備をお願いします。\n\n{{sections}}',
       deliveryRequest: '{{to}}{{staffName}}さん\nお疲れ様です。{{locationName}}宛の備品が事務所に届く予定です。\n{{visitSentence}}\n品目：\n{{items}}\nご都合が合わない場合はお手数ですがご一報ください。',
       staleCheckNotice: '{{to}}{{staffName}}さん\nお疲れ様です。{{locationName}}は、{{daysSince}}日以上備品の在庫確認が行われていません。\n近く訪問される際に、アプリから在庫確認をお願いできますでしょうか。',
