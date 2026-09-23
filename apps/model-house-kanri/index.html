@@ -772,8 +772,10 @@
     const DeliveryReportView = ({ orders: allOrders, user, isRegistered, showAlert, showConfirm }) => {
       const [submittingId, setSubmittingId] = useState(null);
       const [missedModalOrder, setMissedModalOrder] = useState(null);
-      const orders = (allOrders || []).filter(o => o.status === '配達待ち');
-      const pendingOrders = (allOrders || []).filter(o => o.status === '依頼送信済み');
+      // ADV本人手配は「鴨江事務所への到着を待つ」という概念が無く（ADV自身が調達・配置するため）、
+      // 業者からの到着日返信を待たずに、依頼送信済みの時点ですぐ配置報告できるようにする。
+      const orders = (allOrders || []).filter(o => o.status === '配達待ち' || (o.status === '依頼送信済み' && o.orderRole === 'ADV本人手配'));
+      const pendingOrders = (allOrders || []).filter(o => o.status === '依頼送信済み' && o.orderRole !== 'ADV本人手配');
 
       // missedItemIds: 直近の「忘れました」報告で配置できなかった品目。次にこの拠点へ行く人へ
       // 自動でChatwork通知するロジックはPhase2（カレンダー連携）で実装予定。ここでは記録のみ行う。
@@ -853,6 +855,9 @@
                       {isMine && <span className="text-[9px] tracking-widest bg-indigo-600 text-white px-1.5 py-0.5 shrink-0">あなた宛</span>}
                     </div>
                     <div className="text-[10px] text-gray-400 mt-0.5">{o.items.map(i => `${i.itemName}×${i.requestedLots ?? 1}${i.orderUnit || ''}`).join('、')}</div>
+                    {o.orderRole === 'ADV本人手配' && (
+                      <div className="text-[10px] text-gray-400 mt-0.5">ご本人手配の品目です。ご準備でき次第「配置しました」を押してください。</div>
+                    )}
                     {o.deliveryAssignee && (
                       <div className={`text-[10px] mt-0.5 ${isMine ? 'text-indigo-700 font-medium' : 'text-gray-400'}`}>
                         配達担当：{o.deliveryAssignee.name}{isMine ? '（あなたです）' : ''}
@@ -2201,10 +2206,14 @@
                 発注日：{order.requestedAt ? order.requestedAt.slice(0, 10) : '不明'}
                 {order.deliveryScheduledDate ? `／鴨江到着予定 ${order.deliveryScheduledDate}` : ''}
               </div>
-              <div className="text-[10px] text-gray-400 mt-0.5">
-                配達担当：{order.deliveryAssignee ? order.deliveryAssignee.name : '自動設定予定'}
-                {order.deliveryVisitDate ? `／運搬・配置予定 ${order.deliveryVisitDate}` : ''}
-              </div>
+              {order.orderRole === 'ADV本人手配' ? (
+                <div className="text-[10px] text-gray-400 mt-0.5">ご本人手配（ADVが直接調達・配置）</div>
+              ) : (
+                <div className="text-[10px] text-gray-400 mt-0.5">
+                  配達担当：{order.deliveryAssignee ? order.deliveryAssignee.name : '自動設定予定'}
+                  {order.deliveryVisitDate ? `／運搬・配置予定 ${order.deliveryVisitDate}` : ''}
+                </div>
+              )}
               {order.missedItemIds && order.missedItemIds.length > 0 && (
                 <div className="text-[10px] text-rose-500 mt-0.5">
                   未配置あり：{order.items.filter(i => order.missedItemIds.includes(i.itemId)).map(i => i.itemName).join('、')}（要フォロー）
@@ -2214,7 +2223,10 @@
             <span className={`text-[10px] tracking-widest uppercase px-2 py-0.5 shrink-0 ${STATUS_BADGE_CLS[order.status] || 'bg-gray-800 text-white'}`}>{ORDER_STATUS_DISPLAY[order.status] || order.status}</span>
           </div>
           <div className="flex flex-wrap items-center gap-2 mt-2">
-            {order.status === '依頼送信済み' && (
+            {order.status === '依頼送信済み' && order.orderRole === 'ADV本人手配' && (
+              <span className="text-[11px] text-gray-400">ADV本人手配のため到着日の登録は不要です。「配置報告」画面でご本人が完了報告します</span>
+            )}
+            {order.status === '依頼送信済み' && order.orderRole !== 'ADV本人手配' && (
               <>
                 <input
                   type="date" value={scheduledDate} onChange={(e) => setScheduledDate(e.target.value)}
