@@ -54,8 +54,9 @@
     const col = (name) => collection(db, 'artifacts', appId, 'public', 'data', name);
     const docRef = (name, id) => doc(db, 'artifacts', appId, 'public', 'data', name, id);
 
-    // 管理者メールアドレス（藤田さん・染矢さん）。染矢さんのメールアドレスが判明したら追加すること。
-    const ADMIN_EMAILS = ['fujita.e@hakuto-k.jp'];
+    // 管理者メールアドレス（藤田さん・染矢さん）
+    const ADMIN_EMAILS = ['fujita.e@hakuto-k.jp', 'someya.m@hakuto-k.jp'];
+    const ALLOWED_LOGIN_DOMAIN = 'hakuto-k.jp'; // 社内ドメイン以外のGoogleアカウントでのログインを拒否する
 
     const nowIso = () => new Date().toISOString();
 
@@ -334,12 +335,14 @@
     // ============================================================
     // ログイン画面
     // ============================================================
-    const LoginView = () => {
+    const LoginView = ({ domainError }) => {
       const [error, setError] = useState('');
       const handleLogin = async () => {
         setError('');
         try {
-          await signInWithPopup(auth, new GoogleAuthProvider());
+          const provider = new GoogleAuthProvider();
+          provider.setCustomParameters({ hd: ALLOWED_LOGIN_DOMAIN }); // 社内ドメインのアカウントを候補に絞るヒント（強制ではないため、ログイン後にも念のため検証する）
+          await signInWithPopup(auth, provider);
         } catch (e) {
           setError('ログインに失敗しました。もう一度お試しください。');
         }
@@ -355,6 +358,7 @@
               className="w-full bg-gray-800 text-white hover:bg-gray-900 transition-colors px-6 py-3 text-xs tracking-widest shadow-sm"
             >Googleアカウントでログイン</button>
             {error && <p className="text-rose-500 text-xs mt-4">{error}</p>}
+            {domainError && <p className="text-rose-500 text-xs mt-4">社内（{ALLOWED_LOGIN_DOMAIN}）のGoogleアカウントでログインしてください。</p>}
           </div>
         </div>
       );
@@ -416,12 +420,18 @@
         return map;
       }, [orders, location.id]);
 
+      // items はFirestoreのonSnapshotが発火するたびに新しい配列参照になる（中身が同じでも）。
+      // これを直接useMemoの依存配列に入れると、無関係な変更（他ユーザーの編集や再接続）のたびに
+      // ADVが入力中のtapCounts/withdrawValuesが無警告でリセットされてしまうため、
+      // 品目IDの集合という「内容が変わらない限り安定した値」を依存配列に使う。
+      const itemIdsKey = useMemo(() => relevantItems.map(i => i.id).join(','), [relevantItems]);
+
       // 持ち出しモード（鴨江事務所）は従来通り数量を直接入力する
       const initialWithdrawValues = useMemo(() => {
         const v = {};
         relevantItems.forEach(item => { v[item.id] = 0; });
         return v;
-      }, [location.id, items]);
+      }, [location.id, itemIdsKey]);
 
       // 在庫確認モード（モデルハウス／見学会）は「在庫OK／発注が必要×N」のワンタップ判定に統一。
       // 正確な残数を毎回数える負担をなくし、タップ回数＝発注してほしい度合い（ロット数の目安）を記録する。
@@ -430,7 +440,7 @@
         const v = {};
         relevantItems.forEach(item => { v[item.id] = 0; });
         return v;
-      }, [location.id, items]);
+      }, [location.id, itemIdsKey]);
 
       const [withdrawValues, setWithdrawValues] = useState(initialWithdrawValues);
       const [tapCounts, setTapCounts] = useState(initialTapCounts);
@@ -482,7 +492,9 @@
               return { itemId: item.id, itemName: item.name, unit: item.unit, previousCount, newCount, delta: -taken, belowReorderPoint };
             }
             if (allUnchanged) {
-              return { itemId: item.id, itemName: item.name, unit: item.unit, previousCount, newCount: previousCount, delta: 0, belowReorderPoint: !!(level && level.belowReorderPoint), requestedLots: 0 };
+              // 「全品目在庫OK」と明示的に申告しているため、過去に発注要フラグが立っていても
+              // ここでクリアする（残していると発注済み扱いにならず永久に警告が残り続ける）。
+              return { itemId: item.id, itemName: item.name, unit: item.unit, previousCount, newCount: previousCount, delta: 0, belowReorderPoint: false, requestedLots: 0 };
             }
             const requestedLots = tapCounts[item.id] ?? 0;
             const isLow = requestedLots > 0;
@@ -1374,12 +1386,13 @@
     const OrderStatusUpdateRow = ({ order, showAlert }) => {
       const [scheduledDate, setScheduledDate] = useState(order.deliveryScheduledDate || '');
 
+      // 「配達済み」への変更はここでは行わない（配置報告画面の「配置しました／忘れました」からのみ
+      // 行う設計に統一した。ここで直接ステータスだけ変更すると在庫データが更新されず、
+      // 同じ品目が再び「発注が必要」に浮上する不整合が起きるため）。
       const advance = async (nextStatus) => {
         const ts = nowIso();
         const patch = { status: nextStatus, updatedAt: ts };
-        // 配達担当者はPhase2でカレンダー連携により自動設定される（Phase1では手動選択させない）
         if (nextStatus === '配達待ち') patch.deliveryScheduledDate = scheduledDate || null;
-        if (nextStatus === '配達済み') patch.deliveredAt = ts;
         try {
           await updateDoc(docRef('orders', order.id), patch);
         } catch (e) {
@@ -1416,7 +1429,7 @@
               </>
             )}
             {order.status === '配達待ち' && (
-              <button onClick={() => advance('配達済み')} className="text-[11px] tracking-widest border border-gray-300 text-gray-600 hover:bg-gray-100 px-3 py-1">配達済みにする</button>
+              <span className="text-[11px] text-gray-400">配達済みへの変更は「配置報告」画面から行ってください</span>
             )}
           </div>
         </div>
@@ -1519,12 +1532,21 @@
       const [orders, setOrders] = useState([]);
       const [staffList, setStaffList] = useState([]);
       const [config, setConfig] = useState({ staleCheckDays: 14 });
+      const [domainError, setDomainError] = useState(false);
 
       const showAlert = (message) => setDialog({ type: 'alert', message, confirmLabel: 'OK' });
       const showConfirm = (message, onConfirm, confirmLabel) => setDialog({ type: 'confirm', message, onConfirm, confirmLabel });
 
       useEffect(() => {
         const unsub = onAuthStateChanged(auth, (u) => {
+          // hdパラメータはログイン画面での絞り込みヒントに過ぎず強制力がないため、
+          // ログイン後にドメインを検証し、社外アカウントなら即サインアウトする。
+          if (u && !(u.email || '').toLowerCase().endsWith('@' + ALLOWED_LOGIN_DOMAIN)) {
+            setDomainError(true);
+            signOut(auth);
+            return;
+          }
+          setDomainError(false);
           setUser(u);
           if (u) {
             setDoc(docRef('users', u.uid), {
@@ -1562,7 +1584,7 @@
         return <div className="min-h-screen flex items-center justify-center text-gray-300 text-xs">読み込み中...</div>;
       }
       if (!user) {
-        return <LoginView />;
+        return <LoginView domainError={domainError} />;
       }
 
       const isAdmin = ADMIN_EMAILS.includes((user.email || '').toLowerCase());
