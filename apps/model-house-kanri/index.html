@@ -1265,14 +1265,20 @@
               <FormField label="集客・マーケルームID"><input className={inputCls} value={roomMarketing} onChange={e => setRoomMarketing(e.target.value)} /></FormField>
               <FormField label="ADV備品発注依頼ルームID"><input className={inputCls} value={roomAdvShortage} onChange={e => setRoomAdvShortage(e.target.value)} /></FormField>
             </div>
-            <label className="flex items-center gap-2 mt-2 text-sm text-gray-700">
-              <input type="checkbox" checked={autoSendEnabled} onChange={e => setAutoSendEnabled(e.target.checked)} />
-              自動送信を有効にする（OFFの間は「承認待ち」タブでの確認・送信操作が必須）
-            </label>
-            <label className="flex items-center gap-2 mt-2 text-sm text-gray-700">
-              <input type="checkbox" checked={orderRequestAutoSendEnabled} onChange={e => setOrderRequestAutoSendEnabled(e.target.checked)} />
-              発注管理画面の依頼文もChatworkへ自動送信できるようにする（OFFの場合は文面コピー＋手動送信のみ）
-            </label>
+            <div className="mt-3 border border-gray-100 p-3 bg-gray-50">
+              <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-2">① GASが自動生成するメッセージ（配達依頼・未確認アラート等）</p>
+              <label className="flex items-start gap-2 text-sm text-gray-700">
+                <input type="checkbox" className="mt-0.5" checked={autoSendEnabled} onChange={e => setAutoSendEnabled(e.target.checked)} />
+                <span>確認なしで即送信する<br /><span className="text-xs text-gray-400">OFFの場合：「承認待ち」タブに一旦溜まり、藤田さん・染矢さんが内容確認のうえ送信ボタンを押すまで送られません</span></span>
+              </label>
+            </div>
+            <div className="mt-3 border border-gray-100 p-3 bg-gray-50">
+              <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-2">② 発注管理画面（管理者が手動で「依頼文を作成」した時）</p>
+              <label className="flex items-start gap-2 text-sm text-gray-700">
+                <input type="checkbox" className="mt-0.5" checked={orderRequestAutoSendEnabled} onChange={e => setOrderRequestAutoSendEnabled(e.target.checked)} />
+                <span>「Chatworkへ自動送信」ボタンを表示する<br /><span className="text-xs text-gray-400">OFFの場合：このボタンは表示されず、従来通り文面をコピーして手動でChatworkに貼り付ける運用になります</span></span>
+              </label>
+            </div>
           </div>
 
           <button onClick={save} disabled={saving} className="mt-4 bg-gray-800 text-white hover:bg-gray-900 transition-colors px-4 py-2 text-xs tracking-widest disabled:opacity-50">{saving ? '保存中...' : '保存'}</button>
