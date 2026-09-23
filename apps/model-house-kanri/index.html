@@ -22,7 +22,7 @@
     } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
     import {
       initializeFirestore, persistentLocalCache, persistentSingleTabManager,
-      collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot, getDoc, addDoc,
+      collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot, getDoc, getDocs, addDoc,
       query, orderBy, limit, where, writeBatch, increment
     } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
 
@@ -2011,6 +2011,28 @@
         }
       };
 
+      // モーダルを開いてから送信するまでの間（文面を確認・編集している数十秒〜数分）に、
+      // GAS側の自動処理（1日3回のバッチ、または手動実行）が同じ拠点・品目の発注を
+      // 先に作ってしまっていないか、送信の直前にもう一度確認する（二重発注の防止）。
+      // これにより危険な時間帯は「本当に同じ一瞬」まで縮まる（完全にゼロにはできないが、
+      // 実運用上は問題にならないレベルになる）。
+      // 何か1件でも既に他の経路で発注済みになっていれば、文面（text）と実際に記録される
+      // 品目がずれてしまうため、部分的に送るのではなく丸ごと中断する（安全側に倒す）。
+      const findAlreadyCoveredItemNames = async () => {
+        const snap = await getDocs(col('orders'));
+        const covered = new Set();
+        snap.docs.forEach(d => {
+          const o = d.data();
+          if (o.status === '配達済み') return;
+          (o.items || []).forEach(i => covered.add(o.locationId + '_' + i.itemId));
+        });
+        const alreadyCovered = [];
+        group.locationGroups.forEach(g => g.lines.forEach(l => {
+          if (covered.has(g.location.id + '_' + l.itemId)) alreadyCovered.push(l.itemName);
+        }));
+        return alreadyCovered;
+      };
+
       // 対象拠点ごとに発注ステータスは個別管理する（到着日・配達担当は拠点ごとに異なるため）。
       // 依頼文（1通にまとめたもの）は各拠点のordersドキュメントに同じ内容を記録しておく。
       const recordOrders = async (chatworkRoomId) => {
@@ -2036,6 +2058,12 @@
       const markRequested = async () => {
         setSaving(true);
         try {
+          const alreadyCovered = await findAlreadyCoveredItemNames();
+          if (alreadyCovered.length > 0) {
+            showAlert(`一部の品目（${alreadyCovered.join('、')}）は、この画面を開いている間に他の経路（自動処理など）で既に発注されていました。画面を閉じて最新の状態をご確認ください。`);
+            onClose();
+            return;
+          }
           await recordOrders(null);
           onConfirmed();
         } catch (e) {
@@ -2063,6 +2091,12 @@
         }
         setAutoSending(true);
         try {
+          const alreadyCovered = await findAlreadyCoveredItemNames();
+          if (alreadyCovered.length > 0) {
+            showAlert(`一部の品目（${alreadyCovered.join('、')}）は、この画面を開いている間に他の経路（自動処理など）で既に発注されていました。Chatworkへの送信は行いませんでした。画面を閉じて最新の状態をご確認ください。`);
+            onClose();
+            return;
+          }
           const res = await fetch(config.gasWebAppUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'text/plain;charset=utf-8' },
