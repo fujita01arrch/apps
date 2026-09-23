@@ -23,7 +23,7 @@
     import {
       initializeFirestore, persistentLocalCache, persistentSingleTabManager,
       collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot, getDoc, addDoc,
-      query, orderBy, limit, writeBatch
+      query, orderBy, limit, where, writeBatch
     } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
 
     const { useState, useEffect, useMemo, useRef } = React;
@@ -1430,6 +1430,7 @@
       { key: 'checkChatworkReplies', label: 'Chatwork返信を確認（到着日を反映）' },
       { key: 'assignDeliveries', label: '配達担当を自動割当' },
       { key: 'checkStaleLocations', label: '未確認アラートを送信' },
+      { key: 'cleanupOldLogs', label: '古い履歴ログを削除（35日以上前）' },
     ];
 
     const BasicSettingsPanel = ({ config, showAlert }) => {
@@ -1640,6 +1641,11 @@
         }
         case 'checkStaleLocations':
           return `未確認候補${result.staleCandidates}件のうち${result.notified}件に通知しました。`;
+        case 'cleanupOldLogs': {
+          if (result.deleted === 0) return '削除対象の古いログはありませんでした。';
+          const parts = Object.entries(result.byCollection || {}).filter(([, n]) => n > 0).map(([c, n]) => `${c}：${n}件`);
+          return `古いログを${result.deleted}件削除しました（${parts.join('／')}）。`;
+        }
         default:
           return JSON.stringify(result);
       }
@@ -1786,7 +1792,27 @@
       <div className="text-[10px] text-gray-400 tracking-widest uppercase px-4 mb-2">{children}</div>
     );
 
-    const DashboardView = ({ locations, items, stockLevels, staleCheckDays }) => {
+    // ランキングを横棒グラフで見せるだけの小さな共通部品。
+    const SimpleBarList = ({ data, barColor = 'bg-indigo-600', emptyText = 'データがありません' }) => {
+      const max = Math.max(1, ...data.map(d => d.value));
+      if (data.length === 0) return <p className="text-xs text-gray-400 py-4 text-center">{emptyText}</p>;
+      return (
+        <div className="space-y-2.5">
+          {data.map((d, i) => (
+            <div key={i}>
+              <div className="flex justify-between text-xs text-gray-600 mb-0.5">
+                <span className="truncate pr-2">{d.label}</span><span className="text-gray-400 shrink-0">{d.value}</span>
+              </div>
+              <div className="h-2 bg-gray-100">
+                <div className={`h-2 ${barColor}`} style={{ width: `${Math.max(4, (d.value / max) * 100)}%` }} />
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    };
+
+    const DashboardView = ({ locations, items, stockLevels, orders, recentSessions, staleCheckDays }) => {
       const itemById = useMemo(() => Object.fromEntries(items.map(i => [i.id, i])), [items]);
       const sortedLocations = [...locations].filter(l => l.isActive).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
@@ -1798,12 +1824,41 @@
           .filter(s => s.item && s.item.isActive && s.location && s.location.isActive);
       }, [stockLevels, itemById, locations]);
 
-      const [recentSessions, setRecentSessions] = useState([]);
-      useEffect(() => {
-        const q = query(col('stockCheckSessions'), orderBy('submittedAt', 'desc'), limit(20));
-        const unsub = onSnapshot(q, (snap) => setRecentSessions(snap.docs.map(d => ({ id: d.id, ...d.data() }))));
-        return () => unsub();
-      }, []);
+      const sortedRecentSessions = useMemo(
+        () => [...recentSessions].sort((a, b) => (b.submittedAt || '').localeCompare(a.submittedAt || '')).slice(0, 20),
+        [recentSessions]
+      );
+
+      // 拠点別・品目別の発注頻度（＝減りやすさ）は、発注記録（orders）全期間から集計する。
+      // ordersは発注イベントが起きた時にしか作られない低頻度なコレクションなので、統計用に
+      // 期間を絞る必要はない。
+      const locationOrderRanking = useMemo(() => {
+        const counts = {};
+        orders.forEach(o => { counts[o.locationName] = (counts[o.locationName] || 0) + 1; });
+        return Object.entries(counts).map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value).slice(0, 8);
+      }, [orders]);
+
+      const itemOrderRanking = useMemo(() => {
+        const counts = {};
+        orders.forEach(o => (o.items || []).forEach(i => { counts[i.itemName] = (counts[i.itemName] || 0) + 1; }));
+        return Object.entries(counts).map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value).slice(0, 8);
+      }, [orders]);
+
+      // 担当者別のアクティビティ（直近35日）：在庫確認の実施回数と、うち発注が必要と報告した回数。
+      // これが多い人ほど、こまめに在庫確認・不足報告をしてくれている＝奨励したい行動。
+      const staffActivityRanking = useMemo(() => {
+        const stats = {};
+        recentSessions.forEach(s => {
+          const name = s.submittedBy?.name || s.submittedBy?.email || '不明';
+          stats[name] = stats[name] || { checkIns: 0, shortageReports: 0 };
+          stats[name].checkIns += 1;
+          if ((s.lines || []).some(l => l.belowReorderPoint)) stats[name].shortageReports += 1;
+        });
+        return Object.entries(stats)
+          .map(([label, v]) => ({ label, value: v.shortageReports, checkIns: v.checkIns }))
+          .sort((a, b) => b.value - a.value || b.checkIns - a.checkIns)
+          .slice(0, 8);
+      }, [recentSessions]);
 
       const SESSION_MODE_LABEL = { checkin: '在庫確認', withdrawal: '予備持ち出し', adjustment: '棚卸修正', restock: '配置完了' };
 
@@ -1843,10 +1898,46 @@
           </section>
 
           <section>
-            <SectionLabel>最近の確認・配置履歴（直近{recentSessions.length}件）</SectionLabel>
+            <SectionLabel>統計</SectionLabel>
+            <div className="bg-white border border-gray-200 mx-4 p-4 space-y-5">
+              <div>
+                <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-2">発注が多い拠点（減りやすい場所）</p>
+                <SimpleBarList data={locationOrderRanking} />
+              </div>
+              <div className="border-t border-gray-100 pt-4">
+                <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-2">発注が多い品目（減りやすい品目）</p>
+                <SimpleBarList data={itemOrderRanking} barColor="bg-amber-500" />
+              </div>
+              <div className="border-t border-gray-100 pt-4">
+                <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-2">不足報告が多いスタッフ（直近35日）</p>
+                <SimpleBarList data={staffActivityRanking} barColor="bg-emerald-600" />
+                <p className="text-[10px] text-gray-300 mt-2">数値は「発注が必要」と報告した回数。カッコ内の在庫確認実施回数は含めていません。</p>
+              </div>
+            </div>
+          </section>
+
+          <section>
+            <SectionLabel>発注履歴（だれが・いつ・何を）</SectionLabel>
             <div className="bg-white border border-gray-200 mx-4 divide-y divide-gray-100">
-              {recentSessions.length === 0 && <p className="px-4 py-6 text-center text-xs text-gray-400">まだ記録がありません</p>}
-              {recentSessions.map(s => (
+              {orders.length === 0 && <p className="px-4 py-6 text-center text-xs text-gray-400">まだ発注履歴がありません</p>}
+              {orders.slice(0, 20).map(o => (
+                <div key={o.id} className="px-4 py-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-sm text-gray-800">{o.locationName}｜{o.orderRole}</span>
+                    <span className="text-[10px] text-gray-400">{o.requestedAt ? o.requestedAt.slice(0, 16).replace('T', ' ') : ''}</span>
+                  </div>
+                  <div className="text-[10px] text-gray-400 mt-0.5">発注者：{o.requestedBy?.name || '不明'}</div>
+                  <div className="text-[10px] text-gray-400 mt-0.5">{(o.items || []).map(i => `${i.itemName}×${i.requestedLots ?? 1}${i.orderUnit || ''}`).join('、')}</div>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section>
+            <SectionLabel>最近の確認・配置履歴（直近{sortedRecentSessions.length}件）</SectionLabel>
+            <div className="bg-white border border-gray-200 mx-4 divide-y divide-gray-100">
+              {sortedRecentSessions.length === 0 && <p className="px-4 py-6 text-center text-xs text-gray-400">まだ記録がありません</p>}
+              {sortedRecentSessions.map(s => (
                 <div key={s.id} className="px-4 py-3">
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-gray-800">{s.locationName}</span>
@@ -1859,6 +1950,7 @@
                 </div>
               ))}
             </div>
+            <p className="text-[10px] text-gray-300 text-center mt-2">統計・履歴は直近35日分のみ保持しています（それより古いデータは自動的に削除されます）。</p>
           </section>
         </div>
       );
@@ -2251,6 +2343,7 @@
       const [orders, setOrders] = useState([]);
       const [outbox, setOutbox] = useState([]);
       const [staffList, setStaffList] = useState([]);
+      const [recentSessions, setRecentSessions] = useState([]);
       const [config, setConfig] = useState({ staleCheckDays: 14 });
       const [domainError, setDomainError] = useState(false);
 
@@ -2304,6 +2397,12 @@
           onSnapshot(col('users'), (snap) => {
             setStaffList(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.displayName || '').localeCompare(b.displayName || '', 'ja')));
           }),
+          // ダッシュボードの統計（拠点・品目・担当者別の傾向）用。直近35日分だけ読み込む
+          // （それより古いものはGAS側の定期クリーンアップで削除される。統計に生の全履歴は不要なため）。
+          onSnapshot(
+            query(col('stockCheckSessions'), where('submittedAt', '>=', new Date(Date.now() - 35 * 24 * 60 * 60 * 1000).toISOString())),
+            (snap) => setRecentSessions(snap.docs.map(d => ({ id: d.id, ...d.data() })))
+          ),
           onSnapshot(docRef('system_config', 'default'), (snap) => { if (snap.exists()) setConfig(snap.data()); }),
         ];
         return () => unsubs.forEach(u => u());
@@ -2325,7 +2424,7 @@
       const myStaffRecord = staffList.find(s => s.id === userDocId(user.email));
       const isRegistered = !!myStaffRecord;
       const isAdmin = myStaffRecord ? myStaffRecord.role === 'admin' : ADMIN_EMAILS.includes((user.email || '').toLowerCase());
-      const commonProps = { locations, items, stockLevels, orders, outbox, staffList, config, staleCheckDays: config.staleCheckDays ?? 14, user, isAdmin, isRegistered, showAlert, showConfirm };
+      const commonProps = { locations, items, stockLevels, orders, outbox, staffList, recentSessions, config, staleCheckDays: config.staleCheckDays ?? 14, user, isAdmin, isRegistered, showAlert, showConfirm };
 
       const renderView = () => {
         switch (view) {
