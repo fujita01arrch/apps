@@ -1222,12 +1222,24 @@
 
     const GeneralSettingsPanel = ({ config, showAlert }) => {
       const [staleCheckDays, setStaleCheckDays] = useState(config.staleCheckDays ?? 14);
+      const [gasWebAppUrl, setGasWebAppUrl] = useState(config.gasWebAppUrl || '');
+      const [gasSharedToken, setGasSharedToken] = useState(config.gasSharedToken || '');
+      const [roomOperations, setRoomOperations] = useState(config.chatworkRoomIds?.operations || '');
+      const [roomMarketing, setRoomMarketing] = useState(config.chatworkRoomIds?.marketing || '');
+      const [roomAdvShortage, setRoomAdvShortage] = useState(config.chatworkRoomIds?.advShortageReport || '');
+      const [autoSendEnabled, setAutoSendEnabled] = useState(!!config.autoSendEnabled);
       const [saving, setSaving] = useState(false);
 
       const save = async () => {
         setSaving(true);
         try {
-          await updateDoc(docRef('system_config', 'default'), { staleCheckDays: Number(staleCheckDays) });
+          await updateDoc(docRef('system_config', 'default'), {
+            staleCheckDays: Number(staleCheckDays),
+            gasWebAppUrl: gasWebAppUrl.trim(),
+            gasSharedToken: gasSharedToken.trim(),
+            chatworkRoomIds: { operations: roomOperations.trim(), marketing: roomMarketing.trim(), advShortageReport: roomAdvShortage.trim() },
+            autoSendEnabled,
+          });
           showAlert('保存しました。');
         } catch (e) {
           showAlert('保存に失敗しました。\n' + (e && e.message ? e.message : ''));
@@ -1241,10 +1253,22 @@
           <FormField label="未確認とみなす日数（この日数を超えるとダッシュボード等で警告表示）">
             <input type="number" className={inputCls} value={staleCheckDays} onChange={e => setStaleCheckDays(e.target.value)} />
           </FormField>
-          <div className="mt-4 border-t border-gray-100 pt-3">
-            <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-1">Phase2予定項目（現時点では未使用）</p>
-            <p className="text-xs text-gray-400">Chatwork自動送信・カレンダー連携によるAI自動化は今後追加予定です。</p>
+
+          <div className="mt-4 border-t border-gray-100 pt-4">
+            <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-3">Phase2連携設定（GAS・Chatwork）</p>
+            <FormField label="GAS WebアプリURL"><input className={inputCls} value={gasWebAppUrl} onChange={e => setGasWebAppUrl(e.target.value)} placeholder="https://script.google.com/macros/s/.../exec" /></FormField>
+            <FormField label="合言葉（SHARED_TOKENと同じ値）"><input className={inputCls} value={gasSharedToken} onChange={e => setGasSharedToken(e.target.value)} /></FormField>
+            <div className="grid grid-cols-3 gap-3">
+              <FormField label="業務管理ルームID"><input className={inputCls} value={roomOperations} onChange={e => setRoomOperations(e.target.value)} /></FormField>
+              <FormField label="集客・マーケルームID"><input className={inputCls} value={roomMarketing} onChange={e => setRoomMarketing(e.target.value)} /></FormField>
+              <FormField label="ADV備品発注依頼ルームID"><input className={inputCls} value={roomAdvShortage} onChange={e => setRoomAdvShortage(e.target.value)} /></FormField>
+            </div>
+            <label className="flex items-center gap-2 mt-2 text-sm text-gray-700">
+              <input type="checkbox" checked={autoSendEnabled} onChange={e => setAutoSendEnabled(e.target.checked)} />
+              自動送信を有効にする（OFFの間は「承認待ち」タブでの確認・送信操作が必須）
+            </label>
           </div>
+
           <button onClick={save} disabled={saving} className="mt-4 bg-gray-800 text-white hover:bg-gray-900 transition-colors px-4 py-2 text-xs tracking-widest disabled:opacity-50">{saving ? '保存中...' : '保存'}</button>
         </div>
       );
@@ -1282,6 +1306,7 @@
       { key: 'guides', label: '手順', icon: BookOpenIcon, adminOnly: false },
       { key: 'dashboard', label: 'ダッシュボード', icon: ListIcon, adminOnly: true },
       { key: 'orders', label: '発注管理', icon: BellIcon, adminOnly: true },
+      { key: 'approvals', label: '承認待ち', icon: CheckIcon, adminOnly: true },
       { key: 'settings', label: '設定', icon: SettingsIcon, adminOnly: true },
     ];
 
@@ -1566,6 +1591,83 @@
       );
     };
 
+    // ============================================================
+    // 承認待ちメッセージ（Phase2：GASが作った送信下書きを確認して送信する）
+    // ============================================================
+    const OUTBOX_KIND_LABEL = {
+      order_request: '発注依頼', delivery_request: '運搬依頼',
+      adv_shortage_notice: '不足報告通知', stale_alert: '未確認アラート'
+    };
+
+    const PendingApprovalView = ({ outbox, config, user, showAlert, showConfirm }) => {
+      const [approvingId, setApprovingId] = useState(null);
+      const pending = (outbox || []).filter(o => o.status === 'pending_review');
+      const sent = (outbox || []).filter(o => o.status === 'sent').slice(0, 10);
+
+      const approve = async (item) => {
+        if (!config.gasWebAppUrl || !config.gasSharedToken) {
+          showAlert('設定画面（全般）でGAS WebアプリURLと合言葉を設定してください。');
+          return;
+        }
+        setApprovingId(item.id);
+        try {
+          const res = await fetch(config.gasWebAppUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // application/jsonにするとCORSプリフライトでGASが失敗するため
+            body: JSON.stringify({ action: 'approveAndSend', token: config.gasSharedToken, outboxId: item.id, approverEmail: user.email }),
+          });
+          const json = await res.json();
+          if (!json.ok) throw new Error(json.error || '不明なエラー');
+          showAlert('送信しました。');
+        } catch (e) {
+          showAlert('送信に失敗しました。\n' + (e && e.message ? e.message : ''));
+        } finally {
+          setApprovingId(null);
+        }
+      };
+
+      return (
+        <div className="max-w-2xl mx-auto space-y-6">
+          <section>
+            <SectionLabel>承認待ち（{pending.length}件）</SectionLabel>
+            <div className="bg-white border border-gray-200 mx-4 divide-y divide-gray-100">
+              {pending.length === 0 && <p className="px-4 py-6 text-center text-xs text-gray-400">現在、承認待ちのメッセージはありません</p>}
+              {pending.map(item => (
+                <div key={item.id} className="px-4 py-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] tracking-widest uppercase text-gray-400">{OUTBOX_KIND_LABEL[item.kind] || item.kind}</span>
+                    <span className="text-[10px] text-gray-400">{item.draftedAt ? item.draftedAt.slice(0, 16).replace('T', ' ') : ''}</span>
+                  </div>
+                  <div className="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed bg-gray-50 border border-gray-100 p-3">{item.body}</div>
+                  <button
+                    onClick={() => showConfirm('この内容でChatworkへ送信しますか？', () => approve(item), '送信する')}
+                    disabled={approvingId === item.id}
+                    className="mt-2 w-full bg-gray-800 text-white hover:bg-gray-900 transition-colors px-4 py-2.5 text-xs tracking-widest disabled:opacity-50"
+                  >{approvingId === item.id ? '送信中...' : '内容を確認して送信する'}</button>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section>
+            <SectionLabel>最近送信済み</SectionLabel>
+            <div className="bg-white border border-gray-200 mx-4 divide-y divide-gray-100">
+              {sent.length === 0 && <p className="px-4 py-6 text-center text-xs text-gray-400">履歴はまだありません</p>}
+              {sent.map(item => (
+                <div key={item.id} className="px-4 py-3">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[10px] tracking-widest uppercase text-gray-400">{OUTBOX_KIND_LABEL[item.kind] || item.kind}</span>
+                    <span className="text-[10px] text-gray-400">{item.sentAt ? item.sentAt.slice(0, 16).replace('T', ' ') : ''}</span>
+                  </div>
+                  <p className="text-xs text-gray-500 mt-1 truncate">{item.body}</p>
+                </div>
+              ))}
+            </div>
+          </section>
+        </div>
+      );
+    };
+
     const OrderManagementView = ({ locations, items, stockLevels, orders, user, showAlert }) => {
       const [modalGroup, setModalGroup] = useState(null);
 
@@ -1676,6 +1778,7 @@
       const [items, setItems] = useState([]);
       const [stockLevels, setStockLevels] = useState({});
       const [orders, setOrders] = useState([]);
+      const [outbox, setOutbox] = useState([]);
       const [config, setConfig] = useState({ staleCheckDays: 14 });
       const [domainError, setDomainError] = useState(false);
 
@@ -1719,6 +1822,9 @@
           onSnapshot(col('orders'), (snap) => {
             setOrders(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.requestedAt || '').localeCompare(a.requestedAt || '')));
           }),
+          onSnapshot(col('outbox'), (snap) => {
+            setOutbox(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.draftedAt || '').localeCompare(a.draftedAt || '')));
+          }),
           // usersコレクション（担当者一覧）はPhase2でGAS側がFirestoreへ直接書き込む形で
           // 配達担当者を自動設定する設計のため、クライアント側での購読は不要（無駄な購読を削除）。
           onSnapshot(docRef('system_config', 'default'), (snap) => { if (snap.exists()) setConfig(snap.data()); }),
@@ -1734,7 +1840,7 @@
       }
 
       const isAdmin = ADMIN_EMAILS.includes((user.email || '').toLowerCase());
-      const commonProps = { locations, items, stockLevels, orders, config, staleCheckDays: config.staleCheckDays ?? 14, user, isAdmin, showAlert, showConfirm };
+      const commonProps = { locations, items, stockLevels, orders, outbox, config, staleCheckDays: config.staleCheckDays ?? 14, user, isAdmin, showAlert, showConfirm };
 
       const renderView = () => {
         switch (view) {
@@ -1743,6 +1849,7 @@
           case 'guides': return <GuidesView />;
           case 'dashboard': return isAdmin ? <DashboardView {...commonProps} /> : null;
           case 'orders': return isAdmin ? <OrderManagementView {...commonProps} /> : null;
+          case 'approvals': return isAdmin ? <PendingApprovalView {...commonProps} /> : null;
           case 'settings': return isAdmin ? <SettingsView {...commonProps} /> : null;
           default: return null;
         }
