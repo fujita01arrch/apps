@@ -804,11 +804,19 @@
               {orders.length === 0 && <p className="px-4 py-10 text-center text-xs text-gray-400">現在、配置待ちの発注はありません</p>}
               {orders.map(o => {
                 const hasMissed = o.missedItemIds && o.missedItemIds.length > 0;
+                const isMine = !!(o.deliveryAssignee && o.deliveryAssignee.uid === user.uid);
                 return (
-                  <div key={o.id} className="px-4 py-4">
-                    <div className="text-sm text-gray-800">{o.locationName}</div>
+                  <div key={o.id} className={`px-4 py-4 ${isMine ? 'bg-indigo-50 border-l-4 border-indigo-500' : ''}`}>
+                    <div className="flex items-center gap-2">
+                      <div className="text-sm text-gray-800">{o.locationName}</div>
+                      {isMine && <span className="text-[9px] tracking-widest bg-indigo-600 text-white px-1.5 py-0.5 shrink-0">あなた宛</span>}
+                    </div>
                     <div className="text-[10px] text-gray-400 mt-0.5">{o.items.map(i => `${i.itemName}×${i.requestedLots ?? 1}${i.orderUnit || ''}`).join('、')}</div>
-                    {o.deliveryAssignee && <div className="text-[10px] text-gray-400 mt-0.5">配達担当：{o.deliveryAssignee.name}</div>}
+                    {o.deliveryAssignee && (
+                      <div className={`text-[10px] mt-0.5 ${isMine ? 'text-indigo-700 font-medium' : 'text-gray-400'}`}>
+                        配達担当：{o.deliveryAssignee.name}{isMine ? '（あなたです）' : ''}
+                      </div>
+                    )}
                     {o.deliveryScheduledDate && <div className="text-[10px] text-gray-400 mt-0.5">到着予定：{o.deliveryScheduledDate}</div>}
                     {hasMissed && (
                       <div className="text-[10px] text-rose-500 mt-0.5">
