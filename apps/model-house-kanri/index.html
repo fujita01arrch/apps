@@ -632,42 +632,95 @@
     // ============================================================
     // 配置報告（ADV向け：配達待ちの発注を「配置しました」で完了させる）
     // ============================================================
+    // 配達待ちの発注のうち、配置できなかった品目を選ぶモーダル
+    const MissedItemsModal = ({ order, onClose, onConfirm, saving }) => {
+      const [selected, setSelected] = useState({});
+      const toggle = (itemId) => setSelected(prev => ({ ...prev, [itemId]: !prev[itemId] }));
+      const selectedIds = Object.keys(selected).filter(id => selected[id]);
+
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white max-w-sm w-full p-6 shadow-xl border border-gray-200">
+            <h3 className="font-serif tracking-wide text-sm text-gray-800 mb-1">{order.locationName}</h3>
+            <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-4">配置できなかった品目を選択してください</p>
+            <div className="space-y-2 mb-4">
+              {order.items.map(i => (
+                <label key={i.itemId} className="flex items-center gap-2 text-sm text-gray-700">
+                  <input type="checkbox" checked={!!selected[i.itemId]} onChange={() => toggle(i.itemId)} />
+                  {i.itemName}×{i.requestedLots ?? 1}
+                </label>
+              ))}
+            </div>
+            <p className="text-[10px] text-gray-400 mb-4">選択した品目以外は配置済みとして記録されます。</p>
+            <div className="flex justify-end gap-2">
+              <button onClick={onClose} className="px-4 py-2 text-xs tracking-widest border border-gray-300 text-gray-600 hover:bg-gray-100">キャンセル</button>
+              <button
+                onClick={() => onConfirm(selectedIds)}
+                disabled={selectedIds.length === 0 || saving}
+                className="px-4 py-2 text-xs tracking-widest bg-rose-500 text-white hover:bg-rose-600 disabled:opacity-50"
+              >{saving ? '記録中...' : 'この内容で記録する'}</button>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
     const DeliveryReportView = ({ orders: allOrders, user, showAlert, showConfirm }) => {
       const [submittingId, setSubmittingId] = useState(null);
+      const [missedModalOrder, setMissedModalOrder] = useState(null);
       const orders = (allOrders || []).filter(o => o.status === '配達待ち');
       const pendingOrders = (allOrders || []).filter(o => o.status === '依頼送信済み');
 
-      const reportDelivered = async (order) => {
+      // missedItemIds: 直近の「忘れました」報告で配置できなかった品目。次にこの拠点へ行く人へ
+      // 自動でChatwork通知するロジックはPhase2（カレンダー連携）で実装予定。ここでは記録のみ行う。
+      const reportDelivered = async (order, missedItemIds = []) => {
         setSubmittingId(order.id);
         try {
           const ts = nowIso();
-          const deliveredBy = { uid: user.uid, name: user.displayName || user.email };
+          const actor = { uid: user.uid, name: user.displayName || user.email };
+          const deliveredItems = order.items.filter(i => !missedItemIds.includes(i.itemId));
+          const allDelivered = missedItemIds.length === 0;
 
-          await updateDoc(docRef('orders', order.id), { status: '配達済み', deliveredAt: ts, deliveredBy, updatedAt: ts });
-
-          const lines = order.items.map(i => ({
-            itemId: i.itemId, itemName: i.itemName, unit: i.unit,
-            previousCount: null, newCount: i.reorderLot ?? i.reorderPoint ?? null, delta: null, belowReorderPoint: false,
-          }));
-          await addDoc(col('stockCheckSessions'), {
-            locationId: order.locationId, locationName: order.locationName, mode: 'restock',
-            allUnchanged: false, submittedBy: deliveredBy, submittedAt: ts,
-            linkedOrderId: order.id, lines, memo: '発注品の配置完了報告',
-          });
-          for (const line of lines) {
-            await setDoc(docRef('stockLevels', stockDocId(order.locationId, line.itemId)), {
-              locationId: order.locationId, itemId: line.itemId,
-              currentCount: line.newCount, belowReorderPoint: false,
-              lastCheckedAt: ts, lastCheckedBy: deliveredBy, lastCheckMode: 'restock',
-            }, { merge: true });
+          const patch = { updatedAt: ts };
+          if (allDelivered) {
+            patch.status = '配達済み';
+            patch.deliveredAt = ts;
+            patch.deliveredBy = actor;
+            patch.missedAt = null;
+            patch.missedItemIds = [];
+          } else {
+            patch.missedAt = ts;
+            patch.missedBy = actor;
+            patch.missedItemIds = missedItemIds;
           }
-          await updateDoc(docRef('locations', order.locationId), { lastCheckedAt: ts, lastCheckedBy: deliveredBy, updatedAt: ts });
+          await updateDoc(docRef('orders', order.id), patch);
 
-          showAlert('配置完了を記録しました。ありがとうございます。');
+          if (deliveredItems.length > 0) {
+            const lines = deliveredItems.map(i => ({
+              itemId: i.itemId, itemName: i.itemName, unit: i.unit,
+              previousCount: null, newCount: i.reorderLot ?? i.reorderPoint ?? null, delta: null, belowReorderPoint: false,
+            }));
+            await addDoc(col('stockCheckSessions'), {
+              locationId: order.locationId, locationName: order.locationName, mode: 'restock',
+              allUnchanged: false, submittedBy: actor, submittedAt: ts,
+              linkedOrderId: order.id, lines, memo: allDelivered ? '発注品の配置完了報告' : '発注品の一部配置完了報告',
+            });
+            for (const line of lines) {
+              await setDoc(docRef('stockLevels', stockDocId(order.locationId, line.itemId)), {
+                locationId: order.locationId, itemId: line.itemId,
+                currentCount: line.newCount, belowReorderPoint: false,
+                lastCheckedAt: ts, lastCheckedBy: actor, lastCheckMode: 'restock',
+              }, { merge: true });
+            }
+          }
+          await updateDoc(docRef('locations', order.locationId), { lastCheckedAt: ts, lastCheckedBy: actor, updatedAt: ts });
+
+          showAlert(allDelivered ? '配置完了を記録しました。ありがとうございます。' : '未配置の品目を記録しました。次にこの拠点へ行く方への連絡は、現状は藤田さん・染矢さんへ別途ご連絡ください（自動通知はPhase2で対応予定です）。');
         } catch (e) {
           showAlert('記録に失敗しました。\n' + (e && e.message ? e.message : ''));
         } finally {
           setSubmittingId(null);
+          setMissedModalOrder(null);
         }
       };
 
@@ -677,21 +730,45 @@
             <SectionLabel>配達待ちの発注（{orders.length}件）</SectionLabel>
             <div className="bg-white border border-gray-200 mx-4 divide-y divide-gray-100">
               {orders.length === 0 && <p className="px-4 py-10 text-center text-xs text-gray-400">現在、配置待ちの発注はありません</p>}
-              {orders.map(o => (
-                <div key={o.id} className="px-4 py-4">
-                  <div className="text-sm text-gray-800">{o.locationName}</div>
-                  <div className="text-[10px] text-gray-400 mt-0.5">{o.items.map(i => `${i.itemName}×${i.requestedLots ?? 1}`).join('、')}</div>
-                  {o.deliveryAssignee && <div className="text-[10px] text-gray-400 mt-0.5">配達担当：{o.deliveryAssignee.name}</div>}
-                  {o.deliveryScheduledDate && <div className="text-[10px] text-gray-400 mt-0.5">到着予定：{o.deliveryScheduledDate}</div>}
-                  <button
-                    onClick={() => showConfirm(`${o.locationName}へ備品を配置しましたか？`, () => reportDelivered(o), '配置しました')}
-                    disabled={submittingId === o.id}
-                    className="mt-2 w-full bg-gray-800 text-white hover:bg-gray-900 transition-colors px-4 py-2.5 text-xs tracking-widest disabled:opacity-50"
-                  >{submittingId === o.id ? '記録中...' : '配置しました'}</button>
-                </div>
-              ))}
+              {orders.map(o => {
+                const hasMissed = o.missedItemIds && o.missedItemIds.length > 0;
+                return (
+                  <div key={o.id} className="px-4 py-4">
+                    <div className="text-sm text-gray-800">{o.locationName}</div>
+                    <div className="text-[10px] text-gray-400 mt-0.5">{o.items.map(i => `${i.itemName}×${i.requestedLots ?? 1}`).join('、')}</div>
+                    {o.deliveryAssignee && <div className="text-[10px] text-gray-400 mt-0.5">配達担当：{o.deliveryAssignee.name}</div>}
+                    {o.deliveryScheduledDate && <div className="text-[10px] text-gray-400 mt-0.5">到着予定：{o.deliveryScheduledDate}</div>}
+                    {hasMissed && (
+                      <div className="text-[10px] text-rose-500 mt-0.5">
+                        未配置：{o.items.filter(i => o.missedItemIds.includes(i.itemId)).map(i => i.itemName).join('、')}（次の訪問時にお願いします）
+                      </div>
+                    )}
+                    <div className="flex gap-2 mt-2">
+                      <button
+                        onClick={() => showConfirm(`${o.locationName}へ備品をすべて配置しましたか？`, () => reportDelivered(o, []), '配置しました')}
+                        disabled={submittingId === o.id}
+                        className="flex-1 bg-gray-800 text-white hover:bg-gray-900 transition-colors px-4 py-2.5 text-xs tracking-widest disabled:opacity-50"
+                      >{submittingId === o.id ? '記録中...' : '配置しました'}</button>
+                      <button
+                        onClick={() => setMissedModalOrder(o)}
+                        disabled={submittingId === o.id}
+                        className="flex-1 border border-gray-300 text-gray-600 hover:bg-gray-100 transition-colors px-4 py-2.5 text-xs tracking-widest disabled:opacity-50"
+                      >忘れました</button>
+                    </div>
+                  </div>
+                );
+              })}
             </div>
           </section>
+
+          {missedModalOrder && (
+            <MissedItemsModal
+              order={missedModalOrder}
+              saving={submittingId === missedModalOrder.id}
+              onClose={() => setMissedModalOrder(null)}
+              onConfirm={(missedItemIds) => reportDelivered(missedModalOrder, missedItemIds)}
+            />
+          )}
 
           <section>
             <SectionLabel>発注済み・返答待ち（{pendingOrders.length}件）</SectionLabel>
@@ -1308,6 +1385,11 @@
                 配達担当：{order.deliveryAssignee ? order.deliveryAssignee.name : '自動設定予定（Phase2）'}
                 {order.deliveryScheduledDate ? `／到着予定 ${order.deliveryScheduledDate}` : ''}
               </div>
+              {order.missedItemIds && order.missedItemIds.length > 0 && (
+                <div className="text-[10px] text-rose-500 mt-0.5">
+                  未配置あり：{order.items.filter(i => order.missedItemIds.includes(i.itemId)).map(i => i.itemName).join('、')}（要フォロー）
+                </div>
+              )}
             </div>
             <span className={`text-[10px] tracking-widest uppercase px-2 py-0.5 shrink-0 ${STATUS_BADGE_CLS[order.status] || 'bg-gray-800 text-white'}`}>{ORDER_STATUS_DISPLAY[order.status] || order.status}</span>
           </div>
