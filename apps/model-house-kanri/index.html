@@ -632,8 +632,10 @@
     // ============================================================
     // 配置報告（ADV向け：配達待ちの発注を「配置しました」で完了させる）
     // ============================================================
-    // 配達待ちの発注のうち、配置できなかった品目を選ぶモーダル
-    const MissedItemsModal = ({ order, onClose, onConfirm, saving }) => {
+    // 配達待ちの発注のうち、配置できなかった品目を選ぶモーダル。
+    // pendingItems は「まだ配置できていない品目」のみ（前回の忘れました報告で
+    // 既に配置済みとされた品目は表示・選択の対象から外す）。
+    const MissedItemsModal = ({ order, pendingItems, onClose, onConfirm, saving }) => {
       const [selected, setSelected] = useState({});
       const toggle = (itemId) => setSelected(prev => ({ ...prev, [itemId]: !prev[itemId] }));
       const selectedIds = Object.keys(selected).filter(id => selected[id]);
@@ -644,7 +646,7 @@
             <h3 className="font-serif tracking-wide text-sm text-gray-800 mb-1">{order.locationName}</h3>
             <p className="text-[10px] text-rose-500 tracking-widest uppercase mb-4">配置できなかった品目を選択してください</p>
             <div className="space-y-2 mb-4">
-              {order.items.map(i => (
+              {pendingItems.map(i => (
                 <label key={i.itemId} className="flex items-center gap-2 text-sm text-gray-700">
                   <input type="checkbox" checked={!!selected[i.itemId]} onChange={() => toggle(i.itemId)} />
                   {i.itemName}×{i.requestedLots ?? 1}
@@ -678,7 +680,12 @@
         try {
           const ts = nowIso();
           const actor = { uid: user.uid, name: user.displayName || user.email };
-          const deliveredItems = order.items.filter(i => !missedItemIds.includes(i.itemId));
+          // pendingItemIds：今回の報告対象＝まだ配置できていない品目（前回の忘れました報告が
+          // あればその品目のみ、なければ全品目）。これ以外の品目は既に配置済みなので触らない。
+          const pendingItemIds = (order.missedItemIds && order.missedItemIds.length > 0)
+            ? order.missedItemIds
+            : order.items.map(i => i.itemId);
+          const deliveredItems = order.items.filter(i => pendingItemIds.includes(i.itemId) && !missedItemIds.includes(i.itemId));
           const allDelivered = missedItemIds.length === 0;
 
           const patch = { updatedAt: ts };
@@ -764,6 +771,11 @@
           {missedModalOrder && (
             <MissedItemsModal
               order={missedModalOrder}
+              pendingItems={
+                (missedModalOrder.missedItemIds && missedModalOrder.missedItemIds.length > 0)
+                  ? missedModalOrder.items.filter(i => missedModalOrder.missedItemIds.includes(i.itemId))
+                  : missedModalOrder.items
+              }
               saving={submittingId === missedModalOrder.id}
               onClose={() => setMissedModalOrder(null)}
               onConfirm={(missedItemIds) => reportDelivered(missedModalOrder, missedItemIds)}
