@@ -639,7 +639,9 @@
                       <div className="text-sm text-gray-800">{item.name}</div>
                       <div className="text-[10px] text-gray-400 tracking-wide mt-0.5">
                         発注 ×{line.requestedLots ?? 1}{item.orderUnit || ''}
-                        {order.status === '配達待ち' && order.deliveryScheduledDate ? `／到着予定 ${order.deliveryScheduledDate}` : ''}
+                        {order.status === '依頼送信済み' && order.requestedAt ? `／発注日 ${order.requestedAt.slice(0, 10)}` : ''}
+                        {order.status === '配達待ち' && order.deliveryScheduledDate ? `／鴨江到着予定 ${order.deliveryScheduledDate}` : ''}
+                        {order.status === '配達待ち' && order.deliveryVisitDate ? `／運搬・配置予定 ${order.deliveryVisitDate}` : ''}
                         {order.status === '配達待ち' && order.deliveryAssignee ? `／配達担当 ${order.deliveryAssignee.name}` : ''}
                       </div>
                     </div>
@@ -853,7 +855,12 @@
                         配達担当：{o.deliveryAssignee.name}{isMine ? '（あなたです）' : ''}
                       </div>
                     )}
-                    {o.deliveryScheduledDate && <div className="text-[10px] text-gray-400 mt-0.5">到着予定：{o.deliveryScheduledDate}</div>}
+                    {o.deliveryVisitDate && (
+                      <div className={`text-[10px] mt-0.5 ${isMine ? 'text-indigo-700 font-medium' : 'text-gray-400'}`}>
+                        運搬・配置予定：{o.deliveryVisitDate}
+                      </div>
+                    )}
+                    {o.deliveryScheduledDate && <div className="text-[10px] text-gray-400 mt-0.5">鴨江到着予定：{o.deliveryScheduledDate}</div>}
                     {hasMissed && (
                       <div className="text-[10px] text-rose-500 mt-0.5">
                         未配置：{o.items.filter(i => o.missedItemIds.includes(i.itemId)).map(i => i.itemName).join('、')}（次の訪問時にお願いします）
@@ -899,7 +906,9 @@
                 <div key={o.id} className="px-4 py-3">
                   <div className="text-sm text-gray-800">{o.locationName}｜{o.orderRole}</div>
                   <div className="text-[10px] text-gray-400 mt-0.5">{o.items.map(i => `${i.itemName}×${i.requestedLots ?? 1}${i.orderUnit || ''}`).join('、')}</div>
-                  <div className="text-[10px] text-amber-600 mt-0.5">発注依頼済み・到着日の連絡待ちです</div>
+                  <div className="text-[10px] text-amber-600 mt-0.5">
+                    発注依頼済み（{o.requestedAt ? o.requestedAt.slice(0, 10) : '日付不明'}）・鴨江到着日の連絡待ちです
+                  </div>
                 </div>
               ))}
             </div>
@@ -2130,8 +2139,12 @@
               <div className="text-sm text-gray-800">{order.locationName}｜{order.orderRole}</div>
               <div className="text-[10px] text-gray-400 mt-0.5">{order.items.map(i => `${i.itemName}×${i.requestedLots ?? 1}${i.orderUnit || ''}`).join('、')}</div>
               <div className="text-[10px] text-gray-400 mt-0.5">
-                配達担当：{order.deliveryAssignee ? order.deliveryAssignee.name : '自動設定予定（Phase2）'}
-                {order.deliveryScheduledDate ? `／到着予定 ${order.deliveryScheduledDate}` : ''}
+                発注日：{order.requestedAt ? order.requestedAt.slice(0, 10) : '不明'}
+                {order.deliveryScheduledDate ? `／鴨江到着予定 ${order.deliveryScheduledDate}` : ''}
+              </div>
+              <div className="text-[10px] text-gray-400 mt-0.5">
+                配達担当：{order.deliveryAssignee ? order.deliveryAssignee.name : '自動設定予定'}
+                {order.deliveryVisitDate ? `／運搬・配置予定 ${order.deliveryVisitDate}` : ''}
               </div>
               {order.missedItemIds && order.missedItemIds.length > 0 && (
                 <div className="text-[10px] text-rose-500 mt-0.5">
@@ -2148,7 +2161,7 @@
                   type="date" value={scheduledDate} onChange={(e) => setScheduledDate(e.target.value)}
                   className="border border-gray-300 text-xs px-2 py-1"
                 />
-                <button onClick={() => advance('配達待ち')} disabled={saving} className="text-[11px] tracking-widest border border-gray-300 text-gray-600 hover:bg-gray-100 px-3 py-1 disabled:opacity-50">{saving ? '登録中...' : '到着予定を登録'}</button>
+                <button onClick={() => advance('配達待ち')} disabled={saving} className="text-[11px] tracking-widest border border-gray-300 text-gray-600 hover:bg-gray-100 px-3 py-1 disabled:opacity-50">{saving ? '登録中...' : '鴨江到着予定を登録'}</button>
               </>
             )}
             {order.status === '配達待ち' && (
