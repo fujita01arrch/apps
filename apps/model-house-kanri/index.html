@@ -2079,12 +2079,14 @@
         }
       };
 
-      // GAS経由でChatworkへ自動送信するボタンは常に表示する（ADV本人手配のみ送信先が無いため対象外）。
+      // GAS経由でChatworkへ自動送信するボタンは常に表示する。宛先は担当区分によって異なる
+      // （業務管理・集客マーケは発注先の業者、ADV本人手配はADV備品発注依頼ルームのADV本人）。
       // 「完全自動化」チェック（設定画面）がONの場合はGASが1日3回のバッチで自動的に送信するが、
       // その場合もこのボタンで随時・任意のタイミングで手動送信できる（バッチを待たず今すぐ送りたい時用）。
       const roomIdForRole = group.role === '業務管理'
         ? config.chatworkRoomIds?.operations
-        : group.role === '集客・マーケ' ? config.chatworkRoomIds?.marketing : null;
+        : group.role === '集客・マーケ' ? config.chatworkRoomIds?.marketing
+        : group.role === 'ADV本人手配' ? config.chatworkRoomIds?.advShortageReport : null;
 
       const sendViaGas = async () => {
         if (!config.gasWebAppUrl || !config.gasSharedToken) {
@@ -2328,7 +2330,7 @@
           if (!s.belowReorderPoint) return;
           const item = itemById[s.itemId];
           const location = locationById[s.locationId];
-          if (!item || !location || item.orderRole === 'ADV本人手配') return;
+          if (!item || !location) return;
           if (openOrderItemKeys.has(s.locationId + '_' + s.itemId)) return;
           const key = s.locationId + '|' + item.orderRole;
           byLocationRole[key] = byLocationRole[key] || { location, role: item.orderRole, lines: [] };
