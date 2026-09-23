@@ -1129,9 +1129,13 @@
     const StaffSettingsPanel = ({ staffList, user, isAdmin, showAlert, showConfirm }) => {
       const [editing, setEditing] = useState(undefined); // undefined=閉じている, null=新規, obj=編集
 
+      const myId = userDocId(user.email);
       const remove = async (staff) => {
-        if (staff.email.toLowerCase() === (user.email || '').toLowerCase()) {
-          showAlert('自分自身は削除できません。');
+        // 「自分自身」の判定はメールアドレスの値ではなく、ドキュメントIDで行う。
+        // メールアドレスが同じでも、旧方式（ログインID採番）で作られた重複レコードは
+        // 別ドキュメントなので、そちらは削除できるようにする（今回の移行で必要になるケース）。
+        if (staff.id === myId) {
+          showAlert('現在ログイン中の自分自身のレコードは削除できません。');
           return;
         }
         await deleteDoc(docRef('users', staff.id));
@@ -1152,8 +1156,12 @@
             {staffList.map(s => (
               <div key={s.id} className="flex items-center justify-between px-4 py-3">
                 <div>
-                  <div className="text-sm text-gray-800">{s.displayName}{!s.uid && <span className="ml-2 text-[10px] text-amber-600">未ログイン</span>}</div>
+                  <div className="text-sm text-gray-800">
+                    {s.displayName}{!s.uid && <span className="ml-2 text-[10px] text-amber-600">未ログイン</span>}
+                    {s.id === myId && <span className="ml-2 text-[10px] text-indigo-600">これが現在の正しいレコードです</span>}
+                  </div>
                   <div className="text-[10px] text-gray-400 mt-0.5">{s.email}／{roleLabel[s.role] || s.role || '未設定'}{s.chatworkContactId ? `／ChatworkID: ${s.chatworkContactId}` : '／ChatworkID未登録'}</div>
+                  <div className="text-[9px] text-gray-300 mt-0.5">ID: {s.id}</div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <button onClick={() => setEditing(s)} className="text-gray-400 hover:text-gray-700"><EditIcon className="w-4 h-4" /></button>
