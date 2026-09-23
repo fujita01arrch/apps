@@ -23,7 +23,7 @@
     import {
       initializeFirestore, persistentLocalCache, persistentSingleTabManager,
       collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot, getDoc, addDoc,
-      query, orderBy, limit, where, writeBatch
+      query, orderBy, limit, where, writeBatch, increment
     } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
 
     const { useState, useEffect, useMemo, useRef } = React;
@@ -566,6 +566,18 @@
             allUnchanged: !!allUnchanged, submittedBy, submittedAt: ts,
             linkedOrderId: null, lines, memo: '',
           });
+          // 担当者別の統計は、35日で削除される生ログ（stockCheckSessions）からではなく、
+          // ここで積み上げる永続カウンター（staffActivityStats）から算出する。
+          // こうすることで、生ログを定期削除してデータ量を抑えつつ、統計自体は消えずに残る。
+          if (!isWithdrawal) {
+            const hasShortageReport = lines.some(l => l.belowReorderPoint);
+            batch.set(docRef('staffActivityStats', userDocId(submittedBy.email)), {
+              displayName: submittedBy.name, email: submittedBy.email,
+              checkInCount: increment(1),
+              shortageReportCount: increment(hasShortageReport ? 1 : 0),
+              lastActivityAt: ts,
+            }, { merge: true });
+          }
           for (const line of lines) {
             batch.set(docRef('stockLevels', stockDocId(location.id, line.itemId)), {
               locationId: location.id, itemId: line.itemId,
@@ -1812,7 +1824,7 @@
       );
     };
 
-    const DashboardView = ({ locations, items, stockLevels, orders, recentSessions, staleCheckDays }) => {
+    const DashboardView = ({ locations, items, stockLevels, orders, recentSessions, staffActivityStats, staleCheckDays }) => {
       const itemById = useMemo(() => Object.fromEntries(items.map(i => [i.id, i])), [items]);
       const sortedLocations = [...locations].filter(l => l.isActive).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
@@ -1844,21 +1856,14 @@
         return Object.entries(counts).map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value).slice(0, 8);
       }, [orders]);
 
-      // 担当者別のアクティビティ（直近35日）：在庫確認の実施回数と、うち発注が必要と報告した回数。
-      // これが多い人ほど、こまめに在庫確認・不足報告をしてくれている＝奨励したい行動。
+      // 担当者別のアクティビティ：staffActivityStats（永続カウンター、在庫確認のたびに積み上げ）から。
+      // 生ログ（stockCheckSessions）は35日で削除されるが、このカウンターは消えないので全期間の統計になる。
       const staffActivityRanking = useMemo(() => {
-        const stats = {};
-        recentSessions.forEach(s => {
-          const name = s.submittedBy?.name || s.submittedBy?.email || '不明';
-          stats[name] = stats[name] || { checkIns: 0, shortageReports: 0 };
-          stats[name].checkIns += 1;
-          if ((s.lines || []).some(l => l.belowReorderPoint)) stats[name].shortageReports += 1;
-        });
-        return Object.entries(stats)
-          .map(([label, v]) => ({ label, value: v.shortageReports, checkIns: v.checkIns }))
+        return staffActivityStats
+          .map(s => ({ label: s.displayName || s.email, value: s.shortageReportCount || 0, checkIns: s.checkInCount || 0 }))
           .sort((a, b) => b.value - a.value || b.checkIns - a.checkIns)
           .slice(0, 8);
-      }, [recentSessions]);
+      }, [staffActivityStats]);
 
       const SESSION_MODE_LABEL = { checkin: '在庫確認', withdrawal: '予備持ち出し', adjustment: '棚卸修正', restock: '配置完了' };
 
@@ -1909,9 +1914,9 @@
                 <SimpleBarList data={itemOrderRanking} barColor="bg-amber-500" />
               </div>
               <div className="border-t border-gray-100 pt-4">
-                <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-2">不足報告が多いスタッフ（直近35日）</p>
+                <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-2">不足報告が多いスタッフ（全期間の累計）</p>
                 <SimpleBarList data={staffActivityRanking} barColor="bg-emerald-600" />
-                <p className="text-[10px] text-gray-300 mt-2">数値は「発注が必要」と報告した回数。カッコ内の在庫確認実施回数は含めていません。</p>
+                <p className="text-[10px] text-gray-300 mt-2">数値は「発注が必要」と報告した回数の累計です。この数値自体は自動削除されず残り続けます。</p>
               </div>
             </div>
           </section>
@@ -1950,7 +1955,7 @@
                 </div>
               ))}
             </div>
-            <p className="text-[10px] text-gray-300 text-center mt-2">統計・履歴は直近35日分のみ保持しています（それより古いデータは自動的に削除されます）。</p>
+            <p className="text-[10px] text-gray-300 text-center mt-2">この一覧は直近35日分のみです（それより古い個別記録は自動削除されますが、上の統計の数値自体は消えずに残ります）。</p>
           </section>
         </div>
       );
@@ -2344,6 +2349,7 @@
       const [outbox, setOutbox] = useState([]);
       const [staffList, setStaffList] = useState([]);
       const [recentSessions, setRecentSessions] = useState([]);
+      const [staffActivityStats, setStaffActivityStats] = useState([]);
       const [config, setConfig] = useState({ staleCheckDays: 14 });
       const [domainError, setDomainError] = useState(false);
 
@@ -2403,6 +2409,8 @@
             query(col('stockCheckSessions'), where('submittedAt', '>=', new Date(Date.now() - 35 * 24 * 60 * 60 * 1000).toISOString())),
             (snap) => setRecentSessions(snap.docs.map(d => ({ id: d.id, ...d.data() })))
           ),
+          // 担当者別統計の永続カウンター（生ログを35日で削除しても、これは消えずに積み上がる）
+          onSnapshot(col('staffActivityStats'), (snap) => setStaffActivityStats(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
           onSnapshot(docRef('system_config', 'default'), (snap) => { if (snap.exists()) setConfig(snap.data()); }),
         ];
         return () => unsubs.forEach(u => u());
@@ -2424,7 +2432,7 @@
       const myStaffRecord = staffList.find(s => s.id === userDocId(user.email));
       const isRegistered = !!myStaffRecord;
       const isAdmin = myStaffRecord ? myStaffRecord.role === 'admin' : ADMIN_EMAILS.includes((user.email || '').toLowerCase());
-      const commonProps = { locations, items, stockLevels, orders, outbox, staffList, recentSessions, config, staleCheckDays: config.staleCheckDays ?? 14, user, isAdmin, isRegistered, showAlert, showConfirm };
+      const commonProps = { locations, items, stockLevels, orders, outbox, staffList, recentSessions, staffActivityStats, config, staleCheckDays: config.staleCheckDays ?? 14, user, isAdmin, isRegistered, showAlert, showConfirm };
 
       const renderView = () => {
         switch (view) {
