@@ -1059,16 +1059,30 @@
       );
     };
 
-    // 自分のChatwork個人APIトークンを登録する自己申告カード。userSecrets/{自分のメール}に
-    // 保存する（artifacts配下の共通データ置き場とは別のコレクション。Firestoreセキュリティ
-    // ルールで本人しか読み書きできないよう制限している。他のスタッフの分は見えない・触れない）。
-    const MyChatworkTokenCard = ({ user, showAlert }) => {
+    // 自分のChatwork個人APIトークンを登録する自己申告カード。
+    //
+    // 保護は二重になっている：
+    // 1. 画面レベル：このカードは管理者（isAdmin）にしか表示しない（下のガード節）。
+    //    さらに、この画面自体（設定タブ）は App.jsの renderView 側で isAdmin の人にしか
+    //    そもそもルーティングされない（二重に隠れている）。
+    // 2. データベースレベル：保存先は artifacts配下の共通データ置き場とは別の、独立した
+    //    トップレベルコレクション userSecrets/{自分のメールアドレス}。Firestoreの
+    //    セキュリティルール（Firebase Console > Firestore Database > ルール）で、
+    //    「リクエストしてきた本人のメールアドレスとドキュメントIDが一致する場合のみ」
+    //    読み書きを許可するよう設定済み。つまり管理者であっても、他人のトークンは
+    //    ブラウザの開発者ツールで直接Firestoreを叩いても読めない（画面を隠しているだけではない）。
+    //    GAS（サーバー側）だけは、サービスアカウント経由の別ルートでこのルールの対象外として
+    //    全員分を読み取り、実際の代理送信に使う。
+    const MyChatworkTokenCard = ({ user, isAdmin, showAlert }) => {
       const [token, setToken] = useState('');
       const [loaded, setLoaded] = useState(false);
       const [saving, setSaving] = useState(false);
       const myId = userDocId(user.email);
 
+      // Reactのフック規則上、useEffectより後ろにガード節を置く必要があるため、
+      // isAdmin===falseの時はuseEffect内で何もしない（実処理は下のreturn nullで止める）。
       useEffect(() => {
+        if (!isAdmin) return;
         let cancelled = false;
         getDoc(doc(db, 'userSecrets', myId)).then(snap => {
           if (cancelled) return;
@@ -1076,7 +1090,9 @@
           setLoaded(true);
         }).catch(() => setLoaded(true));
         return () => { cancelled = true; };
-      }, [myId]);
+      }, [myId, isAdmin]);
+
+      if (!isAdmin) return null; // 画面レベルの保護（呼び出し元が万一admin以外に見せても表示しない）
 
       const save = async () => {
         setSaving(true);
@@ -1093,7 +1109,13 @@
       return (
         <div className="bg-white border border-gray-200 mx-4 p-4 mb-3">
           <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-1">あなたのChatwork APIトークン</p>
-          <p className="text-[11px] text-gray-400 mb-2">ここに入力した内容は、あなた以外（管理者を含む）には見えません。「連携設定」タブで代理送信者としてあなたが選ばれている場合のみ使われます。</p>
+          <p className="text-[11px] text-gray-400 mb-2">
+            ここに入力した内容は、あなた以外（他の管理者を含む）には見えません。画面を隠しているだけでなく、
+            データベース側の設定（Firestoreセキュリティルール）でも「本人のメールアドレスと一致する場合のみ」
+            読み書きできるよう制限しているため、他の人が開発者ツール等で直接データを覗いても読み取れません。
+            自動送信の処理（GASサーバー）だけは、別の安全な経路でこの内容を使って「連携設定」タブで選ばれた
+            代理送信者としてChatworkへ送信します。
+          </p>
           {loaded ? (
             <>
               <input type="password" className={inputCls} value={token} onChange={e => setToken(e.target.value)} placeholder="Chatworkの個人APIトークン" />
@@ -1104,7 +1126,7 @@
       );
     };
 
-    const StaffSettingsPanel = ({ staffList, user, showAlert, showConfirm }) => {
+    const StaffSettingsPanel = ({ staffList, user, isAdmin, showAlert, showConfirm }) => {
       const [editing, setEditing] = useState(undefined); // undefined=閉じている, null=新規, obj=編集
 
       const remove = async (staff) => {
@@ -1119,7 +1141,7 @@
 
       return (
         <div>
-          <MyChatworkTokenCard user={user} showAlert={showAlert} />
+          <MyChatworkTokenCard user={user} isAdmin={isAdmin} showAlert={showAlert} />
           <div className="flex justify-end px-4 mb-2">
             <button onClick={() => setEditing(null)} className="flex items-center gap-1 text-[11px] tracking-widest bg-gray-800 text-white hover:bg-gray-900 px-3 py-1.5">
               <PlusIcon className="w-3.5 h-3.5" />スタッフを追加
@@ -1553,7 +1575,7 @@
       );
     };
 
-    const SettingsView = ({ locations, items, staffList, config, user, showAlert, showConfirm }) => {
+    const SettingsView = ({ locations, items, staffList, config, user, isAdmin, showAlert, showConfirm }) => {
       const [tab, setTab] = useState('locations');
       const tabs = [
         { key: 'locations', label: '拠点' },
@@ -1574,7 +1596,7 @@
           {tab === 'locations' && <LocationsSettingsPanel locations={locations} showAlert={showAlert} showConfirm={showConfirm} />}
           {tab === 'items' && <EquipmentSettingsPanel items={items} showAlert={showAlert} showConfirm={showConfirm} />}
           {tab === 'guides' && <GuidesSettingsPanel showAlert={showAlert} showConfirm={showConfirm} user={user} />}
-          {tab === 'staff' && <StaffSettingsPanel staffList={staffList} user={user} showAlert={showAlert} showConfirm={showConfirm} />}
+          {tab === 'staff' && <StaffSettingsPanel staffList={staffList} user={user} isAdmin={isAdmin} showAlert={showAlert} showConfirm={showConfirm} />}
           {tab === 'templates' && <MessageTemplatesSettingsPanel config={config} showAlert={showAlert} />}
           {tab === 'integration' && <IntegrationSettingsPanel config={config} staffList={staffList} showAlert={showAlert} />}
           {tab === 'basic' && <BasicSettingsPanel config={config} showAlert={showAlert} />}
