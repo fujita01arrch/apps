@@ -227,9 +227,14 @@
     // 拠点タイプごとに、その拠点で扱う備品カテゴリを絞り込む。
     // 鴨江事務所（予備在庫）は「鴨江個人用」品目のみ、それ以外の拠点（モデルハウス・完成見学会）は
     // 「鴨江個人用」以外の品目のみを対象にする（無関係な品目が入り混じって表示されるのを防ぐ）。
+    // さらに完成見学会は常設モデルハウスより備品が少ないため、品目ごとの
+    // appliesToCompletionViewing フラグ（既定true。未設定＝旧データは全て対象）で絞り込む。
     function isItemApplicableToLocation(item, location) {
       const isPersonalOnly = item.category === '鴨江個人用';
-      return location.type === 'office_reserve' ? isPersonalOnly : !isPersonalOnly;
+      if (location.type === 'office_reserve') return isPersonalOnly;
+      if (isPersonalOnly) return false;
+      if (location.type === 'completion_viewing') return item.appliesToCompletionViewing !== false;
+      return true;
     }
     function daysSince(isoString) {
       if (!isoString) return Infinity;
@@ -1262,6 +1267,7 @@
       const [orderUnitLabel, setOrderUnitLabel] = useState(item?.orderUnitLabel || '');
       const [tapIncrement, setTapIncrement] = useState(item?.tapIncrement ?? 1);
       const [tapMax, setTapMax] = useState(item?.tapMax ?? 3);
+      const [appliesToCompletionViewing, setAppliesToCompletionViewing] = useState(item?.appliesToCompletionViewing !== false);
       const [note, setNote] = useState(item?.note || '');
       const [saving, setSaving] = useState(false);
 
@@ -1278,6 +1284,7 @@
             orderUnitLabel: orderUnitLabel.trim(),
             tapIncrement: Math.max(1, Number(tapIncrement) || 1),
             tapMax: Math.max(1, Number(tapMax) || 1),
+            appliesToCompletionViewing,
             note, updatedAt: ts,
           };
           if (isNew) {
@@ -1322,6 +1329,12 @@
               <FormField label="1タップの増分（発注する単位）"><input type="number" min="1" className={inputCls} value={tapIncrement} onChange={e => setTapIncrement(e.target.value)} /></FormField>
               <FormField label="タップ上限（×いくつまで）"><input type="number" min="1" className={inputCls} value={tapMax} onChange={e => setTapMax(e.target.value)} /></FormField>
             </div>
+            {category !== '鴨江個人用' && (
+              <label className="flex items-center gap-2 text-sm text-gray-700 mb-3">
+                <input type="checkbox" checked={appliesToCompletionViewing} onChange={e => setAppliesToCompletionViewing(e.target.checked)} />
+                完成見学会でも使用する（オフにすると完成見学会の在庫確認画面には表示されません）
+              </label>
+            )}
             <FormField label="備考"><input className={inputCls} value={note} onChange={e => setNote(e.target.value)} /></FormField>
             <div className="flex justify-end gap-2 mt-4">
               <button onClick={onClose} className="px-4 py-2 text-xs tracking-widest border border-gray-300 text-gray-600 hover:bg-gray-100">キャンセル</button>
@@ -1361,6 +1374,7 @@
                   <div className="text-sm text-gray-800">{item.name}{!item.isActive && '（無効）'}</div>
                   <div className="text-[10px] text-gray-400 mt-0.5">
                     {item.orderRole} ／ 必要在庫数 {item.reorderPoint ?? '—'}{item.stockUnit}以上 ／ 発注単位 {item.orderUnit}{item.orderUnitLabel ? `（${item.orderUnitLabel}）` : ''}
+                    {item.category !== '鴨江個人用' && (item.appliesToCompletionViewing === false ? ' ／ 完成見学会：対象外' : ' ／ 完成見学会：対象')}
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
