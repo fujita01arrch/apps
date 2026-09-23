@@ -22,7 +22,7 @@
     } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
     import {
       initializeFirestore, persistentLocalCache, persistentSingleTabManager,
-      collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot, getDoc, getDocs, addDoc,
+      collection, doc, setDoc, updateDoc, deleteDoc, onSnapshot, getDoc, addDoc,
       query, orderBy, limit, writeBatch
     } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-firestore.js";
 
@@ -830,19 +830,25 @@
       );
     };
 
-    // ============================================================
-    // 手順・印刷方法ページ（閲覧）
-    // ============================================================
-    const GuidesView = () => {
+    // guidesコレクションの購読は閲覧画面・設定画面の両方で必要なため、共通フックにまとめる
+    // （同じonSnapshotロジックが2箇所に重複していたのを解消）。
+    function useGuides() {
       const [guides, setGuides] = useState([]);
-      const [openId, setOpenId] = useState(null);
-
       useEffect(() => {
         const unsub = onSnapshot(col('guides'), (snap) => {
           setGuides(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.order ?? 0) - (b.order ?? 0)));
         });
         return () => unsub();
       }, []);
+      return guides;
+    }
+
+    // ============================================================
+    // 手順・印刷方法ページ（閲覧）
+    // ============================================================
+    const GuidesView = () => {
+      const guides = useGuides();
+      const [openId, setOpenId] = useState(null);
 
       return (
         <div className="max-w-xl mx-auto px-4 space-y-2">
@@ -857,7 +863,12 @@
                 <ChevronDownIcon className={`w-4 h-4 text-gray-400 transition-transform ${openId === g.id ? 'rotate-180' : ''}`} />
               </button>
               {openId === g.id && (
-                <div className="px-4 pb-4 text-sm text-gray-600 whitespace-pre-wrap leading-relaxed border-t border-gray-100 pt-3">{g.bodyText}</div>
+                <div className="px-4 pb-4 border-t border-gray-100 pt-3">
+                  <p className="text-sm text-gray-600 whitespace-pre-wrap leading-relaxed">{g.bodyText}</p>
+                  {(g.imageUrls || []).map((url, i) => (
+                    <img key={i} src={url} alt="" className="mt-3 max-w-full border border-gray-200" />
+                  ))}
+                </div>
               )}
             </div>
           ))}
@@ -1093,6 +1104,7 @@
       const isNew = !guide;
       const [title, setTitle] = useState(guide?.title || '');
       const [bodyText, setBodyText] = useState(guide?.bodyText || '');
+      const [imageUrlsText, setImageUrlsText] = useState((guide?.imageUrls || []).join('\n'));
       const [saving, setSaving] = useState(false);
 
       const save = async () => {
@@ -1101,11 +1113,12 @@
         try {
           const ts = nowIso();
           const updatedBy = user.displayName || user.email;
+          const imageUrls = imageUrlsText.split('\n').map(s => s.trim()).filter(Boolean);
           if (isNew) {
             const id = 'guide-' + Date.now();
-            await setDoc(docRef('guides', id), { id, title, bodyText, order: 999, updatedAt: ts, updatedBy });
+            await setDoc(docRef('guides', id), { id, title, bodyText, imageUrls, order: 999, updatedAt: ts, updatedBy });
           } else {
-            await updateDoc(docRef('guides', guide.id), { title, bodyText, updatedAt: ts, updatedBy });
+            await updateDoc(docRef('guides', guide.id), { title, bodyText, imageUrls, updatedAt: ts, updatedBy });
           }
           onClose();
         } catch (e) {
@@ -1121,6 +1134,9 @@
             <h3 className="font-serif tracking-wide text-sm text-gray-800 mb-4">{isNew ? '手順ページを追加' : '手順ページを編集'}</h3>
             <FormField label="タイトル"><input className={inputCls} value={title} onChange={e => setTitle(e.target.value)} /></FormField>
             <FormField label="本文"><textarea rows={10} className={inputCls} value={bodyText} onChange={e => setBodyText(e.target.value)} /></FormField>
+            <FormField label="画像URL（1行に1つ。Googleドライブ等の共有リンクを貼り付け）">
+              <textarea rows={3} className={inputCls} value={imageUrlsText} onChange={e => setImageUrlsText(e.target.value)} placeholder="https://..." />
+            </FormField>
             <div className="flex justify-end gap-2 mt-4">
               <button onClick={onClose} className="px-4 py-2 text-xs tracking-widest border border-gray-300 text-gray-600 hover:bg-gray-100">キャンセル</button>
               <button onClick={save} disabled={saving} className="px-4 py-2 text-xs tracking-widest bg-gray-800 text-white hover:bg-gray-900 disabled:opacity-50">{saving ? '保存中...' : '保存'}</button>
@@ -1131,13 +1147,8 @@
     };
 
     const GuidesSettingsPanel = ({ showAlert, showConfirm, user }) => {
-      const [guides, setGuides] = useState([]);
+      const guides = useGuides();
       const [editing, setEditing] = useState(undefined);
-
-      useEffect(() => {
-        const unsub = onSnapshot(col('guides'), (snap) => setGuides(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.order ?? 0) - (b.order ?? 0))));
-        return () => unsub();
-      }, []);
 
       const remove = async (guide) => { await deleteDoc(docRef('guides', guide.id)); };
 
@@ -1327,7 +1338,7 @@
                     <div className="text-sm text-rose-600 font-medium">{s.item.name}</div>
                     <div className="text-[10px] text-gray-400">{s.location.name}</div>
                   </div>
-                  <span className="text-xs text-rose-500">残 {s.currentCount}{s.item.unit}（必要在庫数 {s.item.reorderPoint}{s.item.unit}以上）</span>
+                  <span className="text-xs text-rose-500">残り目安 {s.currentCount}{s.item.unit}（必要在庫数 {s.item.reorderPoint}{s.item.unit}以上）</span>
                 </div>
               ))}
             </div>
@@ -1433,11 +1444,13 @@
 
     const OrderStatusUpdateRow = ({ order, showAlert }) => {
       const [scheduledDate, setScheduledDate] = useState(order.deliveryScheduledDate || '');
+      const [saving, setSaving] = useState(false);
 
       // 「配達済み」への変更はここでは行わない（配置報告画面の「配置しました／忘れました」からのみ
       // 行う設計に統一した。ここで直接ステータスだけ変更すると在庫データが更新されず、
       // 同じ品目が再び「発注が必要」に浮上する不整合が起きるため）。
       const advance = async (nextStatus) => {
+        setSaving(true);
         const ts = nowIso();
         const patch = { status: nextStatus, updatedAt: ts };
         if (nextStatus === '配達待ち') patch.deliveryScheduledDate = scheduledDate || null;
@@ -1445,6 +1458,8 @@
           await updateDoc(docRef('orders', order.id), patch);
         } catch (e) {
           showAlert('更新に失敗しました。\n' + (e && e.message ? e.message : ''));
+        } finally {
+          setSaving(false);
         }
       };
 
@@ -1473,7 +1488,7 @@
                   type="date" value={scheduledDate} onChange={(e) => setScheduledDate(e.target.value)}
                   className="border border-gray-300 text-xs px-2 py-1"
                 />
-                <button onClick={() => advance('配達待ち')} className="text-[11px] tracking-widest border border-gray-300 text-gray-600 hover:bg-gray-100 px-3 py-1">到着予定を登録</button>
+                <button onClick={() => advance('配達待ち')} disabled={saving} className="text-[11px] tracking-widest border border-gray-300 text-gray-600 hover:bg-gray-100 px-3 py-1 disabled:opacity-50">{saving ? '登録中...' : '到着予定を登録'}</button>
               </>
             )}
             {order.status === '配達待ち' && (
@@ -1484,7 +1499,7 @@
       );
     };
 
-    const OrderManagementView = ({ locations, items, stockLevels, orders, staffList, user, showAlert }) => {
+    const OrderManagementView = ({ locations, items, stockLevels, orders, user, showAlert }) => {
       const [modalGroup, setModalGroup] = useState(null);
 
       const itemById = useMemo(() => Object.fromEntries(items.map(i => [i.id, i])), [items]);
@@ -1521,8 +1536,8 @@
             <SectionLabel>発注が必要な状態（{pendingGroups.length}件）</SectionLabel>
             <div className="bg-white border border-gray-200 mx-4 divide-y divide-gray-100">
               {pendingGroups.length === 0 && <p className="px-4 py-6 text-center text-xs text-gray-400">現在、新規に発注が必要な品目はありません</p>}
-              {pendingGroups.map((g, idx) => (
-                <div key={idx} className="flex items-center justify-between px-4 py-3">
+              {pendingGroups.map((g) => (
+                <div key={g.location.id + '|' + g.role} className="flex items-center justify-between px-4 py-3">
                   <div>
                     <div className="text-sm text-gray-800">{g.location.name}｜{g.role}</div>
                     <div className="text-[10px] text-gray-400 mt-0.5">{g.lines.map(l => `${l.itemName}×${l.requestedLots ?? 1}`).join('、')}</div>
@@ -1581,7 +1596,6 @@
       const [items, setItems] = useState([]);
       const [stockLevels, setStockLevels] = useState({});
       const [orders, setOrders] = useState([]);
-      const [staffList, setStaffList] = useState([]);
       const [config, setConfig] = useState({ staleCheckDays: 14 });
       const [domainError, setDomainError] = useState(false);
 
@@ -1625,7 +1639,8 @@
           onSnapshot(col('orders'), (snap) => {
             setOrders(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.requestedAt || '').localeCompare(a.requestedAt || '')));
           }),
-          onSnapshot(col('users'), (snap) => setStaffList(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
+          // usersコレクション（担当者一覧）はPhase2でGAS側がFirestoreへ直接書き込む形で
+          // 配達担当者を自動設定する設計のため、クライアント側での購読は不要（無駄な購読を削除）。
           onSnapshot(docRef('system_config', 'default'), (snap) => { if (snap.exists()) setConfig(snap.data()); }),
         ];
         return () => unsubs.forEach(u => u());
@@ -1639,7 +1654,7 @@
       }
 
       const isAdmin = ADMIN_EMAILS.includes((user.email || '').toLowerCase());
-      const commonProps = { locations, items, stockLevels, orders, staffList, config, staleCheckDays: config.staleCheckDays ?? 14, user, isAdmin, showAlert, showConfirm };
+      const commonProps = { locations, items, stockLevels, orders, config, staleCheckDays: config.staleCheckDays ?? 14, user, isAdmin, showAlert, showConfirm };
 
       const renderView = () => {
         switch (view) {
