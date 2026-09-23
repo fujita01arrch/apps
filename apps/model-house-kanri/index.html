@@ -1803,14 +1803,16 @@
       const [subTab, setSubTab] = useState('orders');
       return (
         <div>
-          <div className="max-w-2xl mx-auto px-4 mb-4 flex items-center gap-2">
-            <label className="text-[10px] text-gray-400 tracking-widest uppercase shrink-0">管理メニュー</label>
-            <select
-              value={subTab} onChange={e => setSubTab(e.target.value)}
-              className="border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-800 focus:outline-none focus:border-gray-500"
-            >
-              {ADMIN_SUB_TABS.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
-            </select>
+          <div className="max-w-2xl mx-auto px-4 mb-4">
+            <div className="relative inline-block">
+              <select
+                value={subTab} onChange={e => setSubTab(e.target.value)}
+                className="appearance-none bg-gray-800 text-white text-[11px] tracking-widest pl-3 pr-8 py-1.5 focus:outline-none cursor-pointer"
+              >
+                {ADMIN_SUB_TABS.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
+              </select>
+              <ChevronDownIcon className="w-3.5 h-3.5 text-white absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+            </div>
           </div>
           {subTab === 'orders' && <OrderManagementView {...props} />}
           {subTab === 'approvals' && <PendingApprovalView {...props} />}
