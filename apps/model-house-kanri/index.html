@@ -495,7 +495,14 @@
           const mode = isWithdrawal ? 'withdrawal' : 'checkin';
 
           const lines = relevantItems
-            .filter(item => !orderByItemId[item.id]) // 発注処理中の品目は在庫確認の対象から除外（二重記録防止。持ち出しモードも対象）
+            .filter(item => {
+              if (orderByItemId[item.id]) return false; // 発注処理中（ordersドキュメントあり）は対象外
+              if (!isWithdrawal) {
+                const level = stockLevels[stockDocId(location.id, item.id)];
+                if (level && level.belowReorderPoint) return false; // 依頼中（管理者確認待ち）も対象外。「全品目在庫OK」で誤って上書きされないようにする
+              }
+              return true;
+            })
             .map(item => {
             const level = stockLevels[stockDocId(location.id, item.id)];
             const previousCount = level ? level.currentCount : (item.fullStockQty ?? null);
@@ -596,7 +603,7 @@
                       </div>
                     </div>
                     <span className={`text-[11px] tracking-widest px-3 py-1.5 shrink-0 ${STATUS_BADGE_CLS[order.status] || 'bg-gray-100 text-gray-500'}`}>
-                      {order.status === '依頼送信済み' ? '発注済み・返答待ち' : order.status}
+                      {order.status === '依頼送信済み' ? '発注済み' : order.status}
                     </span>
                   </div>
                 );
@@ -611,6 +618,23 @@
                       <div className="text-[10px] text-gray-400 tracking-wide mt-0.5">事務所在庫: {prevCount ?? '未確認'}{item.stockUnit}</div>
                     </div>
                     <Stepper value={withdrawValues[item.id]} onChange={(v) => setWithdrawValue(item.id, v)} unit={item.stockUnit} />
+                  </div>
+                );
+              }
+              // ADVが「発注が必要」とタップして送信済みだが、管理者がまだ発注管理画面で
+              // 依頼文を作成していない（ordersドキュメント未作成）段階。この間もタップし直せて
+              // しまうと重複申告になるため、「依頼中」として表示しタップ操作を無効化する。
+              const pendingLevel = stockLevels[stockDocId(location.id, item.id)];
+              if (pendingLevel && pendingLevel.belowReorderPoint) {
+                return (
+                  <div key={item.id} className="flex items-center justify-between py-3.5 px-3 border-b border-gray-100 last:border-b-0 bg-amber-50">
+                    <div className="min-w-0 pr-3">
+                      <div className="text-sm text-gray-800">{item.name}</div>
+                      <div className="text-[10px] text-gray-400 tracking-wide mt-0.5">
+                        発注 ×{pendingLevel.requestedLots ?? 1}{item.orderUnit || ''}
+                      </div>
+                    </div>
+                    <span className="text-[11px] tracking-widest px-3 py-1.5 shrink-0 bg-amber-100 text-amber-700">報告済み</span>
                   </div>
                 );
               }
@@ -819,7 +843,7 @@
           )}
 
           <section>
-            <SectionLabel>発注済み・返答待ち（{pendingOrders.length}件）</SectionLabel>
+            <SectionLabel>発注済み（{pendingOrders.length}件）</SectionLabel>
             <div className="bg-white border border-gray-200 mx-4 divide-y divide-gray-100">
               {pendingOrders.length === 0 && <p className="px-4 py-6 text-center text-xs text-gray-400">現在、返答待ちの発注はありません</p>}
               {pendingOrders.map(o => (
@@ -1478,7 +1502,7 @@
 
     const ORDER_STATUS_LABELS = ['未発注', '依頼送信済み', '配達待ち', '配達済み'];
 
-    const ORDER_STATUS_DISPLAY = { '依頼送信済み': '発注済み・返答待ち', '配達待ち': '配達待ち', '配達済み': '配達済み' };
+    const ORDER_STATUS_DISPLAY = { '依頼送信済み': '発注済み', '配達待ち': '配達待ち', '配達済み': '配達済み' };
 
     const OrderStatusUpdateRow = ({ order, showAlert }) => {
       const [scheduledDate, setScheduledDate] = useState(order.deliveryScheduledDate || '');
