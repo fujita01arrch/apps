@@ -1781,16 +1781,40 @@
     // ============================================================
     // ヘッダー / ナビゲーション
     // ============================================================
+    // 一般の人（ADV）が使うのは最初の4つだけ。それ以外（発注管理・承認待ち・実行・設定）は
+    // 「管理者」タブ1つにまとめて、一般の人のナビゲーションをシンプルに保つ。
     const NAV_ITEMS = [
       { key: 'stock', label: '在庫確認', icon: BoxIcon, adminOnly: false },
       { key: 'delivery', label: '配置報告', icon: TruckIcon, adminOnly: false },
+      { key: 'dashboard', label: 'ダッシュボード', icon: ListIcon, adminOnly: false },
       { key: 'guides', label: '手順', icon: BookOpenIcon, adminOnly: false },
-      { key: 'dashboard', label: 'ダッシュボード', icon: ListIcon, adminOnly: true },
-      { key: 'orders', label: '発注管理', icon: BellIcon, adminOnly: true },
-      { key: 'approvals', label: '承認待ち', icon: CheckIcon, adminOnly: true },
-      { key: 'batchRun', label: '実行', icon: PlayIcon, adminOnly: true },
-      { key: 'settings', label: '設定', icon: SettingsIcon, adminOnly: true },
+      { key: 'admin', label: '管理者', icon: SettingsIcon, adminOnly: true },
     ];
+
+    // 「管理者」タブの中の4つのサブタブ（既存の画面はそのまま、入口だけ1つにまとめている）。
+    const ADMIN_SUB_TABS = [
+      { key: 'orders', label: '発注管理' },
+      { key: 'approvals', label: '承認待ち' },
+      { key: 'batchRun', label: '実行' },
+      { key: 'settings', label: '設定' },
+    ];
+
+    const AdminHubView = (props) => {
+      const [subTab, setSubTab] = useState('orders');
+      return (
+        <div>
+          <div className="max-w-2xl mx-auto flex gap-1 px-4 mb-3 overflow-x-auto">
+            {ADMIN_SUB_TABS.map(t => (
+              <button key={t.key} onClick={() => setSubTab(t.key)} className={`text-[11px] tracking-widest px-3 py-1.5 whitespace-nowrap ${subTab === t.key ? 'bg-gray-800 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>{t.label}</button>
+            ))}
+          </div>
+          {subTab === 'orders' && <OrderManagementView {...props} />}
+          {subTab === 'approvals' && <PendingApprovalView {...props} />}
+          {subTab === 'batchRun' && <BatchRunView {...props} />}
+          {subTab === 'settings' && <SettingsView {...props} />}
+        </div>
+      );
+    };
 
     const Header = ({ view, setView, isAdmin, onLogout, userName }) => {
       const items = NAV_ITEMS.filter(i => !i.adminOnly || isAdmin);
@@ -2575,12 +2599,9 @@
         switch (view) {
           case 'stock': return <StockCheckView {...commonProps} />;
           case 'delivery': return <DeliveryReportView {...commonProps} />;
+          case 'dashboard': return <DashboardView {...commonProps} />;
           case 'guides': return <GuidesView />;
-          case 'dashboard': return isAdmin ? <DashboardView {...commonProps} /> : null;
-          case 'orders': return isAdmin ? <OrderManagementView {...commonProps} /> : null;
-          case 'approvals': return isAdmin ? <PendingApprovalView {...commonProps} /> : null;
-          case 'batchRun': return isAdmin ? <BatchRunView {...commonProps} /> : null;
-          case 'settings': return isAdmin ? <SettingsView {...commonProps} /> : null;
+          case 'admin': return isAdmin ? <AdminHubView {...commonProps} /> : null;
           default: return null;
         }
       };
