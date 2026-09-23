@@ -1345,9 +1345,11 @@
       return (
         <div>
           <div className="flex gap-1 px-4 mb-2 overflow-x-auto">
-            {ITEM_CATEGORIES.map(c => (
-              <button key={c} onClick={() => setCategory(c)} className={`text-[11px] tracking-widest px-3 py-1.5 whitespace-nowrap ${category === c ? 'bg-gray-800 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>{c}</button>
-            ))}
+            <div className="inline-flex gap-1 bg-white border border-gray-200 p-1">
+              {ITEM_CATEGORIES.map(c => (
+                <button key={c} onClick={() => setCategory(c)} className={`text-[11px] tracking-widest px-3 py-1.5 whitespace-nowrap transition-colors ${category === c ? 'bg-gray-100 text-gray-800 font-medium' : 'text-gray-400 hover:bg-gray-50'}`}>{c}</button>
+              ))}
+            </div>
           </div>
           <div className="flex justify-end px-4 mb-2">
             <button onClick={() => setEditing(null)} className="flex items-center gap-1 text-[11px] tracking-widest bg-gray-800 text-white hover:bg-gray-900 px-3 py-1.5">
