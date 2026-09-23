@@ -2327,7 +2327,7 @@
                   type="date" value={scheduledDate} onChange={(e) => setScheduledDate(e.target.value)}
                   className="border border-gray-300 text-xs px-2 py-1"
                 />
-                <button onClick={() => advance('配達待ち')} disabled={saving} className="text-[11px] tracking-widest border border-gray-300 text-gray-600 hover:bg-gray-100 px-3 py-1 disabled:opacity-50">{saving ? '登録中...' : '鴨江到着予定を登録'}</button>
+                <button onClick={() => advance('配達待ち')} disabled={saving || !scheduledDate} className="text-[11px] tracking-widest border border-gray-300 text-gray-600 hover:bg-gray-100 px-3 py-1 disabled:opacity-50">{saving ? '登録中...' : '鴨江到着予定を登録'}</button>
               </>
             )}
             {order.status === '配達待ち' && (
