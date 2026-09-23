@@ -446,7 +446,7 @@
       '配達待ち': 'bg-sky-50',
     };
 
-    const StockCheckForm = ({ location, items, stockLevels, orders, user, onBack, onSubmitted, showAlert, showConfirm }) => {
+    const StockCheckForm = ({ location, items, stockLevels, orders, user, isRegistered, onBack, onSubmitted, showAlert, showConfirm }) => {
       const isWithdrawal = location.type === 'office_reserve';
       const relevantItems = items
         .filter(i => i.isActive && isItemApplicableToLocation(i, location))
@@ -605,7 +605,7 @@
             <div className="px-4 py-2">
               <button
                 onClick={() => showConfirm('この拠点は全品目「在庫OK」として記録します。よろしいですか？', () => submit(true), '在庫OKで記録')}
-                disabled={submitting}
+                disabled={submitting || !isRegistered}
                 className="w-full flex items-center justify-center gap-2 bg-white border border-gray-300 text-gray-700 hover:bg-gray-100 transition-colors px-4 py-3 text-xs tracking-widest disabled:opacity-50"
               >
                 <CheckIcon className="w-4 h-4" /> この拠点は全品目在庫OK
@@ -690,9 +690,9 @@
             <div className="max-w-xl mx-auto">
               <button
                 onClick={() => submit(false)}
-                disabled={submitting}
+                disabled={submitting || !isRegistered}
                 className="w-full bg-gray-800 text-white hover:bg-gray-900 transition-colors px-6 py-3 text-xs tracking-widest shadow-sm disabled:opacity-50"
-              >{submitting ? '送信中...' : (isWithdrawal ? 'この内容で記録する' : (lowCount > 0 ? `この内容で送信する（発注 ${lowCount}件）` : 'この内容で送信する'))}</button>
+              >{submitting ? '送信中...' : !isRegistered ? '未登録のため送信できません' : (isWithdrawal ? 'この内容で記録する' : (lowCount > 0 ? `この内容で送信する（発注 ${lowCount}件）` : 'この内容で送信する'))}</button>
             </div>
           </div>
         </div>
@@ -752,7 +752,7 @@
       );
     };
 
-    const DeliveryReportView = ({ orders: allOrders, user, showAlert, showConfirm }) => {
+    const DeliveryReportView = ({ orders: allOrders, user, isRegistered, showAlert, showConfirm }) => {
       const [submittingId, setSubmittingId] = useState(null);
       const [missedModalOrder, setMissedModalOrder] = useState(null);
       const orders = (allOrders || []).filter(o => o.status === '配達待ち');
@@ -850,12 +850,12 @@
                     <div className="flex gap-2 mt-2">
                       <button
                         onClick={() => showConfirm(`${o.locationName}へ備品をすべて配置しましたか？`, () => reportDelivered(o, []), '配置しました')}
-                        disabled={submittingId === o.id}
+                        disabled={submittingId === o.id || !isRegistered}
                         className="flex-1 bg-gray-800 text-white hover:bg-gray-900 transition-colors px-4 py-2.5 text-xs tracking-widest disabled:opacity-50"
                       >{submittingId === o.id ? '記録中...' : '配置しました'}</button>
                       <button
                         onClick={() => setMissedModalOrder(o)}
-                        disabled={submittingId === o.id}
+                        disabled={submittingId === o.id || !isRegistered}
                         className="flex-1 border border-gray-300 text-gray-600 hover:bg-gray-100 transition-colors px-4 py-2.5 text-xs tracking-widest disabled:opacity-50"
                       >忘れました</button>
                     </div>
@@ -1156,10 +1156,14 @@
             {staffList.map(s => (
               <div key={s.id} className="flex items-center justify-between px-4 py-3">
                 <div>
-                  <div className="text-sm text-gray-800">
-                    {s.displayName}{!s.uid && <span className="ml-2 text-[10px] text-amber-600">未ログイン</span>}
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm text-gray-800">{s.displayName}</span>
+                    <span className={`text-[10px] tracking-widest px-2 py-0.5 shrink-0 ${s.role === 'admin' ? 'bg-indigo-700 text-white' : 'bg-gray-100 text-gray-600'}`}>
+                      {roleLabel[s.role] || s.role || '未設定'}
+                    </span>
+                    {!s.uid && <span className="text-[10px] text-amber-600">未ログイン</span>}
                   </div>
-                  <div className="text-[10px] text-gray-400 mt-0.5">{s.email}／{roleLabel[s.role] || s.role || '未設定'}{s.chatworkContactId ? `／ChatworkID: ${s.chatworkContactId}` : '／ChatworkID未登録'}</div>
+                  <div className="text-[10px] text-gray-400 mt-0.5">{s.email}{s.chatworkContactId ? `／ChatworkID: ${s.chatworkContactId}` : '／ChatworkID未登録'}</div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <button onClick={() => setEditing(s)} className="text-gray-400 hover:text-gray-700"><EditIcon className="w-4 h-4" /></button>
@@ -2265,17 +2269,13 @@
           setDomainError(false);
           setUser(u);
           if (u) {
-            // ドキュメントIDはメールアドレス。管理者がスタッフ管理画面で先に名前や
-            // ChatworkアカウントIDを登録していた場合、そのレコードにuid・最終ログイン日時だけ
-            // マージする（roleは既存レコードがあれば触らない＝スタッフ管理画面での権限変更を尊重）。
-            // まだレコードが無い初回ログインの時だけ、ADMIN_EMAILSを初期値として使う。
+            // あらかじめ管理者がスタッフ管理画面で登録した人だけが使える運用のため、
+            // ここではレコードを新規作成しない（自動登録はしない）。
+            // 既に登録済みの人であれば、uid・最終ログイン日時だけ更新する。
             const uref = docRef('users', userDocId(u.email));
             getDoc(uref).then((snap) => {
-              const patch = { uid: u.uid, email: u.email, displayName: u.displayName || u.email, lastLoginAt: nowIso() };
-              if (!snap.exists()) {
-                patch.role = ADMIN_EMAILS.includes((u.email || '').toLowerCase()) ? 'admin' : 'adv';
-              }
-              setDoc(uref, patch, { merge: true });
+              if (!snap.exists()) return; // 未登録者：何もしない（閲覧のみで利用してもらう）
+              setDoc(uref, { uid: u.uid, lastLoginAt: nowIso() }, { merge: true }).catch(() => {});
             });
           }
         });
@@ -2316,11 +2316,16 @@
         return <LoginView domainError={domainError} />;
       }
 
-      // 権限はFirestore（users/{email}.role）を見る。まだレコードが読み込めていない
-      // 一瞬（ログイン直後）はADMIN_EMAILSにフォールバックし、管理者が締め出されないようにする。
+      // このアプリは「あらかじめ管理者がスタッフ管理画面で登録した人」だけが編集できる運用。
+      // isRegistered=falseの人は、画面上は閲覧できるが書き込み操作はすべて無効化する
+      // （さらにFirestoreセキュリティルール側でも、未登録者の書き込みはデータベースレベルで拒否している）。
+      // 権限（管理者かどうか）はFirestore（users/{email}.role）を見る。ADMIN_EMAILSは、
+      // 万一Firestore側のレコードが消えてしまった時に藤田さん・染矢さんが締め出されないための
+      // 最終セーフティネットとしてのみ残す（新規スタッフの自動登録には使わない）。
       const myStaffRecord = staffList.find(s => s.id === userDocId(user.email));
+      const isRegistered = !!myStaffRecord;
       const isAdmin = myStaffRecord ? myStaffRecord.role === 'admin' : ADMIN_EMAILS.includes((user.email || '').toLowerCase());
-      const commonProps = { locations, items, stockLevels, orders, outbox, staffList, config, staleCheckDays: config.staleCheckDays ?? 14, user, isAdmin, showAlert, showConfirm };
+      const commonProps = { locations, items, stockLevels, orders, outbox, staffList, config, staleCheckDays: config.staleCheckDays ?? 14, user, isAdmin, isRegistered, showAlert, showConfirm };
 
       const renderView = () => {
         switch (view) {
@@ -2339,6 +2344,11 @@
       return (
         <div className="min-h-screen bg-[#f9f9f9]">
           <Header view={view} setView={setView} isAdmin={isAdmin} onLogout={() => signOut(auth)} userName={user.displayName || user.email} />
+          {!isRegistered && (
+            <div className="bg-amber-50 border-b border-amber-200 text-amber-800 text-xs text-center py-2 px-4">
+              あなたはまだスタッフとして登録されていません。閲覧のみ可能です（入力・送信はできません）。管理者にご連絡ください。
+            </div>
+          )}
           {seeding && <div className="text-center text-[10px] text-gray-400 py-2">初期データを準備しています...</div>}
           <main className="py-4">{renderView()}</main>
           <CustomDialog dialog={dialog} onClose={() => setDialog(null)} />
