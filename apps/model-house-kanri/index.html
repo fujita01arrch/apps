@@ -395,9 +395,26 @@
     // ============================================================
     // 在庫確認フォーム（ADVの主要動線。入力手間最小化を最優先に設計）
     // ============================================================
-    const StockCheckForm = ({ location, items, stockLevels, user, onBack, onSubmitted, showAlert, showConfirm }) => {
+    const STATUS_BADGE_CLS = {
+      '依頼送信済み': 'bg-amber-100 text-amber-700',
+      '配達待ち': 'bg-sky-100 text-sky-700',
+    };
+
+    const StockCheckForm = ({ location, items, stockLevels, orders, user, onBack, onSubmitted, showAlert, showConfirm }) => {
       const isWithdrawal = location.type === 'office_reserve';
       const relevantItems = items.filter(i => i.isActive).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+
+      // 拠点×品目ごとに、進行中（配達済みでない）の発注があるかを引けるようにしておく。
+      // 「発注が必要」とタップして送信した後、他の人がこの画面を開いても
+      // 発注状況が分かるようにするため（発注済みかどうかをここに表示する）。
+      const orderByItemId = useMemo(() => {
+        const map = {};
+        (orders || []).forEach(o => {
+          if (o.locationId !== location.id || o.status === '配達済み') return;
+          o.items.forEach(i => { map[i.itemId] = { order: o, line: i }; });
+        });
+        return map;
+      }, [orders, location.id]);
 
       // 持ち出しモード（鴨江事務所）は従来通り数量を直接入力する
       const initialWithdrawValues = useMemo(() => {
@@ -452,7 +469,9 @@
           const ts = nowIso();
           const mode = isWithdrawal ? 'withdrawal' : 'checkin';
 
-          const lines = relevantItems.map(item => {
+          const lines = relevantItems
+            .filter(item => isWithdrawal || !orderByItemId[item.id]) // 発注処理中の品目は在庫確認の対象から除外（二重記録防止）
+            .map(item => {
             const level = stockLevels[stockDocId(location.id, item.id)];
             const previousCount = level ? level.currentCount : (item.fullStockQty ?? null);
 
@@ -544,6 +563,25 @@
                   </div>
                 );
               }
+              const inProgress = orderByItemId[item.id];
+              if (inProgress) {
+                const { order, line } = inProgress;
+                return (
+                  <div key={item.id} className="flex items-center justify-between py-3.5 px-3 border-b border-gray-100 last:border-b-0">
+                    <div className="min-w-0 pr-3">
+                      <div className="text-sm text-gray-800">{item.name}</div>
+                      <div className="text-[10px] text-gray-400 tracking-wide mt-0.5">
+                        発注 ×{line.requestedLots ?? 1}
+                        {order.status === '配達待ち' && order.deliveryScheduledDate ? `／到着予定 ${order.deliveryScheduledDate}` : ''}
+                        {order.status === '配達待ち' && order.deliveryAssignee ? `／配達担当 ${order.deliveryAssignee.name}` : ''}
+                      </div>
+                    </div>
+                    <span className={`text-[11px] tracking-widest px-3 py-1.5 shrink-0 ${STATUS_BADGE_CLS[order.status] || 'bg-gray-100 text-gray-500'}`}>
+                      {order.status === '依頼送信済み' ? '発注済み・返答待ち' : order.status}
+                    </span>
+                  </div>
+                );
+              }
               const count = tapCounts[item.id] ?? 0;
               return (
                 <React.Fragment key={item.id}>
@@ -594,16 +632,10 @@
     // ============================================================
     // 配置報告（ADV向け：配達待ちの発注を「配置しました」で完了させる）
     // ============================================================
-    const DeliveryReportView = ({ user, showAlert, showConfirm }) => {
-      const [orders, setOrders] = useState([]);
+    const DeliveryReportView = ({ orders: allOrders, user, showAlert, showConfirm }) => {
       const [submittingId, setSubmittingId] = useState(null);
-
-      useEffect(() => {
-        const unsub = onSnapshot(col('orders'), (snap) => {
-          setOrders(snap.docs.map(d => ({ id: d.id, ...d.data() })).filter(o => o.status === '配達待ち'));
-        });
-        return () => unsub();
-      }, []);
+      const orders = (allOrders || []).filter(o => o.status === '配達待ち');
+      const pendingOrders = (allOrders || []).filter(o => o.status === '依頼送信済み');
 
       const reportDelivered = async (order) => {
         setSubmittingId(order.id);
@@ -615,7 +647,7 @@
 
           const lines = order.items.map(i => ({
             itemId: i.itemId, itemName: i.itemName, unit: i.unit,
-            previousCount: null, newCount: i.reorderLot ?? i.countAtRequest, delta: null, belowReorderPoint: false,
+            previousCount: null, newCount: i.reorderLot ?? i.reorderPoint ?? null, delta: null, belowReorderPoint: false,
           }));
           await addDoc(col('stockCheckSessions'), {
             locationId: order.locationId, locationName: order.locationName, mode: 'restock',
@@ -640,23 +672,40 @@
       };
 
       return (
-        <div className="max-w-xl mx-auto">
-          <SectionLabel>配達待ちの発注（{orders.length}件）</SectionLabel>
-          <div className="bg-white border border-gray-200 mx-4 divide-y divide-gray-100">
-            {orders.length === 0 && <p className="px-4 py-10 text-center text-xs text-gray-400">現在、配置待ちの発注はありません</p>}
-            {orders.map(o => (
-              <div key={o.id} className="px-4 py-4">
-                <div className="text-sm text-gray-800">{o.locationName}</div>
-                <div className="text-[10px] text-gray-400 mt-0.5">{o.items.map(i => i.itemName).join('、')}</div>
-                {o.deliveryScheduledDate && <div className="text-[10px] text-gray-400 mt-0.5">到着予定：{o.deliveryScheduledDate}</div>}
-                <button
-                  onClick={() => showConfirm(`${o.locationName}へ備品を配置しましたか？`, () => reportDelivered(o), '配置しました')}
-                  disabled={submittingId === o.id}
-                  className="mt-2 w-full bg-gray-800 text-white hover:bg-gray-900 transition-colors px-4 py-2.5 text-xs tracking-widest disabled:opacity-50"
-                >{submittingId === o.id ? '記録中...' : '配置しました'}</button>
-              </div>
-            ))}
-          </div>
+        <div className="max-w-xl mx-auto space-y-6">
+          <section>
+            <SectionLabel>配達待ちの発注（{orders.length}件）</SectionLabel>
+            <div className="bg-white border border-gray-200 mx-4 divide-y divide-gray-100">
+              {orders.length === 0 && <p className="px-4 py-10 text-center text-xs text-gray-400">現在、配置待ちの発注はありません</p>}
+              {orders.map(o => (
+                <div key={o.id} className="px-4 py-4">
+                  <div className="text-sm text-gray-800">{o.locationName}</div>
+                  <div className="text-[10px] text-gray-400 mt-0.5">{o.items.map(i => `${i.itemName}×${i.requestedLots ?? 1}`).join('、')}</div>
+                  {o.deliveryAssignee && <div className="text-[10px] text-gray-400 mt-0.5">配達担当：{o.deliveryAssignee.name}</div>}
+                  {o.deliveryScheduledDate && <div className="text-[10px] text-gray-400 mt-0.5">到着予定：{o.deliveryScheduledDate}</div>}
+                  <button
+                    onClick={() => showConfirm(`${o.locationName}へ備品を配置しましたか？`, () => reportDelivered(o), '配置しました')}
+                    disabled={submittingId === o.id}
+                    className="mt-2 w-full bg-gray-800 text-white hover:bg-gray-900 transition-colors px-4 py-2.5 text-xs tracking-widest disabled:opacity-50"
+                  >{submittingId === o.id ? '記録中...' : '配置しました'}</button>
+                </div>
+              ))}
+            </div>
+          </section>
+
+          <section>
+            <SectionLabel>発注済み・返答待ち（{pendingOrders.length}件）</SectionLabel>
+            <div className="bg-white border border-gray-200 mx-4 divide-y divide-gray-100">
+              {pendingOrders.length === 0 && <p className="px-4 py-6 text-center text-xs text-gray-400">現在、返答待ちの発注はありません</p>}
+              {pendingOrders.map(o => (
+                <div key={o.id} className="px-4 py-3">
+                  <div className="text-sm text-gray-800">{o.locationName}｜{o.orderRole}</div>
+                  <div className="text-[10px] text-gray-400 mt-0.5">{o.items.map(i => `${i.itemName}×${i.requestedLots ?? 1}`).join('、')}</div>
+                  <div className="text-[10px] text-amber-600 mt-0.5">発注依頼済み・到着日の連絡待ちです</div>
+                </div>
+              ))}
+            </div>
+          </section>
         </div>
       );
     };
@@ -1161,7 +1210,7 @@
     // 発注管理（管理者向け）
     // ============================================================
     function buildOrderRequestText(location, role, lines) {
-      const itemLines = lines.map(l => `・${l.itemName}：残り${l.currentCount}${l.unit}（目安${l.item.reorderPoint ?? '—'}${l.unit}）`).join('\n');
+      const itemLines = lines.map(l => `・${l.itemName}：発注ロット ×${l.requestedLots ?? 1}（必要在庫数の目安 ${l.item.reorderPoint ?? '—'}${l.unit}以上）`).join('\n');
       if (role === '業務管理') {
         return `お世話になっております。${location.name}の下記備品が少なくなってきましたので、発注をお願いいたします。\n\n${itemLines}\n\n到着予定日が分かりましたら、このメッセージへの返信で教えていただけますと助かります（普段のお返事の書き方のままで大丈夫です）。\nよろしくお願いいたします。`;
       }
@@ -1191,11 +1240,11 @@
           const ts = nowIso();
           await addDoc(col('orders'), {
             locationId: group.location.id, locationName: group.location.name, orderRole: group.role,
-            items: group.lines.map(l => ({ itemId: l.itemId, itemName: l.itemName, unit: l.unit, countAtRequest: l.currentCount, reorderPoint: l.item.reorderPoint, reorderLot: l.item.reorderLot })),
+            items: group.lines.map(l => ({ itemId: l.itemId, itemName: l.itemName, unit: l.unit, requestedLots: l.requestedLots ?? 1, reorderPoint: l.item.reorderPoint, reorderLot: l.item.reorderLot })),
             status: '依頼送信済み', requestDraftText: text,
             requestedAt: ts, requestedBy: { uid: user.uid, name: user.displayName || user.email },
-            deliveryScheduledDate: null, deliveredAt: null, deliveredBy: null, updatedAt: ts,
-            chatworkRoomId: null, chatworkMessageId: null, autoSendStatus: null, deliveryAssignment: null, needsReview: false,
+            deliveryScheduledDate: null, deliveryAssignee: null, deliveredAt: null, deliveredBy: null, updatedAt: ts,
+            chatworkRoomId: null, chatworkMessageId: null, autoSendStatus: null, needsReview: false,
           });
           onConfirmed();
         } catch (e) {
@@ -1231,12 +1280,15 @@
 
     const ORDER_STATUS_LABELS = ['未発注', '依頼送信済み', '配達待ち', '配達済み'];
 
+    const ORDER_STATUS_DISPLAY = { '依頼送信済み': '発注済み・返答待ち', '配達待ち': '配達待ち', '配達済み': '配達済み' };
+
     const OrderStatusUpdateRow = ({ order, showAlert }) => {
       const [scheduledDate, setScheduledDate] = useState(order.deliveryScheduledDate || '');
 
       const advance = async (nextStatus) => {
         const ts = nowIso();
         const patch = { status: nextStatus, updatedAt: ts };
+        // 配達担当者はPhase2でカレンダー連携により自動設定される（Phase1では手動選択させない）
         if (nextStatus === '配達待ち') patch.deliveryScheduledDate = scheduledDate || null;
         if (nextStatus === '配達済み') patch.deliveredAt = ts;
         try {
@@ -1251,18 +1303,22 @@
           <div className="flex items-center justify-between">
             <div>
               <div className="text-sm text-gray-800">{order.locationName}｜{order.orderRole}</div>
-              <div className="text-[10px] text-gray-400 mt-0.5">{order.items.map(i => i.itemName).join('、')}</div>
+              <div className="text-[10px] text-gray-400 mt-0.5">{order.items.map(i => `${i.itemName}×${i.requestedLots ?? 1}`).join('、')}</div>
+              <div className="text-[10px] text-gray-400 mt-0.5">
+                配達担当：{order.deliveryAssignee ? order.deliveryAssignee.name : '自動設定予定（Phase2）'}
+                {order.deliveryScheduledDate ? `／到着予定 ${order.deliveryScheduledDate}` : ''}
+              </div>
             </div>
-            <span className="text-[10px] tracking-widest uppercase bg-gray-800 text-white px-2 py-0.5">{order.status}</span>
+            <span className={`text-[10px] tracking-widest uppercase px-2 py-0.5 shrink-0 ${STATUS_BADGE_CLS[order.status] || 'bg-gray-800 text-white'}`}>{ORDER_STATUS_DISPLAY[order.status] || order.status}</span>
           </div>
-          <div className="flex items-center gap-2 mt-2">
+          <div className="flex flex-wrap items-center gap-2 mt-2">
             {order.status === '依頼送信済み' && (
               <>
                 <input
                   type="date" value={scheduledDate} onChange={(e) => setScheduledDate(e.target.value)}
                   className="border border-gray-300 text-xs px-2 py-1"
                 />
-                <button onClick={() => advance('配達待ち')} className="text-[11px] tracking-widest border border-gray-300 text-gray-600 hover:bg-gray-100 px-3 py-1">到着予定日を登録</button>
+                <button onClick={() => advance('配達待ち')} className="text-[11px] tracking-widest border border-gray-300 text-gray-600 hover:bg-gray-100 px-3 py-1">到着予定を登録</button>
               </>
             )}
             {order.status === '配達待ち' && (
@@ -1273,16 +1329,8 @@
       );
     };
 
-    const OrderManagementView = ({ locations, items, stockLevels, user, showAlert }) => {
-      const [orders, setOrders] = useState([]);
+    const OrderManagementView = ({ locations, items, stockLevels, orders, staffList, user, showAlert }) => {
       const [modalGroup, setModalGroup] = useState(null);
-
-      useEffect(() => {
-        const unsub = onSnapshot(col('orders'), (snap) => {
-          setOrders(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.requestedAt || '').localeCompare(a.requestedAt || '')));
-        });
-        return () => unsub();
-      }, []);
 
       const itemById = useMemo(() => Object.fromEntries(items.map(i => [i.id, i])), [items]);
       const locationById = useMemo(() => Object.fromEntries(locations.map(l => [l.id, l])), [locations]);
@@ -1322,7 +1370,7 @@
                 <div key={idx} className="flex items-center justify-between px-4 py-3">
                   <div>
                     <div className="text-sm text-gray-800">{g.location.name}｜{g.role}</div>
-                    <div className="text-[10px] text-gray-400 mt-0.5">{g.lines.map(l => l.itemName).join('、')}</div>
+                    <div className="text-[10px] text-gray-400 mt-0.5">{g.lines.map(l => `${l.itemName}×${l.requestedLots ?? 1}`).join('、')}</div>
                   </div>
                   <button onClick={() => setModalGroup(g)} className="text-[11px] tracking-widest bg-gray-800 text-white hover:bg-gray-900 px-3 py-1.5 shrink-0">依頼文を作成</button>
                 </div>
@@ -1374,13 +1422,24 @@
       const [locations, setLocations] = useState([]);
       const [items, setItems] = useState([]);
       const [stockLevels, setStockLevels] = useState({});
+      const [orders, setOrders] = useState([]);
+      const [staffList, setStaffList] = useState([]);
       const [config, setConfig] = useState({ staleCheckDays: 14 });
 
       const showAlert = (message) => setDialog({ type: 'alert', message, confirmLabel: 'OK' });
       const showConfirm = (message, onConfirm, confirmLabel) => setDialog({ type: 'confirm', message, onConfirm, confirmLabel });
 
       useEffect(() => {
-        const unsub = onAuthStateChanged(auth, (u) => setUser(u));
+        const unsub = onAuthStateChanged(auth, (u) => {
+          setUser(u);
+          if (u) {
+            setDoc(docRef('users', u.uid), {
+              uid: u.uid, email: u.email, displayName: u.displayName || u.email,
+              role: ADMIN_EMAILS.includes((u.email || '').toLowerCase()) ? 'admin' : 'adv',
+              lastLoginAt: nowIso(),
+            }, { merge: true });
+          }
+        });
         return () => unsub();
       }, []);
 
@@ -1396,6 +1455,10 @@
             snap.docs.forEach(d => { map[d.id] = d.data(); });
             setStockLevels(map);
           }),
+          onSnapshot(col('orders'), (snap) => {
+            setOrders(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.requestedAt || '').localeCompare(a.requestedAt || '')));
+          }),
+          onSnapshot(col('users'), (snap) => setStaffList(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
           onSnapshot(docRef('system_config', 'default'), (snap) => { if (snap.exists()) setConfig(snap.data()); }),
         ];
         return () => unsubs.forEach(u => u());
@@ -1409,7 +1472,7 @@
       }
 
       const isAdmin = ADMIN_EMAILS.includes((user.email || '').toLowerCase());
-      const commonProps = { locations, items, stockLevels, config, staleCheckDays: config.staleCheckDays ?? 14, user, isAdmin, showAlert, showConfirm };
+      const commonProps = { locations, items, stockLevels, orders, staffList, config, staleCheckDays: config.staleCheckDays ?? 14, user, isAdmin, showAlert, showConfirm };
 
       const renderView = () => {
         switch (view) {
