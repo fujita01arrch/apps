@@ -197,14 +197,14 @@
             <button onClick={onTap} className="flex-1 min-w-0 text-left pr-3">
               <div className={`text-sm ${isLow ? 'text-rose-600 font-medium' : 'text-gray-800'}`}>{item.name}</div>
               <div className="text-[10px] text-gray-400 tracking-wide mt-0.5">
-                必要在庫数：{item.reorderPoint != null ? `${item.reorderPoint}${item.unit}以上` : '未設定'}
+                必要在庫数：{item.reorderPoint != null ? `${item.reorderPoint}${item.stockUnit}以上` : '未設定'}
               </div>
             </button>
             <div className="flex items-center gap-1.5 shrink-0">
               <button
                 onClick={onTap}
                 className={`text-[11px] tracking-widest px-3 py-1.5 transition-colors ${isLow ? 'bg-rose-500 text-white' : 'border border-gray-300 text-gray-400'}`}
-              >{isLow ? `発注が必要 ×${count}` : '在庫OK'}</button>
+              >{isLow ? `発注が必要 ×${count}${item.orderUnit || ''}` : '在庫OK'}</button>
               {isLow && (
                 <button
                   onClick={onReset} aria-label="取り消し"
@@ -244,9 +244,10 @@
 
     // ============================================================
     // 初期投入データ（seed）：Googleドキュメント記載の備品一覧をベースにした暫定値。
-    // reorderPoint / reorderLot / orderRole は暫定であり、設定画面から後日調整する前提。
+    // reorderPoint（必要在庫数）/ orderUnit・orderUnitLabel（発注単位）/ orderRole は暫定であり、
+    // スリッパ・コロコロ替え以外は仮の値。設定画面から後日調整する前提。
     // ============================================================
-    const SEED_VERSION = 1;
+    const SEED_VERSION = 2; // 備品データのフィールドを刷新（unit/reorderLot → stockUnit/orderUnit等）したため引き上げ
 
     const SEED_LOCATIONS = [
       { id: 'nishigasaki', name: '西ヶ崎モデルハウス', type: 'model_house', keywords: ['西ヶ崎'], order: 1 },
@@ -258,55 +259,59 @@
     ];
 
     // 各行: [category, name, unit, fullStockQty, orderRole, note]
+    // 各行: [category, name, stockUnit, reorderPoint, fullStockQty, orderUnit, orderUnitLabel, orderRole, note]
+    // stockUnit/reorderPoint: 在庫確認で使う単位と、これを下回ったら発注する基準値
+    // orderUnit/orderUnitLabel: 実際に発注するときの単位（箱・袋等）と、換算の補足（例：3本入り）
+    // stockUnitとorderUnitが同じ品目が大半だが、コロコロ替え（本→袋）のように異なるものもある。
+    // ここに書いた値のうちスリッパ・コロコロ替え以外は暫定値。設定画面から品目ごとに要調整。
     const SEED_ITEM_ROWS = [
       // 商談用（印刷物・ノベルティ系は暫定でADV本人手配に分類。要確認）
-      ['商談用', 'スリッパ', '足', 50, '業務管理', '0.5箱=50足'],
-      ['商談用', 'スケッチブック', '冊', 3, 'ADV本人手配', ''],
-      ['商談用', '資料セット', '部', 15, 'ADV本人手配', ''],
-      ['商談用', 'ルールブック', '部', 15, 'ADV本人手配', ''],
-      ['商談用', 'コミコミ価格表', '部', 15, 'ADV本人手配', ''],
-      ['商談用', 'コーディネートブック', '冊', 8, 'ADV本人手配', '4種類×各2冊'],
-      ['商談用', '間取り', '枚', 3, 'ADV本人手配', ''],
-      ['商談用', 'QRコード類', 'セット', 2, '業務管理', ''],
-      ['商談用', 'アーチバッグ', '袋', 15, '集客・マーケ', ''],
-      ['商談用', 'LPヒアリングシート', '部', 10, 'ADV本人手配', ''],
-      ['商談用', 'セレクトブック', '部', 10, 'ADV本人手配', ''],
-      ['商談用', 'ヒアリングブック', '部', 10, 'ADV本人手配', ''],
+      ['商談用', 'スリッパ', '箱', 0.5, 1, '箱', '', '業務管理', '1箱=50足'],
+      ['商談用', 'スケッチブック', '冊', 2, 3, '冊', '', 'ADV本人手配', ''],
+      ['商談用', '資料セット', '部', 8, 15, '部', '', 'ADV本人手配', ''],
+      ['商談用', 'ルールブック', '部', 8, 15, '部', '', 'ADV本人手配', ''],
+      ['商談用', 'コミコミ価格表', '部', 8, 15, '部', '', 'ADV本人手配', ''],
+      ['商談用', 'コーディネートブック', '冊', 4, 8, '冊', '', 'ADV本人手配', '4種類×各2冊'],
+      ['商談用', '間取り', '枚', 2, 3, '枚', '', 'ADV本人手配', ''],
+      ['商談用', 'QRコード類', 'セット', 1, 2, 'セット', '', '業務管理', ''],
+      ['商談用', 'アーチバッグ', '袋', 8, 15, '袋', '', '集客・マーケ', ''],
+      ['商談用', 'LPヒアリングシート', '部', 5, 10, '部', '', 'ADV本人手配', ''],
+      ['商談用', 'セレクトブック', '部', 5, 10, '部', '', 'ADV本人手配', ''],
+      ['商談用', 'ヒアリングブック', '部', 5, 10, '部', '', 'ADV本人手配', ''],
       // 消耗品
-      ['消耗品', '水', '箱', 1, '業務管理', '未開封1箱'],
-      ['消耗品', 'トイレットペーパー', 'ロール', 4, '業務管理', ''],
-      ['消耗品', 'ペーパータオル', '袋', 2, '業務管理', ''],
-      ['消耗品', 'ゴミ袋', '袋', 1, '業務管理', '未開封1袋'],
-      ['消耗品', '手袋', '袋', 4, '業務管理', '未開封4袋'],
+      ['消耗品', '水', '箱', 1, 1, '箱', '', '業務管理', '未開封1箱'],
+      ['消耗品', 'トイレットペーパー', 'ロール', 2, 4, 'ロール', '', '業務管理', ''],
+      ['消耗品', 'ペーパータオル', '袋', 1, 2, '袋', '', '業務管理', ''],
+      ['消耗品', 'ゴミ袋', '袋', 1, 1, '袋', '', '業務管理', '未開封1袋'],
+      ['消耗品', '手袋', '袋', 2, 4, '袋', '', '業務管理', '未開封4袋'],
       // 掃除用品
-      ['掃除用品', 'ウエットティッシュ', '個', 1, '業務管理', ''],
-      ['掃除用品', 'トイレ掃除シート', '個', 1, '業務管理', '未開封1個'],
-      ['掃除用品', 'マイクロファイバー', '箱', 0.5, '業務管理', ''],
-      ['掃除用品', '激落ちくん', '袋', 0.5, '業務管理', ''],
-      ['掃除用品', 'サニタリーポリ袋', '袋', 1, '業務管理', '未開封1袋'],
-      ['掃除用品', 'トイレマジックリン', '本', 0.5, '業務管理', ''],
-      ['掃除用品', 'ガラスクリーナー', '本', 0.5, '業務管理', ''],
-      ['掃除用品', '蜘蛛の巣ジェット', '本', null, '業務管理', '無くなり次第発注'],
-      ['掃除用品', 'ゴキブリジェット', '本', null, '業務管理', '無くなり次第発注'],
-      ['掃除用品', 'カメムシジェット', '本', null, '業務管理', '無くなり次第発注'],
-      ['掃除用品', '掃除機の紙パック', '袋', 0.5, '業務管理', ''],
-      ['掃除用品', 'クイックルワイパーシート', '袋', 0.5, '業務管理', ''],
-      ['掃除用品', 'キッチン用スポンジ', '個', 2, '業務管理', ''],
-      ['掃除用品', 'キッチン用スプレー', '本', 0.5, '業務管理', ''],
-      ['掃除用品', 'コロコロ替え', '個', 1, '業務管理', ''],
+      ['掃除用品', 'ウエットティッシュ', '個', 1, 1, '個', '', '業務管理', ''],
+      ['掃除用品', 'トイレ掃除シート', '個', 1, 1, '個', '', '業務管理', '未開封1個'],
+      ['掃除用品', 'マイクロファイバー', '箱', 0.5, 0.5, '箱', '', '業務管理', ''],
+      ['掃除用品', '激落ちくん', '袋', 0.5, 0.5, '袋', '', '業務管理', ''],
+      ['掃除用品', 'サニタリーポリ袋', '袋', 1, 1, '袋', '', '業務管理', '未開封1袋'],
+      ['掃除用品', 'トイレマジックリン', '本', 1, 1, '本', '', '業務管理', ''],
+      ['掃除用品', 'ガラスクリーナー', '本', 1, 1, '本', '', '業務管理', ''],
+      ['掃除用品', '蜘蛛の巣ジェット', '本', null, null, '本', '', '業務管理', '無くなり次第発注'],
+      ['掃除用品', 'ゴキブリジェット', '本', null, null, '本', '', '業務管理', '無くなり次第発注'],
+      ['掃除用品', 'カメムシジェット', '本', null, null, '本', '', '業務管理', '無くなり次第発注'],
+      ['掃除用品', '掃除機の紙パック', '袋', 0.5, 0.5, '袋', '', '業務管理', ''],
+      ['掃除用品', 'クイックルワイパーシート', '袋', 0.5, 0.5, '袋', '', '業務管理', ''],
+      ['掃除用品', 'キッチン用スポンジ', '個', 1, 2, '個', '', '業務管理', ''],
+      ['掃除用品', 'キッチン用スプレー', '本', 1, 1, '本', '', '業務管理', ''],
+      ['掃除用品', 'コロコロ替え', '本', 1, 3, '袋', '3本入り', '業務管理', ''],
       // 鴨江個人用（自動発注対象外、在庫の見える化のみ）
-      ['鴨江個人用', '個人用ゴミ袋', '袋', null, 'ADV本人手配', ''],
-      ['鴨江個人用', '個人用ウェットティッシュ', '個', null, 'ADV本人手配', ''],
+      ['鴨江個人用', '個人用ゴミ袋', '袋', null, null, '袋', '', 'ADV本人手配', ''],
+      ['鴨江個人用', '個人用ウェットティッシュ', '個', null, null, '個', '', 'ADV本人手配', ''],
     ];
 
     function buildSeedItems() {
-      return SEED_ITEM_ROWS.map(([category, name, unit, fullStockQty, orderRole, note], idx) => ({
+      return SEED_ITEM_ROWS.map(([category, name, stockUnit, reorderPoint, fullStockQty, orderUnit, orderUnitLabel, orderRole, note], idx) => ({
         id: `item-${idx + 1}`,
-        category, name, unit,
-        fullStockQty: fullStockQty,
-        reorderPoint: fullStockQty != null ? Math.max(1, Math.ceil(fullStockQty / 2)) : null,
-        reorderLot: fullStockQty != null ? fullStockQty : null,
-        tapIncrement: 1, tapMax: 3, // 1タップあたりの発注ロット数の増分／タップの上限（設定画面から品目ごとに調整可）
+        category, name, stockUnit,
+        fullStockQty, reorderPoint,
+        orderUnit: orderUnit || stockUnit, orderUnitLabel: orderUnitLabel || '',
+        tapIncrement: 1, tapMax: 3, // 1タップあたりの発注数量の増分／タップの上限（orderUnit単位。設定画面から品目ごとに調整可）
         orderRole, note, isActive: true, order: idx,
       }));
     }
@@ -499,22 +504,22 @@
               const taken = withdrawValues[item.id] ?? 0;
               const newCount = Math.max(0, (previousCount ?? 0) - taken);
               const belowReorderPoint = item.reorderPoint != null && newCount <= item.reorderPoint;
-              return { itemId: item.id, itemName: item.name, unit: item.unit, previousCount, newCount, delta: -taken, belowReorderPoint };
+              return { itemId: item.id, itemName: item.name, unit: item.stockUnit, previousCount, newCount, delta: -taken, belowReorderPoint };
             }
             if (allUnchanged) {
               // 「全品目在庫OK」と明示的に申告しているため、過去に発注要フラグが立っていても
               // ここでクリアする（残していると発注済み扱いにならず永久に警告が残り続ける）。
-              return { itemId: item.id, itemName: item.name, unit: item.unit, previousCount, newCount: previousCount, delta: 0, belowReorderPoint: false, requestedLots: 0 };
+              return { itemId: item.id, itemName: item.name, unit: item.stockUnit, previousCount, newCount: previousCount, delta: 0, belowReorderPoint: false, requestedLots: 0 };
             }
             const requestedLots = tapCounts[item.id] ?? 0;
             const isLow = requestedLots > 0;
             if (!isLow) {
               // 在庫OK：触っていないので前回値を維持したまま「確認済み」だけ記録する
-              return { itemId: item.id, itemName: item.name, unit: item.unit, previousCount, newCount: previousCount, delta: 0, belowReorderPoint: false, requestedLots: 0 };
+              return { itemId: item.id, itemName: item.name, unit: item.stockUnit, previousCount, newCount: previousCount, delta: 0, belowReorderPoint: false, requestedLots: 0 };
             }
             const hasDetail = detailOpen[item.id] && detailValues[item.id] !== undefined;
             const newCount = hasDetail ? detailValues[item.id] : (item.reorderPoint ?? 0);
-            return { itemId: item.id, itemName: item.name, unit: item.unit, previousCount, newCount, delta: (previousCount != null ? newCount - previousCount : null), belowReorderPoint: true, requestedLots };
+            return { itemId: item.id, itemName: item.name, unit: item.stockUnit, previousCount, newCount, delta: (previousCount != null ? newCount - previousCount : null), belowReorderPoint: true, requestedLots };
           });
 
           // 複数ドキュメントへの書き込みを1つのバッチにまとめ、途中で通信が切れても
@@ -585,7 +590,7 @@
                     <div className="min-w-0 pr-3">
                       <div className="text-sm text-gray-800">{item.name}</div>
                       <div className="text-[10px] text-gray-400 tracking-wide mt-0.5">
-                        発注 ×{line.requestedLots ?? 1}
+                        発注 ×{line.requestedLots ?? 1}{item.orderUnit || ''}
                         {order.status === '配達待ち' && order.deliveryScheduledDate ? `／到着予定 ${order.deliveryScheduledDate}` : ''}
                         {order.status === '配達待ち' && order.deliveryAssignee ? `／配達担当 ${order.deliveryAssignee.name}` : ''}
                       </div>
@@ -603,9 +608,9 @@
                   <div key={item.id} className="flex items-center justify-between py-3 px-3 border-b border-gray-100 last:border-b-0">
                     <div className="flex-1 min-w-0 pr-3">
                       <div className="text-sm text-gray-800">{item.name}</div>
-                      <div className="text-[10px] text-gray-400 tracking-wide mt-0.5">事務所在庫: {prevCount ?? '未確認'}{item.unit}</div>
+                      <div className="text-[10px] text-gray-400 tracking-wide mt-0.5">事務所在庫: {prevCount ?? '未確認'}{item.stockUnit}</div>
                     </div>
-                    <Stepper value={withdrawValues[item.id]} onChange={(v) => setWithdrawValue(item.id, v)} unit={item.unit} />
+                    <Stepper value={withdrawValues[item.id]} onChange={(v) => setWithdrawValue(item.id, v)} unit={item.stockUnit} />
                   </div>
                 );
               }
@@ -619,7 +624,7 @@
                   </TapRow>
                   {count > 0 && detailOpen[item.id] && (
                     <div className="bg-white px-3 pb-3 border-b border-gray-100 last:border-b-0">
-                      <Stepper value={detailValues[item.id]} onChange={(v) => setDetailValue(item.id, v)} unit={item.unit} />
+                      <Stepper value={detailValues[item.id]} onChange={(v) => setDetailValue(item.id, v)} unit={item.stockUnit} />
                     </div>
                   )}
                 </React.Fragment>
@@ -676,7 +681,7 @@
               {pendingItems.map(i => (
                 <label key={i.itemId} className="flex items-center gap-2 text-sm text-gray-700">
                   <input type="checkbox" checked={!!selected[i.itemId]} onChange={() => toggle(i.itemId)} />
-                  {i.itemName}×{i.requestedLots ?? 1}
+                  {i.itemName}×{i.requestedLots ?? 1}{i.orderUnit || ''}
                 </label>
               ))}
             </div>
@@ -734,8 +739,8 @@
           batch.update(docRef('orders', order.id), patch);
           if (deliveredItems.length > 0) {
             const lines = deliveredItems.map(i => ({
-              itemId: i.itemId, itemName: i.itemName, unit: i.unit,
-              previousCount: null, newCount: i.reorderLot ?? i.reorderPoint ?? null, delta: null, belowReorderPoint: false,
+              itemId: i.itemId, itemName: i.itemName, unit: i.stockUnit,
+              previousCount: null, newCount: i.fullStockQty ?? i.reorderPoint ?? null, delta: null, belowReorderPoint: false,
             }));
             batch.set(doc(col('stockCheckSessions')), {
               locationId: order.locationId, locationName: order.locationName, mode: 'restock',
@@ -773,7 +778,7 @@
                 return (
                   <div key={o.id} className="px-4 py-4">
                     <div className="text-sm text-gray-800">{o.locationName}</div>
-                    <div className="text-[10px] text-gray-400 mt-0.5">{o.items.map(i => `${i.itemName}×${i.requestedLots ?? 1}`).join('、')}</div>
+                    <div className="text-[10px] text-gray-400 mt-0.5">{o.items.map(i => `${i.itemName}×${i.requestedLots ?? 1}${i.orderUnit || ''}`).join('、')}</div>
                     {o.deliveryAssignee && <div className="text-[10px] text-gray-400 mt-0.5">配達担当：{o.deliveryAssignee.name}</div>}
                     {o.deliveryScheduledDate && <div className="text-[10px] text-gray-400 mt-0.5">到着予定：{o.deliveryScheduledDate}</div>}
                     {hasMissed && (
@@ -820,7 +825,7 @@
               {pendingOrders.map(o => (
                 <div key={o.id} className="px-4 py-3">
                   <div className="text-sm text-gray-800">{o.locationName}｜{o.orderRole}</div>
-                  <div className="text-[10px] text-gray-400 mt-0.5">{o.items.map(i => `${i.itemName}×${i.requestedLots ?? 1}`).join('、')}</div>
+                  <div className="text-[10px] text-gray-400 mt-0.5">{o.items.map(i => `${i.itemName}×${i.requestedLots ?? 1}${i.orderUnit || ''}`).join('、')}</div>
                   <div className="text-[10px] text-amber-600 mt-0.5">発注依頼済み・到着日の連絡待ちです</div>
                 </div>
               ))}
@@ -985,10 +990,12 @@
       const isNew = !item;
       const [category, setCategory] = useState(item?.category || ITEM_CATEGORIES[0]);
       const [name, setName] = useState(item?.name || '');
-      const [unit, setUnit] = useState(item?.unit || '個');
+      const [stockUnit, setStockUnit] = useState(item?.stockUnit || '個');
       const [orderRole, setOrderRole] = useState(item?.orderRole || ORDER_ROLES[0]);
       const [reorderPoint, setReorderPoint] = useState(item?.reorderPoint ?? '');
-      const [reorderLot, setReorderLot] = useState(item?.reorderLot ?? '');
+      const [fullStockQty, setFullStockQty] = useState(item?.fullStockQty ?? '');
+      const [orderUnit, setOrderUnit] = useState(item?.orderUnit || '');
+      const [orderUnitLabel, setOrderUnitLabel] = useState(item?.orderUnitLabel || '');
       const [tapIncrement, setTapIncrement] = useState(item?.tapIncrement ?? 1);
       const [tapMax, setTapMax] = useState(item?.tapMax ?? 3);
       const [note, setNote] = useState(item?.note || '');
@@ -1000,16 +1007,18 @@
         try {
           const ts = nowIso();
           const payload = {
-            category, name, unit, orderRole,
+            category, name, stockUnit, orderRole,
             reorderPoint: reorderPoint === '' ? null : Number(reorderPoint),
-            reorderLot: reorderLot === '' ? null : Number(reorderLot),
+            fullStockQty: fullStockQty === '' ? null : Number(fullStockQty),
+            orderUnit: orderUnit.trim() || stockUnit,
+            orderUnitLabel: orderUnitLabel.trim(),
             tapIncrement: Math.max(1, Number(tapIncrement) || 1),
             tapMax: Math.max(1, Number(tapMax) || 1),
             note, updatedAt: ts,
           };
           if (isNew) {
             const id = 'item-' + Date.now();
-            await setDoc(docRef('equipmentItems', id), { id, ...payload, fullStockQty: payload.reorderLot, isActive: true, order: 999, createdAt: ts });
+            await setDoc(docRef('equipmentItems', id), { id, ...payload, isActive: true, order: 999, createdAt: ts });
           } else {
             await updateDoc(docRef('equipmentItems', item.id), payload);
           }
@@ -1031,18 +1040,22 @@
               </select>
             </FormField>
             <FormField label="品目名"><input className={inputCls} value={name} onChange={e => setName(e.target.value)} /></FormField>
-            <FormField label="単位"><input className={inputCls} value={unit} onChange={e => setUnit(e.target.value)} /></FormField>
             <FormField label="発注担当区分">
               <select className={inputCls} value={orderRole} onChange={e => setOrderRole(e.target.value)}>
                 {ORDER_ROLES.map(r => <option key={r} value={r}>{r}</option>)}
               </select>
             </FormField>
             <div className="grid grid-cols-2 gap-3">
-              <FormField label="必要在庫数（これ以上を目安に。空欄可）"><input type="number" className={inputCls} value={reorderPoint} onChange={e => setReorderPoint(e.target.value)} /></FormField>
-              <FormField label="発注ロット（空欄可）"><input type="number" className={inputCls} value={reorderLot} onChange={e => setReorderLot(e.target.value)} /></FormField>
+              <FormField label="必要在庫数の単位（在庫確認で使う単位）"><input className={inputCls} value={stockUnit} onChange={e => setStockUnit(e.target.value)} placeholder="例：箱、本、部" /></FormField>
+              <FormField label="必要在庫数（これを下回ったら発注。空欄可）"><input type="number" className={inputCls} value={reorderPoint} onChange={e => setReorderPoint(e.target.value)} /></FormField>
+            </div>
+            <FormField label="満数（配置後に戻す基準の数。必要在庫数の単位。空欄可）"><input type="number" className={inputCls} value={fullStockQty} onChange={e => setFullStockQty(e.target.value)} /></FormField>
+            <div className="grid grid-cols-2 gap-3">
+              <FormField label="発注する単位（空欄なら必要在庫数の単位と同じ）"><input className={inputCls} value={orderUnit} onChange={e => setOrderUnit(e.target.value)} placeholder="例：袋、箱" /></FormField>
+              <FormField label="発注単位の補足（任意）"><input className={inputCls} value={orderUnitLabel} onChange={e => setOrderUnitLabel(e.target.value)} placeholder="例：3本入り" /></FormField>
             </div>
             <div className="grid grid-cols-2 gap-3">
-              <FormField label="1タップの増分"><input type="number" min="1" className={inputCls} value={tapIncrement} onChange={e => setTapIncrement(e.target.value)} /></FormField>
+              <FormField label="1タップの増分（発注する単位）"><input type="number" min="1" className={inputCls} value={tapIncrement} onChange={e => setTapIncrement(e.target.value)} /></FormField>
               <FormField label="タップ上限（×いくつまで）"><input type="number" min="1" className={inputCls} value={tapMax} onChange={e => setTapMax(e.target.value)} /></FormField>
             </div>
             <FormField label="備考"><input className={inputCls} value={note} onChange={e => setNote(e.target.value)} /></FormField>
@@ -1082,7 +1095,9 @@
               <div key={item.id} className={`flex items-center justify-between px-4 py-3 ${!item.isActive ? 'opacity-50' : ''}`}>
                 <div>
                   <div className="text-sm text-gray-800">{item.name}{!item.isActive && '（無効）'}</div>
-                  <div className="text-[10px] text-gray-400 mt-0.5">{item.orderRole} ／ 必要在庫数 {item.reorderPoint ?? '—'}{item.unit}以上 ／ ロット {item.reorderLot ?? '—'}{item.unit}</div>
+                  <div className="text-[10px] text-gray-400 mt-0.5">
+                    {item.orderRole} ／ 必要在庫数 {item.reorderPoint ?? '—'}{item.stockUnit}以上 ／ 発注単位 {item.orderUnit}{item.orderUnitLabel ? `（${item.orderUnitLabel}）` : ''}
+                  </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <button onClick={() => setEditing(item)} className="text-gray-400 hover:text-gray-700"><EditIcon className="w-4 h-4" /></button>
@@ -1338,7 +1353,7 @@
                     <div className="text-sm text-rose-600 font-medium">{s.item.name}</div>
                     <div className="text-[10px] text-gray-400">{s.location.name}</div>
                   </div>
-                  <span className="text-xs text-rose-500">残り目安 {s.currentCount}{s.item.unit}（必要在庫数 {s.item.reorderPoint}{s.item.unit}以上）</span>
+                  <span className="text-xs text-rose-500">残り目安 {s.currentCount}{s.item.stockUnit}（必要在庫数 {s.item.reorderPoint}{s.item.stockUnit}以上）</span>
                 </div>
               ))}
             </div>
@@ -1369,19 +1384,30 @@
     // ============================================================
     // 発注管理（管理者向け）
     // ============================================================
-    function buildOrderRequestText(location, role, lines) {
-      const itemLines = lines.map(l => `・${l.itemName}：発注ロット ×${l.requestedLots ?? 1}（必要在庫数の目安 ${l.item.reorderPoint ?? '—'}${l.unit}以上）`).join('\n');
+    // group.locationGroups は同じ発注担当区分（業務管理／集客・マーケ）の中で、対象拠点ごとの
+    // 品目リストをまとめたもの。マーケと業務管理は宛先が違うので引き続き別文章にするが、
+    // 同じ担当区分であれば複数のモデルハウス・見学会をまとめて1通の文章にする。
+    function buildOrderRequestText(role, locationGroups) {
+      const sections = locationGroups.map(g => {
+        const itemLines = g.lines.map(l => {
+          const orderUnit = l.item.orderUnit || l.item.stockUnit || '';
+          const label = l.item.orderUnitLabel ? `（${l.item.orderUnitLabel}）` : '';
+          return `・${l.itemName}：${l.requestedLots ?? 1}${orderUnit}${label}`;
+        }).join('\n');
+        return `▼${g.location.name}\n${itemLines}`;
+      }).join('\n\n');
+
       if (role === '業務管理') {
-        return `お世話になっております。${location.name}の下記備品が少なくなってきましたので、発注をお願いいたします。\n\n${itemLines}\n\n到着予定日が分かりましたら、このメッセージへの返信で教えていただけますと助かります（普段のお返事の書き方のままで大丈夫です）。\nよろしくお願いいたします。`;
+        return `お世話になっております。下記備品が少なくなってきましたので、発注をお願いいたします。\n\n${sections}\n\n到着予定日が分かりましたら、このメッセージへの返信で教えていただけますと助かります（普段のお返事の書き方のままで大丈夫です）。\nよろしくお願いいたします。`;
       }
       if (role === '集客・マーケ') {
-        return `お疲れ様です。${location.name}の下記備品、在庫が少なくなってきましたのでご用意をお願いできますでしょうか。\n\n${itemLines}\n\nご用意いただけそうな時期が分かりましたらお知らせください。よろしくお願いいたします。`;
+        return `お疲れ様です。下記備品、在庫が少なくなってきましたのでご用意をお願いできますでしょうか。\n\n${sections}\n\nご用意いただけそうな時期が分かりましたらお知らせください。よろしくお願いいたします。`;
       }
-      return `${location.name}の下記備品はADV本人手配のため、必要に応じてご準備をお願いします。\n\n${itemLines}`;
+      return `下記備品はADV本人手配のため、必要に応じてご準備をお願いします。\n\n${sections}`;
     }
 
     const OrderDraftModal = ({ group, onClose, onConfirmed, showAlert, user }) => {
-      const [text, setText] = useState(buildOrderRequestText(group.location, group.role, group.lines));
+      const [text, setText] = useState(buildOrderRequestText(group.role, group.locationGroups));
       const [saving, setSaving] = useState(false);
       const textareaRef = useRef(null);
 
@@ -1398,14 +1424,24 @@
         setSaving(true);
         try {
           const ts = nowIso();
-          await addDoc(col('orders'), {
-            locationId: group.location.id, locationName: group.location.name, orderRole: group.role,
-            items: group.lines.map(l => ({ itemId: l.itemId, itemName: l.itemName, unit: l.unit, requestedLots: l.requestedLots ?? 1, reorderPoint: l.item.reorderPoint, reorderLot: l.item.reorderLot })),
-            status: '依頼送信済み', requestDraftText: text,
-            requestedAt: ts, requestedBy: { uid: user.uid, name: user.displayName || user.email },
-            deliveryScheduledDate: null, deliveryAssignee: null, deliveredAt: null, deliveredBy: null, updatedAt: ts,
-            chatworkRoomId: null, chatworkMessageId: null, autoSendStatus: null, needsReview: false,
+          // 対象拠点ごとに発注ステータスは個別管理する（到着日・配達担当は拠点ごとに異なるため）。
+          // 依頼文（1通にまとめたもの）は各拠点のordersドキュメントに同じ内容を記録しておく。
+          const batch = writeBatch(db);
+          group.locationGroups.forEach(g => {
+            batch.set(doc(col('orders')), {
+              locationId: g.location.id, locationName: g.location.name, orderRole: group.role,
+              items: g.lines.map(l => ({
+                itemId: l.itemId, itemName: l.itemName, requestedLots: l.requestedLots ?? 1,
+                stockUnit: l.item.stockUnit, orderUnit: l.item.orderUnit, orderUnitLabel: l.item.orderUnitLabel || '',
+                reorderPoint: l.item.reorderPoint, fullStockQty: l.item.fullStockQty,
+              })),
+              status: '依頼送信済み', requestDraftText: text,
+              requestedAt: ts, requestedBy: { uid: user.uid, name: user.displayName || user.email },
+              deliveryScheduledDate: null, deliveryAssignee: null, deliveredAt: null, deliveredBy: null, updatedAt: ts,
+              chatworkRoomId: null, chatworkMessageId: null, autoSendStatus: null, needsReview: false,
+            });
           });
+          await batch.commit();
           onConfirmed();
         } catch (e) {
           showAlert('記録に失敗しました。\n' + (e && e.message ? e.message : ''));
@@ -1417,7 +1453,9 @@
       return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
           <div className="bg-white max-w-lg w-full p-6 shadow-xl border border-gray-200 max-h-[85vh] overflow-y-auto">
-            <h3 className="font-serif tracking-wide text-sm text-gray-800 mb-1">{group.location.name}｜{group.role}</h3>
+            <h3 className="font-serif tracking-wide text-sm text-gray-800 mb-1">
+              {group.role}｜{group.locationGroups.map(g => g.location.name).join('、')}
+            </h3>
             <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-4">発注依頼文（内容確認のうえChatworkへコピー）</p>
             <textarea
               ref={textareaRef}
@@ -1468,7 +1506,7 @@
           <div className="flex items-center justify-between">
             <div>
               <div className="text-sm text-gray-800">{order.locationName}｜{order.orderRole}</div>
-              <div className="text-[10px] text-gray-400 mt-0.5">{order.items.map(i => `${i.itemName}×${i.requestedLots ?? 1}`).join('、')}</div>
+              <div className="text-[10px] text-gray-400 mt-0.5">{order.items.map(i => `${i.itemName}×${i.requestedLots ?? 1}${i.orderUnit || ''}`).join('、')}</div>
               <div className="text-[10px] text-gray-400 mt-0.5">
                 配達担当：{order.deliveryAssignee ? order.deliveryAssignee.name : '自動設定予定（Phase2）'}
                 {order.deliveryScheduledDate ? `／到着予定 ${order.deliveryScheduledDate}` : ''}
@@ -1512,8 +1550,11 @@
         return set;
       }, [orders]);
 
+      // まず拠点×担当区分でまとめ、そのうえで担当区分だけでグルーピングし直す。
+      // マーケと業務管理は宛先が違うため引き続き別グループだが、同じ担当区分なら
+      // 複数の拠点をまたいで1つの依頼（1通の文章）にまとめられるようにするため。
       const pendingGroups = useMemo(() => {
-        const groups = {};
+        const byLocationRole = {};
         Object.values(stockLevels).forEach(s => {
           if (!s.belowReorderPoint) return;
           const item = itemById[s.itemId];
@@ -1521,10 +1562,16 @@
           if (!item || !location || item.orderRole === 'ADV本人手配') return;
           if (openOrderItemKeys.has(s.locationId + '_' + s.itemId)) return;
           const key = s.locationId + '|' + item.orderRole;
-          groups[key] = groups[key] || { location, role: item.orderRole, lines: [] };
-          groups[key].lines.push({ ...s, item, itemName: item.name, unit: item.unit });
+          byLocationRole[key] = byLocationRole[key] || { location, role: item.orderRole, lines: [] };
+          byLocationRole[key].lines.push({ ...s, item, itemName: item.name, unit: item.stockUnit });
         });
-        return Object.values(groups);
+
+        const byRole = {};
+        Object.values(byLocationRole).forEach(g => {
+          byRole[g.role] = byRole[g.role] || { role: g.role, locationGroups: [] };
+          byRole[g.role].locationGroups.push(g);
+        });
+        return Object.values(byRole);
       }, [stockLevels, itemById, locationById, openOrderItemKeys]);
 
       const openOrders = orders.filter(o => o.status !== '配達済み');
@@ -1537,10 +1584,14 @@
             <div className="bg-white border border-gray-200 mx-4 divide-y divide-gray-100">
               {pendingGroups.length === 0 && <p className="px-4 py-6 text-center text-xs text-gray-400">現在、新規に発注が必要な品目はありません</p>}
               {pendingGroups.map((g) => (
-                <div key={g.location.id + '|' + g.role} className="flex items-center justify-between px-4 py-3">
+                <div key={g.role} className="flex items-center justify-between px-4 py-3">
                   <div>
-                    <div className="text-sm text-gray-800">{g.location.name}｜{g.role}</div>
-                    <div className="text-[10px] text-gray-400 mt-0.5">{g.lines.map(l => `${l.itemName}×${l.requestedLots ?? 1}`).join('、')}</div>
+                    <div className="text-sm text-gray-800">{g.role}（{g.locationGroups.length}拠点）</div>
+                    {g.locationGroups.map(lg => (
+                      <div key={lg.location.id} className="text-[10px] text-gray-400 mt-0.5">
+                        {lg.location.name}：{lg.lines.map(l => `${l.itemName}×${l.requestedLots ?? 1}${l.item.orderUnit || ''}`).join('、')}
+                      </div>
+                    ))}
                   </div>
                   <button onClick={() => setModalGroup(g)} className="text-[11px] tracking-widest bg-gray-800 text-white hover:bg-gray-900 px-3 py-1.5 shrink-0">依頼文を作成</button>
                 </div>
