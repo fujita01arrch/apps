@@ -1158,10 +1158,8 @@
                 <div>
                   <div className="text-sm text-gray-800">
                     {s.displayName}{!s.uid && <span className="ml-2 text-[10px] text-amber-600">未ログイン</span>}
-                    {s.id === myId && <span className="ml-2 text-[10px] text-indigo-600">これが現在の正しいレコードです</span>}
                   </div>
                   <div className="text-[10px] text-gray-400 mt-0.5">{s.email}／{roleLabel[s.role] || s.role || '未設定'}{s.chatworkContactId ? `／ChatworkID: ${s.chatworkContactId}` : '／ChatworkID未登録'}</div>
-                  <div className="text-[9px] text-gray-300 mt-0.5">ID: {s.id}</div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <button onClick={() => setEditing(s)} className="text-gray-400 hover:text-gray-700"><EditIcon className="w-4 h-4" /></button>
