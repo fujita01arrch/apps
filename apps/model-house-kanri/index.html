@@ -1228,7 +1228,14 @@
       );
     };
 
-    const GeneralSettingsPanel = ({ config, showAlert }) => {
+    const BATCH_STEPS = [
+      { key: 'autoSendOrderRequests', label: '発注依頼を自動送信' },
+      { key: 'checkChatworkReplies', label: 'Chatwork返信を確認（到着日を反映）' },
+      { key: 'assignDeliveries', label: '配達担当を自動割当' },
+      { key: 'checkStaleLocations', label: '未確認アラートを送信' },
+    ];
+
+    const GeneralSettingsPanel = ({ config, user, showAlert }) => {
       const [staleCheckDays, setStaleCheckDays] = useState(config.staleCheckDays ?? 14);
       const [gasWebAppUrl, setGasWebAppUrl] = useState(config.gasWebAppUrl || '');
       const [gasSharedToken, setGasSharedToken] = useState(config.gasSharedToken || '');
@@ -1238,6 +1245,7 @@
       const [autoSendEnabled, setAutoSendEnabled] = useState(!!config.autoSendEnabled);
       const [orderRequestAutoSendEnabled, setOrderRequestAutoSendEnabled] = useState(!!config.orderRequestAutoSendEnabled);
       const [saving, setSaving] = useState(false);
+      const [runningStep, setRunningStep] = useState(null);
 
       const save = async () => {
         setSaving(true);
@@ -1255,6 +1263,31 @@
           showAlert('保存に失敗しました。\n' + (e && e.message ? e.message : ''));
         } finally {
           setSaving(false);
+        }
+      };
+
+      // 定時（9/12/17時）を待たずに、バッチ処理を今すぐ実行する（管理者専用）。
+      // 実際にChatworkへメッセージが送られる可能性があるため、GAS側でも承認者メールの
+      // ホワイトリストを二重チェックしている。
+      const runBatchStep = async (step) => {
+        if (!config.gasWebAppUrl || !config.gasSharedToken) {
+          showAlert('設定画面でGAS WebアプリURLと合言葉を設定してください。');
+          return;
+        }
+        setRunningStep(step);
+        try {
+          const res = await fetch(config.gasWebAppUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({ action: 'runBatchStep', token: config.gasSharedToken, step, approverEmail: user.email }),
+          });
+          const json = await res.json();
+          if (!json.ok) throw new Error(json.error || '不明なエラー');
+          showAlert('実行しました。');
+        } catch (e) {
+          showAlert('実行に失敗しました。\n' + (e && e.message ? e.message : ''));
+        } finally {
+          setRunningStep(null);
         }
       };
 
@@ -1287,6 +1320,21 @@
                 <span>GASが1日3回のバッチで、発注点割れの品目を自動的にとりまとめてChatworkへ送信する<br /><span className="text-xs text-gray-400">OFFの場合：発注管理画面で管理者が「依頼文を作成」→「Chatworkへ自動送信」を押した時だけ送信されます。ONにしても、発注管理画面の「Chatworkへ自動送信」ボタンは引き続き使えるので、バッチを待たず今すぐ送ることもできます。</span></span>
               </label>
             </div>
+            <div className="mt-3 border border-gray-100 p-3 bg-gray-50">
+              <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-2">③ 手動実行（管理者専用・定時9/12/17時を待たず今すぐ実行）</p>
+              <div className="flex flex-wrap gap-2">
+                {BATCH_STEPS.map(s => (
+                  <button
+                    key={s.key} onClick={() => runBatchStep(s.key)} disabled={!!runningStep}
+                    className="text-[11px] tracking-widest border border-gray-300 text-gray-600 hover:bg-gray-100 px-3 py-1.5 disabled:opacity-50"
+                  >{runningStep === s.key ? '実行中...' : s.label}</button>
+                ))}
+                <button
+                  onClick={() => runBatchStep('all')} disabled={!!runningStep}
+                  className="text-[11px] tracking-widest bg-indigo-700 text-white hover:bg-indigo-800 px-3 py-1.5 disabled:opacity-50"
+                >{runningStep === 'all' ? '実行中...' : 'すべて実行（1日3回のバッチと同じ内容）'}</button>
+              </div>
+            </div>
           </div>
 
           <button onClick={save} disabled={saving} className="mt-4 bg-gray-800 text-white hover:bg-gray-900 transition-colors px-4 py-2 text-xs tracking-widest disabled:opacity-50">{saving ? '保存中...' : '保存'}</button>
@@ -1312,7 +1360,7 @@
           {tab === 'locations' && <LocationsSettingsPanel locations={locations} showAlert={showAlert} showConfirm={showConfirm} />}
           {tab === 'items' && <EquipmentSettingsPanel items={items} showAlert={showAlert} showConfirm={showConfirm} />}
           {tab === 'guides' && <GuidesSettingsPanel showAlert={showAlert} showConfirm={showConfirm} user={user} />}
-          {tab === 'general' && <GeneralSettingsPanel config={config} showAlert={showAlert} />}
+          {tab === 'general' && <GeneralSettingsPanel config={config} user={user} showAlert={showAlert} />}
         </div>
       );
     };
