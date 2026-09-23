@@ -244,6 +244,27 @@
       return `${d}日前`;
     }
     function stockDocId(locationId, itemId) { return `${locationId}_${itemId}`; }
+    // usersのドキュメントIDはメールアドレス（小文字）を使う。ログイン前でも管理者が
+    // スタッフ管理画面から先に登録できるようにするため（Firebase AuthのUIDはログインするまで
+    // 分からず、先に登録できないため）。
+    function userDocId(email) { return (email || '').trim().toLowerCase(); }
+    // {{key}} プレースホルダーをvarsの値で置換する。GAS側（MessageTemplates.gs renderTemplate_）
+    // と同じ仕様にしておくこと。
+    function renderTemplate(tpl, vars) {
+      return String(tpl || '').replace(/\{\{(\w+)\}\}/g, (_, key) => (vars[key] !== undefined && vars[key] !== null) ? String(vars[key]) : '');
+    }
+    const DEFAULT_MESSAGE_TEMPLATES = {
+      orderRequestOperations: 'お世話になっております。下記備品が少なくなってきましたので、発注をお願いいたします。\n\n{{sections}}\n\n到着予定日が分かりましたら、このメッセージへの返信で教えていただけますと助かります（普段のお返事の書き方のままで大丈夫です）。\nよろしくお願いいたします。',
+      orderRequestMarketing: 'お疲れ様です。下記備品、在庫が少なくなってきましたのでご用意をお願いできますでしょうか。\n\n{{sections}}\n\nご用意いただけそうな時期が分かりましたらお知らせください。よろしくお願いいたします。',
+      orderRequestAdvSelf: '下記備品はADV本人手配のため、必要に応じてご準備をお願いします。\n\n{{sections}}',
+      deliveryRequest: '{{to}}{{staffName}}さん\nお疲れ様です。{{locationName}}宛の備品が事務所に届く予定です。\n{{visitSentence}}\n品目：\n{{items}}\nご都合が合わない場合はお手数ですがご一報ください。',
+      staleCheckNotice: '{{to}}{{staffName}}さん\nお疲れ様です。{{locationName}}は、{{daysSince}}日以上備品の在庫確認が行われていません。\n近く訪問される際に、アプリから在庫確認をお願いできますでしょうか。',
+      advShortageNotice: '{{advName}}さんより、{{locationName}}の備品不足報告がアプリに届きました。\n{{items}}\n※このメッセージは共有目的のみです。発注要否の判断・発注依頼は別途アプリ側で行われます。',
+    };
+    function messageTemplateOf(config, key) {
+      const saved = config.messageTemplates && config.messageTemplates[key];
+      return (saved && saved.trim()) ? saved : DEFAULT_MESSAGE_TEMPLATES[key];
+    }
 
     // ============================================================
     // 初期投入データ（seed）：Googleドキュメント記載の備品一覧をベースにした暫定値。
@@ -807,7 +828,7 @@
               {orders.length === 0 && <p className="px-4 py-10 text-center text-xs text-gray-400">現在、配置待ちの発注はありません</p>}
               {orders.map(o => {
                 const hasMissed = o.missedItemIds && o.missedItemIds.length > 0;
-                const isMine = !!(o.deliveryAssignee && o.deliveryAssignee.uid === user.uid);
+                const isMine = !!(o.deliveryAssignee && o.deliveryAssignee.email && o.deliveryAssignee.email.toLowerCase() === (user.email || '').toLowerCase());
                 return (
                   <div key={o.id} className={`px-4 py-4 ${isMine ? 'bg-indigo-50 border-l-4 border-indigo-500' : ''}`}>
                     <div className="flex items-center gap-2">
@@ -979,6 +1000,101 @@
               <button onClick={save} disabled={saving} className="px-4 py-2 text-xs tracking-widest bg-gray-800 text-white hover:bg-gray-900 disabled:opacity-50">{saving ? '保存中...' : '保存'}</button>
             </div>
           </div>
+        </div>
+      );
+    };
+
+    const StaffEditModal = ({ staff, onClose, showAlert }) => {
+      const isNew = !staff;
+      const [displayName, setDisplayName] = useState(staff?.displayName || '');
+      const [email, setEmail] = useState(staff?.email || '');
+      const [role, setRole] = useState(staff?.role || 'adv');
+      const [chatworkContactId, setChatworkContactId] = useState(staff?.chatworkContactId || '');
+      const [saving, setSaving] = useState(false);
+
+      const save = async () => {
+        if (!displayName.trim()) { showAlert('名前を入力してください。'); return; }
+        if (!email.trim() || !email.includes('@')) { showAlert('正しいメールアドレスを入力してください。'); return; }
+        setSaving(true);
+        try {
+          const ts = nowIso();
+          const id = userDocId(isNew ? email : staff.email);
+          await setDoc(docRef('users', id), {
+            displayName: displayName.trim(), email: email.trim(), role,
+            chatworkContactId: chatworkContactId.trim(),
+            updatedAt: ts,
+          }, { merge: true });
+          onClose();
+        } catch (e) {
+          showAlert('保存に失敗しました。\n' + (e && e.message ? e.message : ''));
+        } finally {
+          setSaving(false);
+        }
+      };
+
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white max-w-md w-full p-6 shadow-xl border border-gray-200">
+            <h3 className="font-serif tracking-wide text-sm text-gray-800 mb-4">{isNew ? 'スタッフを追加' : 'スタッフを編集'}</h3>
+            <FormField label="名前"><input className={inputCls} value={displayName} onChange={e => setDisplayName(e.target.value)} /></FormField>
+            <FormField label="メールアドレス">
+              <input className={inputCls} value={email} onChange={e => setEmail(e.target.value)} disabled={!isNew} placeholder="example@hakuto-k.jp" />
+              {!isNew && <p className="text-[10px] text-gray-400 mt-1">メールアドレスは登録後変更できません（削除して登録し直してください）</p>}
+            </FormField>
+            <FormField label="権限">
+              <select className={inputCls} value={role} onChange={e => setRole(e.target.value)}>
+                <option value="adv">ADV（一般）</option>
+                <option value="admin">管理者</option>
+              </select>
+            </FormField>
+            <FormField label="ChatworkアカウントID（任意・配達依頼等のTO通知に使用）">
+              <input className={inputCls} value={chatworkContactId} onChange={e => setChatworkContactId(e.target.value)} placeholder="例：1234567" />
+            </FormField>
+            <div className="flex justify-end gap-2 mt-4">
+              <button onClick={onClose} className="px-4 py-2 text-xs tracking-widest border border-gray-300 text-gray-600 hover:bg-gray-100">キャンセル</button>
+              <button onClick={save} disabled={saving} className="px-4 py-2 text-xs tracking-widest bg-gray-800 text-white hover:bg-gray-900 disabled:opacity-50">{saving ? '保存中...' : '保存'}</button>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    const StaffSettingsPanel = ({ staffList, user, showAlert, showConfirm }) => {
+      const [editing, setEditing] = useState(undefined); // undefined=閉じている, null=新規, obj=編集
+
+      const remove = async (staff) => {
+        if (staff.email.toLowerCase() === (user.email || '').toLowerCase()) {
+          showAlert('自分自身は削除できません。');
+          return;
+        }
+        await deleteDoc(docRef('users', staff.id));
+      };
+
+      const roleLabel = { admin: '管理者', adv: 'ADV（一般）' };
+
+      return (
+        <div>
+          <div className="flex justify-end px-4 mb-2">
+            <button onClick={() => setEditing(null)} className="flex items-center gap-1 text-[11px] tracking-widest bg-gray-800 text-white hover:bg-gray-900 px-3 py-1.5">
+              <PlusIcon className="w-3.5 h-3.5" />スタッフを追加
+            </button>
+          </div>
+          <div className="bg-white border border-gray-200 mx-4 divide-y divide-gray-100">
+            {staffList.length === 0 && <p className="px-4 py-6 text-center text-xs text-gray-400">スタッフはまだ登録されていません</p>}
+            {staffList.map(s => (
+              <div key={s.id} className="flex items-center justify-between px-4 py-3">
+                <div>
+                  <div className="text-sm text-gray-800">{s.displayName}{!s.uid && <span className="ml-2 text-[10px] text-amber-600">未ログイン</span>}</div>
+                  <div className="text-[10px] text-gray-400 mt-0.5">{s.email}／{roleLabel[s.role] || s.role || '未設定'}{s.chatworkContactId ? `／ChatworkID: ${s.chatworkContactId}` : '／ChatworkID未登録'}</div>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button onClick={() => setEditing(s)} className="text-gray-400 hover:text-gray-700"><EditIcon className="w-4 h-4" /></button>
+                  <button onClick={() => showConfirm(`「${s.displayName}」を削除しますか？`, () => remove(s), '削除する')} className="text-gray-400 hover:text-rose-500"><TrashIcon className="w-4 h-4" /></button>
+                </div>
+              </div>
+            ))}
+          </div>
+          {editing !== undefined && <StaffEditModal staff={editing} onClose={() => setEditing(undefined)} showAlert={showAlert} />}
         </div>
       );
     };
@@ -1238,8 +1354,33 @@
       { key: 'checkStaleLocations', label: '未確認アラートを送信' },
     ];
 
-    const GeneralSettingsPanel = ({ config, showAlert }) => {
+    const BasicSettingsPanel = ({ config, showAlert }) => {
       const [staleCheckDays, setStaleCheckDays] = useState(config.staleCheckDays ?? 14);
+      const [saving, setSaving] = useState(false);
+
+      const save = async () => {
+        setSaving(true);
+        try {
+          await updateDoc(docRef('system_config', 'default'), { staleCheckDays: Number(staleCheckDays) });
+          showAlert('保存しました。');
+        } catch (e) {
+          showAlert('保存に失敗しました。\n' + (e && e.message ? e.message : ''));
+        } finally {
+          setSaving(false);
+        }
+      };
+
+      return (
+        <div className="bg-white border border-gray-200 mx-4 p-4">
+          <FormField label="未確認とみなす日数（この日数を超えるとダッシュボード等で警告表示）">
+            <input type="number" className={inputCls} value={staleCheckDays} onChange={e => setStaleCheckDays(e.target.value)} />
+          </FormField>
+          <button onClick={save} disabled={saving} className="mt-2 bg-gray-800 text-white hover:bg-gray-900 transition-colors px-4 py-2 text-xs tracking-widest disabled:opacity-50">{saving ? '保存中...' : '保存'}</button>
+        </div>
+      );
+    };
+
+    const IntegrationSettingsPanel = ({ config, showAlert }) => {
       const [gasWebAppUrl, setGasWebAppUrl] = useState(config.gasWebAppUrl || '');
       const [gasSharedToken, setGasSharedToken] = useState(config.gasSharedToken || '');
       const [roomOperations, setRoomOperations] = useState(config.chatworkRoomIds?.operations || '');
@@ -1253,7 +1394,6 @@
         setSaving(true);
         try {
           await updateDoc(docRef('system_config', 'default'), {
-            staleCheckDays: Number(staleCheckDays),
             gasWebAppUrl: gasWebAppUrl.trim(),
             gasSharedToken: gasSharedToken.trim(),
             chatworkRoomIds: { operations: roomOperations.trim(), marketing: roomMarketing.trim(), advShortageReport: roomAdvShortage.trim() },
@@ -1270,48 +1410,96 @@
 
       return (
         <div className="bg-white border border-gray-200 mx-4 p-4">
-          <FormField label="未確認とみなす日数（この日数を超えるとダッシュボード等で警告表示）">
-            <input type="number" className={inputCls} value={staleCheckDays} onChange={e => setStaleCheckDays(e.target.value)} />
-          </FormField>
-
-          <div className="mt-4 border-t border-gray-100 pt-4">
-            <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-3">Phase2連携設定（GAS・Chatwork）</p>
-            <FormField label="GAS WebアプリURL"><input className={inputCls} value={gasWebAppUrl} onChange={e => setGasWebAppUrl(e.target.value)} placeholder="https://script.google.com/macros/s/.../exec" /></FormField>
-            <FormField label="合言葉（SHARED_TOKENと同じ値）"><input className={inputCls} value={gasSharedToken} onChange={e => setGasSharedToken(e.target.value)} /></FormField>
-            <div className="grid grid-cols-3 gap-3">
-              <FormField label="業務管理ルームID"><input className={inputCls} value={roomOperations} onChange={e => setRoomOperations(e.target.value)} /></FormField>
-              <FormField label="集客・マーケルームID"><input className={inputCls} value={roomMarketing} onChange={e => setRoomMarketing(e.target.value)} /></FormField>
-              <FormField label="ADV備品発注依頼ルームID"><input className={inputCls} value={roomAdvShortage} onChange={e => setRoomAdvShortage(e.target.value)} /></FormField>
-            </div>
-            <div className="mt-3 border border-gray-100 p-3 bg-gray-50">
-              <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-2">① GASが自動生成するメッセージ（配達依頼・未確認アラート等）</p>
-              <label className="flex items-start gap-2 text-sm text-gray-700">
-                <input type="checkbox" className="mt-0.5" checked={autoSendEnabled} onChange={e => setAutoSendEnabled(e.target.checked)} />
-                <span>確認なしで即送信する<br /><span className="text-xs text-gray-400">OFFの場合：「承認待ち」タブに一旦溜まり、藤田さん・染矢さんが内容確認のうえ送信ボタンを押すまで送られません</span></span>
-              </label>
-            </div>
-            <div className="mt-3 border border-gray-100 p-3 bg-gray-50">
-              <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-2">② 発注依頼の完全自動化</p>
-              <label className="flex items-start gap-2 text-sm text-gray-700">
-                <input type="checkbox" className="mt-0.5" checked={orderRequestAutoSendEnabled} onChange={e => setOrderRequestAutoSendEnabled(e.target.checked)} />
-                <span>GASが1日3回のバッチで、発注点割れの品目を自動的にとりまとめてChatworkへ送信する<br /><span className="text-xs text-gray-400">OFFの場合：発注管理画面で管理者が「依頼文を作成」→「Chatworkへ自動送信」を押した時だけ送信されます。ONにしても、発注管理画面の「Chatworkへ自動送信」ボタンは引き続き使えるので、バッチを待たず今すぐ送ることもできます。</span></span>
-              </label>
-            </div>
-            <p className="text-xs text-gray-400 mt-3">※バッチ処理を今すぐ手動実行したい場合は、上部ナビの「実行」タブから行えます。</p>
+          <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-3">Phase2連携設定（GAS・Chatwork）</p>
+          <FormField label="GAS WebアプリURL"><input className={inputCls} value={gasWebAppUrl} onChange={e => setGasWebAppUrl(e.target.value)} placeholder="https://script.google.com/macros/s/.../exec" /></FormField>
+          <FormField label="合言葉（SHARED_TOKENと同じ値）"><input className={inputCls} value={gasSharedToken} onChange={e => setGasSharedToken(e.target.value)} /></FormField>
+          <div className="grid grid-cols-3 gap-3">
+            <FormField label="業務管理ルームID"><input className={inputCls} value={roomOperations} onChange={e => setRoomOperations(e.target.value)} /></FormField>
+            <FormField label="集客・マーケルームID"><input className={inputCls} value={roomMarketing} onChange={e => setRoomMarketing(e.target.value)} /></FormField>
+            <FormField label="ADV備品発注依頼ルームID"><input className={inputCls} value={roomAdvShortage} onChange={e => setRoomAdvShortage(e.target.value)} /></FormField>
           </div>
-
+          <div className="mt-3 border border-gray-100 p-3 bg-gray-50">
+            <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-2">① GASが自動生成するメッセージ（配達依頼・未確認アラート等）</p>
+            <label className="flex items-start gap-2 text-sm text-gray-700">
+              <input type="checkbox" className="mt-0.5" checked={autoSendEnabled} onChange={e => setAutoSendEnabled(e.target.checked)} />
+              <span>確認なしで即送信する<br /><span className="text-xs text-gray-400">OFFの場合：「承認待ち」タブに一旦溜まり、藤田さん・染矢さんが内容確認のうえ送信ボタンを押すまで送られません</span></span>
+            </label>
+          </div>
+          <div className="mt-3 border border-gray-100 p-3 bg-gray-50">
+            <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-2">② 発注依頼の完全自動化</p>
+            <label className="flex items-start gap-2 text-sm text-gray-700">
+              <input type="checkbox" className="mt-0.5" checked={orderRequestAutoSendEnabled} onChange={e => setOrderRequestAutoSendEnabled(e.target.checked)} />
+              <span>GASが1日3回のバッチで、発注点割れの品目を自動的にとりまとめてChatworkへ送信する<br /><span className="text-xs text-gray-400">OFFの場合：発注管理画面で管理者が「依頼文を作成」→「Chatworkへ自動送信」を押した時だけ送信されます。ONにしても、発注管理画面の「Chatworkへ自動送信」ボタンは引き続き使えるので、バッチを待たず今すぐ送ることもできます。</span></span>
+            </label>
+          </div>
+          <p className="text-xs text-gray-400 mt-3">※バッチ処理を今すぐ手動実行したい場合は、上部ナビの「実行」タブから行えます。</p>
           <button onClick={save} disabled={saving} className="mt-4 bg-gray-800 text-white hover:bg-gray-900 transition-colors px-4 py-2 text-xs tracking-widest disabled:opacity-50">{saving ? '保存中...' : '保存'}</button>
         </div>
       );
     };
 
-    const SettingsView = ({ locations, items, config, user, showAlert, showConfirm }) => {
+    const MESSAGE_TEMPLATE_FIELDS = [
+      { key: 'orderRequestOperations', label: '発注依頼文（業務管理宛）', vars: '{{sections}}＝品目一覧（拠点ごとにまとめた文字列）' },
+      { key: 'orderRequestMarketing', label: '発注依頼文（集客・マーケ宛）', vars: '{{sections}}＝品目一覧（拠点ごとにまとめた文字列）' },
+      { key: 'orderRequestAdvSelf', label: '準備依頼文（ADV本人手配）', vars: '{{sections}}＝品目一覧（拠点ごとにまとめた文字列）' },
+      { key: 'deliveryRequest', label: '運搬依頼文（配達担当ADVへ）', vars: '{{to}}＝Chatwork TOメンション／{{staffName}}＝担当者名／{{locationName}}＝拠点名／{{visitSentence}}＝訪問日の一文／{{items}}＝品目一覧' },
+      { key: 'staleCheckNotice', label: '未確認アラート文（次の訪問者へ）', vars: '{{to}}＝Chatwork TOメンション／{{staffName}}＝担当者名／{{locationName}}＝拠点名／{{daysSince}}＝未確認日数' },
+      { key: 'advShortageNotice', label: 'ADV不足報告の共有通知文', vars: '{{advName}}＝報告したADV名／{{locationName}}＝拠点名／{{items}}＝品目一覧' },
+    ];
+
+    const MessageTemplatesSettingsPanel = ({ config, showAlert }) => {
+      const [values, setValues] = useState(() => {
+        const v = {};
+        MESSAGE_TEMPLATE_FIELDS.forEach(f => { v[f.key] = messageTemplateOf(config, f.key); });
+        return v;
+      });
+      const [saving, setSaving] = useState(false);
+
+      const resetOne = (key) => setValues(v => ({ ...v, [key]: DEFAULT_MESSAGE_TEMPLATES[key] }));
+
+      const save = async () => {
+        setSaving(true);
+        try {
+          await updateDoc(docRef('system_config', 'default'), { messageTemplates: values });
+          showAlert('保存しました。');
+        } catch (e) {
+          showAlert('保存に失敗しました。\n' + (e && e.message ? e.message : ''));
+        } finally {
+          setSaving(false);
+        }
+      };
+
+      return (
+        <div className="bg-white border border-gray-200 mx-4 p-4 space-y-4">
+          <p className="text-xs text-gray-500">Chatworkへ自動送信される文面のテンプレートです。{'{{}}'}で囲まれた部分は自動で置き換わります。改行もそのまま反映されます。</p>
+          {MESSAGE_TEMPLATE_FIELDS.map(f => (
+            <div key={f.key} className="border-t border-gray-100 pt-3">
+              <div className="flex items-center justify-between mb-1">
+                <label className="text-xs text-gray-700">{f.label}</label>
+                <button onClick={() => resetOne(f.key)} className="text-[10px] text-gray-400 hover:text-gray-700 underline">初期値に戻す</button>
+              </div>
+              <textarea
+                rows={4} value={values[f.key]} onChange={e => setValues(v => ({ ...v, [f.key]: e.target.value }))}
+                className="w-full border border-gray-300 p-2 text-xs leading-relaxed focus:outline-none focus:border-gray-500"
+              />
+              <p className="text-[10px] text-gray-400 mt-1">{f.vars}</p>
+            </div>
+          ))}
+          <button onClick={save} disabled={saving} className="bg-gray-800 text-white hover:bg-gray-900 transition-colors px-4 py-2 text-xs tracking-widest disabled:opacity-50">{saving ? '保存中...' : '保存'}</button>
+        </div>
+      );
+    };
+
+    const SettingsView = ({ locations, items, staffList, config, user, showAlert, showConfirm }) => {
       const [tab, setTab] = useState('locations');
       const tabs = [
         { key: 'locations', label: '拠点' },
         { key: 'items', label: '備品テンプレート' },
         { key: 'guides', label: '手順ページ' },
-        { key: 'general', label: '全般' },
+        { key: 'staff', label: 'スタッフ' },
+        { key: 'templates', label: 'メッセージ文面' },
+        { key: 'integration', label: '連携設定' },
+        { key: 'basic', label: '基本設定' },
       ];
       return (
         <div className="max-w-2xl mx-auto">
@@ -1323,7 +1511,10 @@
           {tab === 'locations' && <LocationsSettingsPanel locations={locations} showAlert={showAlert} showConfirm={showConfirm} />}
           {tab === 'items' && <EquipmentSettingsPanel items={items} showAlert={showAlert} showConfirm={showConfirm} />}
           {tab === 'guides' && <GuidesSettingsPanel showAlert={showAlert} showConfirm={showConfirm} user={user} />}
-          {tab === 'general' && <GeneralSettingsPanel config={config} showAlert={showAlert} />}
+          {tab === 'staff' && <StaffSettingsPanel staffList={staffList} user={user} showAlert={showAlert} showConfirm={showConfirm} />}
+          {tab === 'templates' && <MessageTemplatesSettingsPanel config={config} showAlert={showAlert} />}
+          {tab === 'integration' && <IntegrationSettingsPanel config={config} showAlert={showAlert} />}
+          {tab === 'basic' && <BasicSettingsPanel config={config} showAlert={showAlert} />}
         </div>
       );
     };
@@ -1584,7 +1775,8 @@
     // group.locationGroups は同じ発注担当区分（業務管理／集客・マーケ）の中で、対象拠点ごとの
     // 品目リストをまとめたもの。マーケと業務管理は宛先が違うので引き続き別文章にするが、
     // 同じ担当区分であれば複数のモデルハウス・見学会をまとめて1通の文章にする。
-    function buildOrderRequestText(role, locationGroups) {
+    // テンプレート本文（config.messageTemplates、GAS側 MessageTemplates.gs と共通の情報源）を使う。
+    function buildOrderRequestText(role, locationGroups, config) {
       const sections = locationGroups.map(g => {
         const itemLines = g.lines.map(l => {
           const orderUnit = l.item.orderUnit || l.item.stockUnit || '';
@@ -1594,17 +1786,13 @@
         return `▼${g.location.name}\n${itemLines}`;
       }).join('\n\n');
 
-      if (role === '業務管理') {
-        return `お世話になっております。下記備品が少なくなってきましたので、発注をお願いいたします。\n\n${sections}\n\n到着予定日が分かりましたら、このメッセージへの返信で教えていただけますと助かります（普段のお返事の書き方のままで大丈夫です）。\nよろしくお願いいたします。`;
-      }
-      if (role === '集客・マーケ') {
-        return `お疲れ様です。下記備品、在庫が少なくなってきましたのでご用意をお願いできますでしょうか。\n\n${sections}\n\nご用意いただけそうな時期が分かりましたらお知らせください。よろしくお願いいたします。`;
-      }
-      return `下記備品はADV本人手配のため、必要に応じてご準備をお願いします。\n\n${sections}`;
+      const key = role === '業務管理' ? 'orderRequestOperations'
+        : role === '集客・マーケ' ? 'orderRequestMarketing' : 'orderRequestAdvSelf';
+      return renderTemplate(messageTemplateOf(config, key), { sections });
     }
 
     const OrderDraftModal = ({ group, config, onClose, onConfirmed, showAlert, user }) => {
-      const [text, setText] = useState(buildOrderRequestText(group.role, group.locationGroups));
+      const [text, setText] = useState(buildOrderRequestText(group.role, group.locationGroups, config));
       const [saving, setSaving] = useState(false);
       const [autoSending, setAutoSending] = useState(false);
       const textareaRef = useRef(null);
@@ -1967,6 +2155,7 @@
       const [stockLevels, setStockLevels] = useState({});
       const [orders, setOrders] = useState([]);
       const [outbox, setOutbox] = useState([]);
+      const [staffList, setStaffList] = useState([]);
       const [config, setConfig] = useState({ staleCheckDays: 14 });
       const [domainError, setDomainError] = useState(false);
 
@@ -1985,11 +2174,18 @@
           setDomainError(false);
           setUser(u);
           if (u) {
-            setDoc(docRef('users', u.uid), {
-              uid: u.uid, email: u.email, displayName: u.displayName || u.email,
-              role: ADMIN_EMAILS.includes((u.email || '').toLowerCase()) ? 'admin' : 'adv',
-              lastLoginAt: nowIso(),
-            }, { merge: true });
+            // ドキュメントIDはメールアドレス。管理者がスタッフ管理画面で先に名前や
+            // ChatworkアカウントIDを登録していた場合、そのレコードにuid・最終ログイン日時だけ
+            // マージする（roleは既存レコードがあれば触らない＝スタッフ管理画面での権限変更を尊重）。
+            // まだレコードが無い初回ログインの時だけ、ADMIN_EMAILSを初期値として使う。
+            const uref = docRef('users', userDocId(u.email));
+            getDoc(uref).then((snap) => {
+              const patch = { uid: u.uid, email: u.email, displayName: u.displayName || u.email, lastLoginAt: nowIso() };
+              if (!snap.exists()) {
+                patch.role = ADMIN_EMAILS.includes((u.email || '').toLowerCase()) ? 'admin' : 'adv';
+              }
+              setDoc(uref, patch, { merge: true });
+            });
           }
         });
         return () => unsub();
@@ -2013,8 +2209,10 @@
           onSnapshot(col('outbox'), (snap) => {
             setOutbox(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (b.draftedAt || '').localeCompare(a.draftedAt || '')));
           }),
-          // usersコレクション（担当者一覧）はPhase2でGAS側がFirestoreへ直接書き込む形で
-          // 配達担当者を自動設定する設計のため、クライアント側での購読は不要（無駄な購読を削除）。
+          // スタッフ管理画面（権限変更）とGAS側の配達担当自動判定の両方で使うため購読する。
+          onSnapshot(col('users'), (snap) => {
+            setStaffList(snap.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => (a.displayName || '').localeCompare(b.displayName || '', 'ja')));
+          }),
           onSnapshot(docRef('system_config', 'default'), (snap) => { if (snap.exists()) setConfig(snap.data()); }),
         ];
         return () => unsubs.forEach(u => u());
@@ -2027,8 +2225,11 @@
         return <LoginView domainError={domainError} />;
       }
 
-      const isAdmin = ADMIN_EMAILS.includes((user.email || '').toLowerCase());
-      const commonProps = { locations, items, stockLevels, orders, outbox, config, staleCheckDays: config.staleCheckDays ?? 14, user, isAdmin, showAlert, showConfirm };
+      // 権限はFirestore（users/{email}.role）を見る。まだレコードが読み込めていない
+      // 一瞬（ログイン直後）はADMIN_EMAILSにフォールバックし、管理者が締め出されないようにする。
+      const myStaffRecord = staffList.find(s => s.id === userDocId(user.email));
+      const isAdmin = myStaffRecord ? myStaffRecord.role === 'admin' : ADMIN_EMAILS.includes((user.email || '').toLowerCase());
+      const commonProps = { locations, items, stockLevels, orders, outbox, staffList, config, staleCheckDays: config.staleCheckDays ?? 14, user, isAdmin, showAlert, showConfirm };
 
       const renderView = () => {
         switch (view) {
