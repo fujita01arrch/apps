@@ -1273,10 +1273,10 @@
               </label>
             </div>
             <div className="mt-3 border border-gray-100 p-3 bg-gray-50">
-              <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-2">② 発注管理画面（管理者が手動で「依頼文を作成」した時）</p>
+              <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-2">② 発注依頼の完全自動化</p>
               <label className="flex items-start gap-2 text-sm text-gray-700">
                 <input type="checkbox" className="mt-0.5" checked={orderRequestAutoSendEnabled} onChange={e => setOrderRequestAutoSendEnabled(e.target.checked)} />
-                <span>「Chatworkへ自動送信」ボタンを表示する<br /><span className="text-xs text-gray-400">OFFの場合：このボタンは表示されず、従来通り文面をコピーして手動でChatworkに貼り付ける運用になります</span></span>
+                <span>GASが1日3回のバッチで、発注点割れの品目を自動的にとりまとめてChatworkへ送信する<br /><span className="text-xs text-gray-400">OFFの場合：発注管理画面で管理者が「依頼文を作成」→「Chatworkへ自動送信」を押した時だけ送信されます。ONにしても、発注管理画面の「Chatworkへ自動送信」ボタンは引き続き使えるので、バッチを待たず今すぐ送ることもできます。</span></span>
               </label>
             </div>
           </div>
@@ -1521,14 +1521,12 @@
         }
       };
 
-      // GAS経由でChatworkへ自動送信する（自動送信ONなら即送信、OFFなら「承認待ちメッセージ」画面に届く）。
-      // ADV本人手配はChatwork送信先が無いため対象外。また設定画面のチェックがOFFの間は
-      // 従来通り文面コピー＋手動送信のみとする（誤って自動送信されるのを防ぐため）。
-      const roomIdForRole = config.orderRequestAutoSendEnabled && (
-        group.role === '業務管理'
-          ? config.chatworkRoomIds?.operations
-          : group.role === '集客・マーケ' ? config.chatworkRoomIds?.marketing : null
-      );
+      // GAS経由でChatworkへ自動送信するボタンは常に表示する（ADV本人手配のみ送信先が無いため対象外）。
+      // 「完全自動化」チェック（設定画面）がONの場合はGASが1日3回のバッチで自動的に送信するが、
+      // その場合もこのボタンで随時・任意のタイミングで手動送信できる（バッチを待たず今すぐ送りたい時用）。
+      const roomIdForRole = group.role === '業務管理'
+        ? config.chatworkRoomIds?.operations
+        : group.role === '集客・マーケ' ? config.chatworkRoomIds?.marketing : null;
 
       const sendViaGas = async () => {
         if (!config.gasWebAppUrl || !config.gasSharedToken) {
