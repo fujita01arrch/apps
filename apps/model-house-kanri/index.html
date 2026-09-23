@@ -1803,10 +1803,14 @@
       const [subTab, setSubTab] = useState('orders');
       return (
         <div>
-          <div className="max-w-2xl mx-auto flex gap-1 px-4 mb-3 overflow-x-auto">
-            {ADMIN_SUB_TABS.map(t => (
-              <button key={t.key} onClick={() => setSubTab(t.key)} className={`text-[11px] tracking-widest px-3 py-1.5 whitespace-nowrap ${subTab === t.key ? 'bg-gray-800 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>{t.label}</button>
-            ))}
+          <div className="max-w-2xl mx-auto px-4 mb-4 flex items-center gap-2">
+            <label className="text-[10px] text-gray-400 tracking-widest uppercase shrink-0">管理メニュー</label>
+            <select
+              value={subTab} onChange={e => setSubTab(e.target.value)}
+              className="border border-gray-300 bg-white px-3 py-2 text-sm font-medium text-gray-800 focus:outline-none focus:border-gray-500"
+            >
+              {ADMIN_SUB_TABS.map(t => <option key={t.key} value={t.key}>{t.label}</option>)}
+            </select>
           </div>
           {subTab === 'orders' && <OrderManagementView {...props} />}
           {subTab === 'approvals' && <PendingApprovalView {...props} />}
