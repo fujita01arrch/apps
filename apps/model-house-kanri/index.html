@@ -1228,6 +1228,7 @@
       const [roomMarketing, setRoomMarketing] = useState(config.chatworkRoomIds?.marketing || '');
       const [roomAdvShortage, setRoomAdvShortage] = useState(config.chatworkRoomIds?.advShortageReport || '');
       const [autoSendEnabled, setAutoSendEnabled] = useState(!!config.autoSendEnabled);
+      const [orderRequestAutoSendEnabled, setOrderRequestAutoSendEnabled] = useState(!!config.orderRequestAutoSendEnabled);
       const [saving, setSaving] = useState(false);
 
       const save = async () => {
@@ -1239,6 +1240,7 @@
             gasSharedToken: gasSharedToken.trim(),
             chatworkRoomIds: { operations: roomOperations.trim(), marketing: roomMarketing.trim(), advShortageReport: roomAdvShortage.trim() },
             autoSendEnabled,
+            orderRequestAutoSendEnabled,
           });
           showAlert('保存しました。');
         } catch (e) {
@@ -1266,6 +1268,10 @@
             <label className="flex items-center gap-2 mt-2 text-sm text-gray-700">
               <input type="checkbox" checked={autoSendEnabled} onChange={e => setAutoSendEnabled(e.target.checked)} />
               自動送信を有効にする（OFFの間は「承認待ち」タブでの確認・送信操作が必須）
+            </label>
+            <label className="flex items-center gap-2 mt-2 text-sm text-gray-700">
+              <input type="checkbox" checked={orderRequestAutoSendEnabled} onChange={e => setOrderRequestAutoSendEnabled(e.target.checked)} />
+              発注管理画面の依頼文もChatworkへ自動送信できるようにする（OFFの場合は文面コピー＋手動送信のみ）
             </label>
           </div>
 
@@ -1460,9 +1466,10 @@
       return `下記備品はADV本人手配のため、必要に応じてご準備をお願いします。\n\n${sections}`;
     }
 
-    const OrderDraftModal = ({ group, onClose, onConfirmed, showAlert, user }) => {
+    const OrderDraftModal = ({ group, config, onClose, onConfirmed, showAlert, user }) => {
       const [text, setText] = useState(buildOrderRequestText(group.role, group.locationGroups));
       const [saving, setSaving] = useState(false);
+      const [autoSending, setAutoSending] = useState(false);
       const textareaRef = useRef(null);
 
       const copyText = async () => {
@@ -1474,33 +1481,73 @@
         }
       };
 
+      // 対象拠点ごとに発注ステータスは個別管理する（到着日・配達担当は拠点ごとに異なるため）。
+      // 依頼文（1通にまとめたもの）は各拠点のordersドキュメントに同じ内容を記録しておく。
+      const recordOrders = async (chatworkRoomId) => {
+        const ts = nowIso();
+        const batch = writeBatch(db);
+        group.locationGroups.forEach(g => {
+          batch.set(doc(col('orders')), {
+            locationId: g.location.id, locationName: g.location.name, orderRole: group.role,
+            items: g.lines.map(l => ({
+              itemId: l.itemId, itemName: l.itemName, requestedLots: l.requestedLots ?? 1,
+              stockUnit: l.item.stockUnit, orderUnit: l.item.orderUnit, orderUnitLabel: l.item.orderUnitLabel || '',
+              reorderPoint: l.item.reorderPoint, fullStockQty: l.item.fullStockQty,
+            })),
+            status: '依頼送信済み', requestDraftText: text,
+            requestedAt: ts, requestedBy: { uid: user.uid, name: user.displayName || user.email },
+            deliveryScheduledDate: null, deliveryAssignee: null, deliveredAt: null, deliveredBy: null, updatedAt: ts,
+            chatworkRoomId: chatworkRoomId || null, chatworkMessageId: null, autoSendStatus: null, needsReview: false,
+          });
+        });
+        await batch.commit();
+      };
+
       const markRequested = async () => {
         setSaving(true);
         try {
-          const ts = nowIso();
-          // 対象拠点ごとに発注ステータスは個別管理する（到着日・配達担当は拠点ごとに異なるため）。
-          // 依頼文（1通にまとめたもの）は各拠点のordersドキュメントに同じ内容を記録しておく。
-          const batch = writeBatch(db);
-          group.locationGroups.forEach(g => {
-            batch.set(doc(col('orders')), {
-              locationId: g.location.id, locationName: g.location.name, orderRole: group.role,
-              items: g.lines.map(l => ({
-                itemId: l.itemId, itemName: l.itemName, requestedLots: l.requestedLots ?? 1,
-                stockUnit: l.item.stockUnit, orderUnit: l.item.orderUnit, orderUnitLabel: l.item.orderUnitLabel || '',
-                reorderPoint: l.item.reorderPoint, fullStockQty: l.item.fullStockQty,
-              })),
-              status: '依頼送信済み', requestDraftText: text,
-              requestedAt: ts, requestedBy: { uid: user.uid, name: user.displayName || user.email },
-              deliveryScheduledDate: null, deliveryAssignee: null, deliveredAt: null, deliveredBy: null, updatedAt: ts,
-              chatworkRoomId: null, chatworkMessageId: null, autoSendStatus: null, needsReview: false,
-            });
-          });
-          await batch.commit();
+          await recordOrders(null);
           onConfirmed();
         } catch (e) {
           showAlert('記録に失敗しました。\n' + (e && e.message ? e.message : ''));
         } finally {
           setSaving(false);
+        }
+      };
+
+      // GAS経由でChatworkへ自動送信する（自動送信ONなら即送信、OFFなら「承認待ちメッセージ」画面に届く）。
+      // ADV本人手配はChatwork送信先が無いため対象外。また設定画面のチェックがOFFの間は
+      // 従来通り文面コピー＋手動送信のみとする（誤って自動送信されるのを防ぐため）。
+      const roomIdForRole = config.orderRequestAutoSendEnabled && (
+        group.role === '業務管理'
+          ? config.chatworkRoomIds?.operations
+          : group.role === '集客・マーケ' ? config.chatworkRoomIds?.marketing : null
+      );
+
+      const sendViaGas = async () => {
+        if (!config.gasWebAppUrl || !config.gasSharedToken) {
+          showAlert('設定画面（全般）でGAS WebアプリURLと合言葉を設定してください。');
+          return;
+        }
+        if (!roomIdForRole) {
+          showAlert('設定画面（全般）で送信先のルームIDを設定してください。');
+          return;
+        }
+        setAutoSending(true);
+        try {
+          const res = await fetch(config.gasWebAppUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({ action: 'sendOrderRequest', token: config.gasSharedToken, roomId: roomIdForRole, body: text }),
+          });
+          const json = await res.json();
+          if (!json.ok) throw new Error(json.error || '不明なエラー');
+          await recordOrders(roomIdForRole);
+          onConfirmed();
+        } catch (e) {
+          showAlert('送信に失敗しました。\n' + (e && e.message ? e.message : ''));
+        } finally {
+          setAutoSending(false);
         }
       };
 
@@ -1510,7 +1557,7 @@
             <h3 className="font-serif tracking-wide text-sm text-gray-800 mb-1">
               {group.role}｜{group.locationGroups.map(g => g.location.name).join('、')}
             </h3>
-            <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-4">発注依頼文（内容確認のうえChatworkへコピー）</p>
+            <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-4">発注依頼文（内容確認のうえChatworkへ送信）</p>
             <textarea
               ref={textareaRef}
               value={text}
@@ -1521,9 +1568,15 @@
             <div className="flex flex-wrap justify-end gap-2 mt-4">
               <button onClick={onClose} className="px-4 py-2 text-xs tracking-widest border border-gray-300 text-gray-600 hover:bg-gray-100">閉じる</button>
               <button onClick={copyText} className="px-4 py-2 text-xs tracking-widest border border-gray-300 text-gray-600 hover:bg-gray-100">文面をコピー</button>
-              <button onClick={markRequested} disabled={saving} className="px-4 py-2 text-xs tracking-widest bg-gray-800 text-white hover:bg-gray-900 disabled:opacity-50">
-                {saving ? '記録中...' : '送信済みとして記録する'}
-              </button>
+              {roomIdForRole ? (
+                <button onClick={sendViaGas} disabled={autoSending} className="px-4 py-2 text-xs tracking-widest bg-indigo-700 text-white hover:bg-indigo-800 disabled:opacity-50">
+                  {autoSending ? '送信中...' : 'Chatworkへ自動送信'}
+                </button>
+              ) : (
+                <button onClick={markRequested} disabled={saving} className="px-4 py-2 text-xs tracking-widest bg-gray-800 text-white hover:bg-gray-900 disabled:opacity-50">
+                  {saving ? '記録中...' : '送信済みとして記録する'}
+                </button>
+              )}
             </div>
           </div>
         </div>
@@ -1668,7 +1721,7 @@
       );
     };
 
-    const OrderManagementView = ({ locations, items, stockLevels, orders, user, showAlert }) => {
+    const OrderManagementView = ({ locations, items, stockLevels, orders, config, user, showAlert }) => {
       const [modalGroup, setModalGroup] = useState(null);
 
       const itemById = useMemo(() => Object.fromEntries(items.map(i => [i.id, i])), [items]);
@@ -1756,7 +1809,7 @@
 
           {modalGroup && (
             <OrderDraftModal
-              group={modalGroup} user={user} showAlert={showAlert}
+              group={modalGroup} config={config} user={user} showAlert={showAlert}
               onClose={() => setModalGroup(null)}
               onConfirmed={() => { setModalGroup(null); showAlert('発注依頼を記録しました。'); }}
             />
