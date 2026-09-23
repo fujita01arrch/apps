@@ -106,6 +106,9 @@
         <path d="M18 8a6 6 0 10-12 0c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 01-3.46 0" />
       </svg>
     );
+    const PlayIcon = ({ className = "w-5 h-5" }) => (
+      <svg viewBox="0 0 24 24" className={className} {...iconProps}><path d="M5 3l16 9-16 9V3z" /></svg>
+    );
     const PlusIcon = ({ className = "w-5 h-5" }) => (
       <svg viewBox="0 0 24 24" className={className} {...iconProps}><path d="M12 5v14M5 12h14" /></svg>
     );
@@ -1235,7 +1238,7 @@
       { key: 'checkStaleLocations', label: '未確認アラートを送信' },
     ];
 
-    const GeneralSettingsPanel = ({ config, user, showAlert }) => {
+    const GeneralSettingsPanel = ({ config, showAlert }) => {
       const [staleCheckDays, setStaleCheckDays] = useState(config.staleCheckDays ?? 14);
       const [gasWebAppUrl, setGasWebAppUrl] = useState(config.gasWebAppUrl || '');
       const [gasSharedToken, setGasSharedToken] = useState(config.gasSharedToken || '');
@@ -1245,7 +1248,6 @@
       const [autoSendEnabled, setAutoSendEnabled] = useState(!!config.autoSendEnabled);
       const [orderRequestAutoSendEnabled, setOrderRequestAutoSendEnabled] = useState(!!config.orderRequestAutoSendEnabled);
       const [saving, setSaving] = useState(false);
-      const [runningStep, setRunningStep] = useState(null);
 
       const save = async () => {
         setSaving(true);
@@ -1263,31 +1265,6 @@
           showAlert('保存に失敗しました。\n' + (e && e.message ? e.message : ''));
         } finally {
           setSaving(false);
-        }
-      };
-
-      // 定時（9/12/17時）を待たずに、バッチ処理を今すぐ実行する（管理者専用）。
-      // 実際にChatworkへメッセージが送られる可能性があるため、GAS側でも承認者メールの
-      // ホワイトリストを二重チェックしている。
-      const runBatchStep = async (step) => {
-        if (!config.gasWebAppUrl || !config.gasSharedToken) {
-          showAlert('設定画面でGAS WebアプリURLと合言葉を設定してください。');
-          return;
-        }
-        setRunningStep(step);
-        try {
-          const res = await fetch(config.gasWebAppUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify({ action: 'runBatchStep', token: config.gasSharedToken, step, approverEmail: user.email }),
-          });
-          const json = await res.json();
-          if (!json.ok) throw new Error(json.error || '不明なエラー');
-          showAlert('実行しました。');
-        } catch (e) {
-          showAlert('実行に失敗しました。\n' + (e && e.message ? e.message : ''));
-        } finally {
-          setRunningStep(null);
         }
       };
 
@@ -1320,21 +1297,7 @@
                 <span>GASが1日3回のバッチで、発注点割れの品目を自動的にとりまとめてChatworkへ送信する<br /><span className="text-xs text-gray-400">OFFの場合：発注管理画面で管理者が「依頼文を作成」→「Chatworkへ自動送信」を押した時だけ送信されます。ONにしても、発注管理画面の「Chatworkへ自動送信」ボタンは引き続き使えるので、バッチを待たず今すぐ送ることもできます。</span></span>
               </label>
             </div>
-            <div className="mt-3 border border-gray-100 p-3 bg-gray-50">
-              <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-2">③ 手動実行（管理者専用・定時9/12/17時を待たず今すぐ実行）</p>
-              <div className="flex flex-wrap gap-2">
-                {BATCH_STEPS.map(s => (
-                  <button
-                    key={s.key} onClick={() => runBatchStep(s.key)} disabled={!!runningStep}
-                    className="text-[11px] tracking-widest border border-gray-300 text-gray-600 hover:bg-gray-100 px-3 py-1.5 disabled:opacity-50"
-                  >{runningStep === s.key ? '実行中...' : s.label}</button>
-                ))}
-                <button
-                  onClick={() => runBatchStep('all')} disabled={!!runningStep}
-                  className="text-[11px] tracking-widest bg-indigo-700 text-white hover:bg-indigo-800 px-3 py-1.5 disabled:opacity-50"
-                >{runningStep === 'all' ? '実行中...' : 'すべて実行（1日3回のバッチと同じ内容）'}</button>
-              </div>
-            </div>
+            <p className="text-xs text-gray-400 mt-3">※バッチ処理を今すぐ手動実行したい場合は、上部ナビの「実行」タブから行えます。</p>
           </div>
 
           <button onClick={save} disabled={saving} className="mt-4 bg-gray-800 text-white hover:bg-gray-900 transition-colors px-4 py-2 text-xs tracking-widest disabled:opacity-50">{saving ? '保存中...' : '保存'}</button>
@@ -1360,7 +1323,118 @@
           {tab === 'locations' && <LocationsSettingsPanel locations={locations} showAlert={showAlert} showConfirm={showConfirm} />}
           {tab === 'items' && <EquipmentSettingsPanel items={items} showAlert={showAlert} showConfirm={showConfirm} />}
           {tab === 'guides' && <GuidesSettingsPanel showAlert={showAlert} showConfirm={showConfirm} user={user} />}
-          {tab === 'general' && <GeneralSettingsPanel config={config} user={user} showAlert={showAlert} />}
+          {tab === 'general' && <GeneralSettingsPanel config={config} showAlert={showAlert} />}
+        </div>
+      );
+    };
+
+    // GASから返るサマリーオブジェクトを、人が読める日本語の1〜数行に整形する。
+    // 「まだ返信が来ていない」のような“何も起きなかった”状態も、エラーと区別して分かるようにする。
+    function formatBatchStepResult(step, result) {
+      if (!result) return '実行しました（結果の詳細は取得できませんでした）。';
+      if (result.error) return 'エラー：' + result.error;
+      if (result.skipped) return 'スキップしました：' + (result.reason || '');
+      switch (step) {
+        case 'autoSendOrderRequests': {
+          if (result.sentGroups === 0) return result.message || '対象となる発注点割れの品目はありませんでした。';
+          let t = `${result.sentGroups}件のまとめ発注（合計${result.locations}拠点分）をChatworkへ送信しました。`;
+          if (result.skippedNoRoom && result.skippedNoRoom.length) t += `\n送信先ルーム未設定でスキップ：${result.skippedNoRoom.join('、')}`;
+          return t;
+        }
+        case 'checkChatworkReplies': {
+          if (result.openOrders === 0) return result.message || '到着日の返答待ちの発注がありませんでした。';
+          if (result.messagesChecked === 0) return result.message || '新着メッセージはありませんでした（まだ返信が来ていない可能性があります）。';
+          return `新着メッセージ${result.messagesChecked}件を確認し、${result.matched}件を「配達待ち」に反映しました（要確認：${result.needsReview}件／対象外：${result.other}件）。`;
+        }
+        case 'assignDeliveries': {
+          if (result.candidateOrders === 0) return result.message || '到着日確定済みで担当者未設定の発注はありませんでした。';
+          let t2 = `候補${result.candidateOrders}件のうち${result.assigned}件の配達担当を自動割当しました。`;
+          if (result.skippedReasons && result.skippedReasons.length) t2 += `\n保留（${result.skipped}件）：\n・` + result.skippedReasons.join('\n・');
+          return t2;
+        }
+        case 'checkStaleLocations':
+          return `未確認候補${result.staleCandidates}件のうち${result.notified}件に通知しました。`;
+        default:
+          return JSON.stringify(result);
+      }
+    }
+
+    const BatchRunView = ({ config, user, showAlert }) => {
+      const [runningStep, setRunningStep] = useState(null);
+      const [lastResults, setLastResults] = useState([]); // [{step,label,text}]
+
+      // 定時（9/12/17時）を待たずに、バッチ処理を今すぐ実行する（管理者専用）。
+      // 実際にChatworkへメッセージが送られる可能性があるため、GAS側でも承認者メールの
+      // ホワイトリストを二重チェックしている。
+      const runBatchStep = async (step, label) => {
+        if (!config.gasWebAppUrl || !config.gasSharedToken) {
+          showAlert('設定画面（全般）でGAS WebアプリURLと合言葉を設定してください。');
+          return;
+        }
+        setRunningStep(step);
+        try {
+          const res = await fetch(config.gasWebAppUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+            body: JSON.stringify({ action: 'runBatchStep', token: config.gasSharedToken, step, approverEmail: user.email }),
+          });
+          const json = await res.json();
+          if (!json.ok) throw new Error(json.error || '不明なエラー');
+
+          const ts = new Date().toLocaleTimeString('ja-JP');
+          if (step === 'all' && json.result && json.result.result) {
+            const all = json.result.result;
+            const entries = BATCH_STEPS.map(s => ({
+              step: s.key, label: s.label, at: ts, text: formatBatchStepResult(s.key, all[s.key]),
+            }));
+            setLastResults(entries);
+          } else {
+            setLastResults([{ step, label, at: ts, text: formatBatchStepResult(step, json.result && json.result.result) }]);
+          }
+        } catch (e) {
+          showAlert('実行に失敗しました。\n' + (e && e.message ? e.message : ''));
+        } finally {
+          setRunningStep(null);
+        }
+      };
+
+      return (
+        <div className="max-w-xl mx-auto space-y-4">
+          <section>
+            <SectionLabel>バッチ処理の手動実行（管理者専用）</SectionLabel>
+            <div className="bg-white border border-gray-200 mx-4 p-4">
+              <p className="text-xs text-gray-500 mb-3">定時（毎日9:00・12:00・17:00）を待たず、今すぐ実行できます。実際にChatworkへメッセージが送られる可能性があります。</p>
+              <div className="flex flex-col gap-2">
+                {BATCH_STEPS.map(s => (
+                  <button
+                    key={s.key} onClick={() => runBatchStep(s.key, s.label)} disabled={!!runningStep}
+                    className="text-left text-xs tracking-wide border border-gray-300 text-gray-700 hover:bg-gray-100 px-3 py-2.5 disabled:opacity-50"
+                  >{runningStep === s.key ? '実行中...' : s.label}</button>
+                ))}
+                <button
+                  onClick={() => runBatchStep('all', 'すべて実行')} disabled={!!runningStep}
+                  className="text-xs tracking-widest bg-indigo-700 text-white hover:bg-indigo-800 px-3 py-2.5 disabled:opacity-50"
+                >{runningStep === 'all' ? '実行中...' : 'すべて実行（1日3回のバッチと同じ内容）'}</button>
+              </div>
+            </div>
+          </section>
+
+          {lastResults.length > 0 && (
+            <section>
+              <SectionLabel>実行結果</SectionLabel>
+              <div className="bg-white border border-gray-200 mx-4 divide-y divide-gray-100">
+                {lastResults.map((r, idx) => (
+                  <div key={idx} className="px-4 py-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-gray-800">{r.label}</span>
+                      <span className="text-[10px] text-gray-400">{r.at}</span>
+                    </div>
+                    <p className="text-[11px] text-gray-500 mt-1 whitespace-pre-line">{r.text}</p>
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
         </div>
       );
     };
@@ -1375,6 +1449,7 @@
       { key: 'dashboard', label: 'ダッシュボード', icon: ListIcon, adminOnly: true },
       { key: 'orders', label: '発注管理', icon: BellIcon, adminOnly: true },
       { key: 'approvals', label: '承認待ち', icon: CheckIcon, adminOnly: true },
+      { key: 'batchRun', label: '実行', icon: PlayIcon, adminOnly: true },
       { key: 'settings', label: '設定', icon: SettingsIcon, adminOnly: true },
     ];
 
@@ -1963,6 +2038,7 @@
           case 'dashboard': return isAdmin ? <DashboardView {...commonProps} /> : null;
           case 'orders': return isAdmin ? <OrderManagementView {...commonProps} /> : null;
           case 'approvals': return isAdmin ? <PendingApprovalView {...commonProps} /> : null;
+          case 'batchRun': return isAdmin ? <BatchRunView {...commonProps} /> : null;
           case 'settings': return isAdmin ? <SettingsView {...commonProps} /> : null;
           default: return null;
         }
