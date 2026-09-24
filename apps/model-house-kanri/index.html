@@ -17,7 +17,7 @@
   <script type="text/babel" data-type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-app.js";
     import {
-      getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut,
+      getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signInWithRedirect, getRedirectResult, signOut,
       setPersistence, browserLocalPersistence
     } from "https://www.gstatic.com/firebasejs/11.0.1/firebase-auth.js";
     import {
@@ -79,10 +79,16 @@
     ];
 
     // 通常のログイン（LoginView）では上記スコープを要求していないため、GASを呼ぶ直前に
-    // その場でスコープ付き再認証（ポップアップ）を行い、都度アクセストークンを取得する。
-    // Firebaseはこのアクセストークンをセッションに保持しない（ログイン直後の結果からしか
-    // 取れない）ため、呼び出しのたびに取得し直す設計にしている。
-    async function getGasApiAccessToken() {
+    // その場でスコープ付き再認証を行い、都度アクセストークンを取得する。Firebaseはこの
+    // アクセストークンをセッションに保持しない（認証直後の結果からしか取れない）ため、
+    // 呼び出しのたびに取得し直す設計にしている。
+    // モバイルのSafari等、ポップアップがブロックされる環境向けに、ポップアップが失敗したら
+    // リダイレクト方式へ自動フォールバックする。リダイレクトはページ遷移を伴うため、
+    // 「何を呼ぼうとしていたか」をsessionStorageに保存しておき、戻ってきた直後に自動で再開する
+    // （App()内のuseEffectで処理、下記参照）。
+    const GAS_PENDING_ACTION_KEY = 'gasPendingAction';
+
+    async function getGasApiAccessTokenViaPopup() {
       const provider = new GoogleAuthProvider();
       GAS_OAUTH_SCOPES.forEach(s => provider.addScope(s));
       if (auth.currentUser?.email) provider.setCustomParameters({ login_hint: auth.currentUser.email });
@@ -92,10 +98,7 @@
       return credential.accessToken;
     }
 
-    // GASプロジェクトの関数を直接実行する（Apps Script API scripts.run）。
-    // functionNameはGAS側の関数名をそのまま指定する（例: 'handleRunBatchStep_'）。
-    async function callGasFunction(functionName, parameters) {
-      const accessToken = await getGasApiAccessToken();
+    async function callGasFunctionWithToken(functionName, parameters, accessToken) {
       const res = await fetch(`https://script.googleapis.com/v1/scripts/${GAS_SCRIPT_DEPLOYMENT_ID}:run`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
@@ -109,6 +112,26 @@
         throw new Error(message);
       }
       return json.response ? json.response.result : undefined;
+    }
+
+    // GASプロジェクトの関数を直接実行する（Apps Script API scripts.run）。
+    // functionNameはGAS側の関数名をそのまま指定する（例: 'handleRunBatchStep_'）。
+    async function callGasFunction(functionName, parameters) {
+      try {
+        const accessToken = await getGasApiAccessTokenViaPopup();
+        return await callGasFunctionWithToken(functionName, parameters, accessToken);
+      } catch (e) {
+        const popupFailed = e && (e.code === 'auth/popup-blocked' || e.code === 'auth/cancelled-popup-request' || e.code === 'auth/popup-closed-by-user');
+        if (!popupFailed) throw e;
+        // ポップアップが使えないため、リダイレクト方式に切り替える。今回の呼び出し内容を
+        // 保存し、ページ遷移する（この関数の呼び出し元には戻ってこない）。
+        sessionStorage.setItem(GAS_PENDING_ACTION_KEY, JSON.stringify({ functionName, parameters }));
+        const provider = new GoogleAuthProvider();
+        GAS_OAUTH_SCOPES.forEach(s => provider.addScope(s));
+        if (auth.currentUser?.email) provider.setCustomParameters({ login_hint: auth.currentUser.email });
+        await signInWithRedirect(auth, provider);
+        return new Promise(() => { }); // ページ遷移するため、この先は実行されない
+      }
     }
 
     const nowIso = () => new Date().toISOString();
@@ -2642,6 +2665,32 @@
 
       const showAlert = (message) => setDialog({ type: 'alert', message, confirmLabel: 'OK' });
       const showConfirm = (message, onConfirm, confirmLabel) => setDialog({ type: 'confirm', message, onConfirm, confirmLabel });
+
+      // モバイルSafari等でポップアップがブロックされ、リダイレクト方式にフォールバックした場合の
+      // 復帰処理。callGasFunction側でsessionStorageに保存しておいた「呼ぼうとしていた内容」を、
+      // リダイレクトで戻ってきた直後にこのuseEffectが検知して自動的に再実行する。
+      useEffect(() => {
+        (async () => {
+          let redirectResult;
+          try {
+            redirectResult = await getRedirectResult(auth);
+          } catch (e) {
+            return;
+          }
+          if (!redirectResult) return;
+          const credential = GoogleAuthProvider.credentialFromResult(redirectResult);
+          const pendingRaw = sessionStorage.getItem(GAS_PENDING_ACTION_KEY);
+          if (!credential || !credential.accessToken || !pendingRaw) return;
+          sessionStorage.removeItem(GAS_PENDING_ACTION_KEY);
+          const { functionName, parameters } = JSON.parse(pendingRaw);
+          try {
+            await callGasFunctionWithToken(functionName, parameters, credential.accessToken);
+            showAlert('中断していた処理を再開し、送信が完了しました。');
+          } catch (e) {
+            showAlert('リダイレクト後の処理再開に失敗しました。\n' + (e && e.message ? e.message : ''));
+          }
+        })();
+      }, []);
 
       useEffect(() => {
         const unsub = onAuthStateChanged(auth, (u) => {
