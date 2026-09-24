@@ -59,6 +59,58 @@
     const ADMIN_EMAILS = ['fujita.e@hakuto-k.jp', 'someya.m@hakuto-k.jp'];
     const ALLOWED_LOGIN_DOMAIN = 'hakuto-k.jp'; // 社内ドメイン以外のGoogleアカウントでのログインを拒否する
 
+    // ============================================================
+    // GAS呼び出し（Apps Script API 経由。2026-09-24〜）
+    // ============================================================
+    // 以前はGAS WebアプリのURLへ「合言葉（SHARED_TOKEN）」付きの匿名POSTで呼んでいたが、
+    // hakuto-k.jpのWorkspace管理者がApps Scriptウェブアプリの「全員（匿名含む）」公開を
+    // ドメイン全体で禁止したため、この方式は使えなくなった（doPost自体は残してあるが、
+    // アクセス権限を「自分のみ」に変更済みなので、この匿名POSTは常に失敗する）。
+    // 代わりに、Googleの正規OAuth認証で「ドメイン内のユーザーのみ実行可」にした
+    // Apps Script API（scripts.run）を使う。GAS側のGCPプロジェクトをこのFirebase
+    // プロジェクト（model-house-kanri）に紐付け、appsscript.jsonにexecutionApi(DOMAIN)を追加済み。
+    const GAS_SCRIPT_DEPLOYMENT_ID = 'AKfycbxbXA1AVoebENTufob6-0ZaPtqE9w6CIIxjGS5wifmg3vO5G-pldZ4s04bDriijPJY_3g';
+    // GAS側appsscript.jsonのoauthScopesと一致させること（スクリプトが使う全スコープを
+    // 呼び出し側のOAuthトークンがカバーしている必要があるため）。
+    const GAS_OAUTH_SCOPES = [
+      'https://www.googleapis.com/auth/calendar.readonly',
+      'https://www.googleapis.com/auth/script.external_request',
+      'https://www.googleapis.com/auth/script.scriptapp',
+    ];
+
+    // 通常のログイン（LoginView）では上記スコープを要求していないため、GASを呼ぶ直前に
+    // その場でスコープ付き再認証（ポップアップ）を行い、都度アクセストークンを取得する。
+    // Firebaseはこのアクセストークンをセッションに保持しない（ログイン直後の結果からしか
+    // 取れない）ため、呼び出しのたびに取得し直す設計にしている。
+    async function getGasApiAccessToken() {
+      const provider = new GoogleAuthProvider();
+      GAS_OAUTH_SCOPES.forEach(s => provider.addScope(s));
+      if (auth.currentUser?.email) provider.setCustomParameters({ login_hint: auth.currentUser.email });
+      const result = await signInWithPopup(auth, provider);
+      const credential = GoogleAuthProvider.credentialFromResult(result);
+      if (!credential || !credential.accessToken) throw new Error('Googleの権限確認に失敗しました。もう一度お試しください。');
+      return credential.accessToken;
+    }
+
+    // GASプロジェクトの関数を直接実行する（Apps Script API scripts.run）。
+    // functionNameはGAS側の関数名をそのまま指定する（例: 'handleRunBatchStep_'）。
+    async function callGasFunction(functionName, parameters) {
+      const accessToken = await getGasApiAccessToken();
+      const res = await fetch(`https://script.googleapis.com/v1/scripts/${GAS_SCRIPT_DEPLOYMENT_ID}:run`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${accessToken}` },
+        body: JSON.stringify({ function: functionName, parameters: parameters || [], devMode: false }),
+      });
+      const json = await res.json();
+      if (json.error) {
+        // scripts.run はGAS内で発生した例外もHTTP 200・レスポンスのerrorフィールドに包んで返す。
+        const detail = json.error.details && json.error.details[0];
+        const message = (detail && detail.errorMessage) || json.error.message || '不明なエラー';
+        throw new Error(message);
+      }
+      return json.response ? json.response.result : undefined;
+    }
+
     const nowIso = () => new Date().toISOString();
 
     // ============================================================
@@ -1720,29 +1772,19 @@
       // 実際にChatworkへメッセージが送られる可能性があるため、GAS側でも承認者メールの
       // ホワイトリストを二重チェックしている。
       const runBatchStep = async (step, label) => {
-        if (!config.gasWebAppUrl || !config.gasSharedToken) {
-          showAlert('設定画面（全般）でGAS WebアプリURLと合言葉を設定してください。');
-          return;
-        }
         setRunningStep(step);
         try {
-          const res = await fetch(config.gasWebAppUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify({ action: 'runBatchStep', token: config.gasSharedToken, step, approverEmail: user.email }),
-          });
-          const json = await res.json();
-          if (!json.ok) throw new Error(json.error || '不明なエラー');
+          const result = await callGasFunction('handleRunBatchStep_', [{ step, approverEmail: user.email }]);
 
           const ts = new Date().toLocaleTimeString('ja-JP');
-          if (step === 'all' && json.result && json.result.result) {
-            const all = json.result.result;
+          if (step === 'all' && result && result.result) {
+            const all = result.result;
             const entries = BATCH_STEPS.map(s => ({
               step: s.key, label: s.label, at: ts, text: formatBatchStepResult(s.key, all[s.key]),
             }));
             setLastResults(entries);
           } else {
-            setLastResults([{ step, label, at: ts, text: formatBatchStepResult(step, json.result && json.result.result) }]);
+            setLastResults([{ step, label, at: ts, text: formatBatchStepResult(step, result && result.result) }]);
           }
         } catch (e) {
           showAlert('実行に失敗しました。\n' + (e && e.message ? e.message : ''));
@@ -2269,10 +2311,6 @@
         : group.role === 'ADV本人手配' ? config.chatworkRoomIds?.advShortageReport : null;
 
       const sendViaGas = async () => {
-        if (!config.gasWebAppUrl || !config.gasSharedToken) {
-          showAlert('設定画面（全般）でGAS WebアプリURLと合言葉を設定してください。');
-          return;
-        }
         if (!roomIdForRole) {
           showAlert('設定画面（全般）で送信先のルームIDを設定してください。');
           return;
@@ -2290,13 +2328,7 @@
           // Chatworkへ送信できた時点で、それぞれの発注にchatworkMessageIdが書き戻される
           // （後日Chatworkで「返信」された時に、どの発注宛かを機械的に判定できるようにするため）。
           createdOrderIds = await recordOrders(roomIdForRole);
-          const res = await fetch(config.gasWebAppUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-            body: JSON.stringify({ action: 'sendOrderRequest', token: config.gasSharedToken, roomId: roomIdForRole, body: text, orderIds: createdOrderIds }),
-          });
-          const json = await res.json();
-          if (!json.ok) throw new Error(json.error || '不明なエラー');
+          await callGasFunction('handleSendOrderRequest_', [{ roomId: roomIdForRole, body: text, orderIds: createdOrderIds }]);
           onConfirmed();
         } catch (e) {
           // Chatworkへの送信に失敗した場合、既に作成した発注記録だけが残ると実態と食い違うため
@@ -2438,19 +2470,9 @@
       const sent = (outbox || []).filter(o => o.status === 'sent').slice(0, 10);
 
       const approve = async (item) => {
-        if (!config.gasWebAppUrl || !config.gasSharedToken) {
-          showAlert('設定画面（全般）でGAS WebアプリURLと合言葉を設定してください。');
-          return;
-        }
         setApprovingId(item.id);
         try {
-          const res = await fetch(config.gasWebAppUrl, {
-            method: 'POST',
-            headers: { 'Content-Type': 'text/plain;charset=utf-8' }, // application/jsonにするとCORSプリフライトでGASが失敗するため
-            body: JSON.stringify({ action: 'approveAndSend', token: config.gasSharedToken, outboxId: item.id, approverEmail: user.email }),
-          });
-          const json = await res.json();
-          if (!json.ok) throw new Error(json.error || '不明なエラー');
+          await callGasFunction('handleApproveAndSend_', [{ outboxId: item.id, approverEmail: user.email }]);
           showAlert('送信しました。');
         } catch (e) {
           showAlert('送信に失敗しました。\n' + (e && e.message ? e.message : ''));
