@@ -98,6 +98,18 @@
       return credential.accessToken;
     }
 
+    // デバッグ用：アクセストークンに実際に付与されているスコープをGoogleのtokeninfoで確認する。
+    // 「The caller does not have permission」がスコープ不足によるものか切り分けるために使う。
+    async function debugTokenScopes_(accessToken) {
+      try {
+        const res = await fetch(`https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=${encodeURIComponent(accessToken)}`);
+        const json = await res.json();
+        return json.scope || '(取得できませんでした)';
+      } catch (e) {
+        return '(tokeninfo取得エラー)';
+      }
+    }
+
     async function callGasFunctionWithToken(functionName, parameters, accessToken) {
       const res = await fetch(`https://script.googleapis.com/v1/scripts/${GAS_SCRIPT_DEPLOYMENT_ID}:run`, {
         method: 'POST',
@@ -109,7 +121,8 @@
         // scripts.run はGAS内で発生した例外もHTTP 200・レスポンスのerrorフィールドに包んで返す。
         const detail = json.error.details && json.error.details[0];
         const message = (detail && detail.errorMessage) || json.error.message || '不明なエラー';
-        throw new Error(message);
+        const scopes = await debugTokenScopes_(accessToken);
+        throw new Error(message + '\n[診断] 付与されたスコープ: ' + scopes);
       }
       return json.response ? json.response.result : undefined;
     }
