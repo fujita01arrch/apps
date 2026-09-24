@@ -1884,7 +1884,7 @@
     );
 
     // ランキングを横棒グラフで見せるだけの小さな共通部品。
-    const SimpleBarList = ({ data, barColor = 'bg-indigo-600', emptyText = 'データがありません' }) => {
+    const SimpleBarList = ({ data, barColor = 'bg-indigo-600', unit = '', emptyText = 'データがありません' }) => {
       const max = Math.max(1, ...data.map(d => d.value));
       if (data.length === 0) return <p className="text-xs text-gray-400 py-4 text-center">{emptyText}</p>;
       return (
@@ -1892,7 +1892,7 @@
           {data.map((d, i) => (
             <div key={i}>
               <div className="flex justify-between text-xs text-gray-600 mb-0.5">
-                <span className="truncate pr-2">{d.label}</span><span className="text-gray-400 shrink-0">{d.value}</span>
+                <span className="truncate pr-2">{d.label}</span><span className="text-gray-400 shrink-0">{d.value}{unit}</span>
               </div>
               <div className="h-2 bg-gray-100">
                 <div className={`h-2 ${barColor}`} style={{ width: `${Math.max(4, (d.value / max) * 100)}%` }} />
@@ -1903,17 +1903,11 @@
       );
     };
 
-    const DashboardView = ({ locations, items, stockLevels, orders, recentSessions, staffActivityStats, staleCheckDays }) => {
+    const DashboardView = ({ locations, items, orders, recentSessions, staleCheckDays }) => {
       const itemById = useMemo(() => Object.fromEntries(items.map(i => [i.id, i])), [items]);
       const sortedLocations = [...locations].filter(l => l.isActive).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-
-      const belowReorderList = useMemo(() => {
-        return Object.values(stockLevels)
-          .filter(s => s.belowReorderPoint)
-          .map(s => ({ ...s, item: itemById[s.itemId], location: locations.find(l => l.id === s.locationId) }))
-          // 無効化された拠点・備品の古い警告が消えずに残り続けないようにする
-          .filter(s => s.item && s.item.isActive && s.location && s.location.isActive);
-      }, [stockLevels, itemById, locations]);
+      // 「そろそろ確認（黄）」は、公式な「要確認（赤）」の一歩手前として、staleCheckDaysの3日前から表示する
+      const warnCheckDays = Math.max(1, staleCheckDays - 3);
 
       const needsReviewOrders = useMemo(
         () => orders.filter(o => o.needsReview).sort((a, b) => (a.updatedAt || '').localeCompare(b.updatedAt || '')),
@@ -1924,6 +1918,53 @@
         () => [...recentSessions].sort((a, b) => (b.submittedAt || '').localeCompare(a.submittedAt || '')).slice(0, 20),
         [recentSessions]
       );
+
+      const thisMonthCheckCount = useMemo(() => {
+        const ym = new Date().toISOString().slice(0, 7);
+        return recentSessions.filter(s => (s.submittedAt || '').slice(0, 7) === ym).length;
+      }, [recentSessions]);
+
+      // 「必要在庫数を下回った品目」という後追いの二値情報は、その時点で既に自動発注の対象に
+      // なっており見ても打つ手が無いため表示しない。代わりに、拠点×品目ごとの過去の発注間隔
+      // （ordersの履歴のみ、新しいデータは持たない）から「そろそろ発注が必要かもしれない品目」を
+      // 予測表示する。過去の発注が1回だけでは間隔を計算できないため、2回以上ある組み合わせのみ対象。
+      const upcomingReorderList = useMemo(() => {
+        const groups = {};
+        orders.forEach(o => {
+          if (!o.requestedAt) return;
+          (o.items || []).forEach(it => {
+            const key = o.locationId + '_' + it.itemId;
+            if (!groups[key]) groups[key] = { locationId: o.locationId, locationName: o.locationName, itemId: it.itemId, itemName: it.itemName, dates: [] };
+            groups[key].dates.push(o.requestedAt);
+          });
+        });
+        const now = Date.now();
+        const results = [];
+        Object.values(groups).forEach(g => {
+          if (g.dates.length < 2) return;
+          const sorted = [...g.dates].sort();
+          const intervals = [];
+          for (let i = 1; i < sorted.length; i++) intervals.push((new Date(sorted[i]) - new Date(sorted[i - 1])) / 86400000);
+          const avgInterval = intervals.reduce((a, b) => a + b, 0) / intervals.length;
+          if (avgInterval <= 0) return;
+          const daysSinceLast = (now - new Date(sorted[sorted.length - 1]).getTime()) / 86400000;
+          const ratio = daysSinceLast / avgInterval;
+          if (ratio < 0.8) return;
+          const location = locations.find(l => l.id === g.locationId);
+          const item = itemById[g.itemId];
+          if (!location || !location.isActive || !item || !item.isActive) return;
+          results.push({
+            key: g.locationId + '_' + g.itemId, locationName: g.locationName, itemName: g.itemName,
+            daysSinceLast: Math.round(daysSinceLast), avgInterval: Math.round(avgInterval), ratio,
+          });
+        });
+        return results.sort((a, b) => b.ratio - a.ratio).slice(0, 8);
+      }, [orders, locations, itemById]);
+
+      const staleLocations = sortedLocations.filter(l => daysSince(l.lastCheckedAt) >= staleCheckDays);
+      const [showAllLocations, setShowAllLocations] = useState(false);
+      const visibleLocations = showAllLocations ? sortedLocations : sortedLocations.filter(l => daysSince(l.lastCheckedAt) >= warnCheckDays);
+      const hiddenOkCount = sortedLocations.length - visibleLocations.length;
 
       // 拠点別・品目別の発注頻度（＝減りやすさ）は、発注記録（orders）全期間から集計する。
       // ordersは発注イベントが起きた時にしか作られない低頻度なコレクションなので、統計用に
@@ -1940,27 +1981,74 @@
         return Object.entries(counts).map(([label, value]) => ({ label, value })).sort((a, b) => b.value - a.value).slice(0, 8);
       }, [orders]);
 
-      // 担当者別のアクティビティ：staffActivityStats（永続カウンター、在庫確認のたびに積み上げ）から。
-      // 生ログ（stockCheckSessions）は35日で削除されるが、このカウンターは消えないので全期間の統計になる。
-      const staffActivityRanking = useMemo(() => {
-        return staffActivityStats
-          .map(s => ({ label: s.displayName || s.email, value: s.shortageReportCount || 0, checkIns: s.checkInCount || 0 }))
-          .sort((a, b) => b.value - a.value || b.checkIns - a.checkIns)
+      // 配置忘れ率＝拠点ごとの「missedItemIdsに一度でも入った品目数」÷「発注品目の総数」。
+      // 個人名を晒すランキング（意識改善の効果測定にも一般公開にも不向き）の代わりに、
+      // 拠点単位の指標として統計に含める。
+      const missedRateByLocation = useMemo(() => {
+        const totals = {};
+        orders.forEach(o => {
+          if (!totals[o.locationName]) totals[o.locationName] = { missed: 0, total: 0 };
+          totals[o.locationName].total += (o.items || []).length;
+          totals[o.locationName].missed += (o.missedItemIds || []).length;
+        });
+        return Object.entries(totals)
+          .filter(([, v]) => v.total > 0)
+          .map(([label, v]) => ({ label, value: Math.round((v.missed / v.total) * 100) }))
+          .sort((a, b) => b.value - a.value)
           .slice(0, 8);
-      }, [staffActivityStats]);
+      }, [orders]);
+
+      const RANKING_TABS = [
+        { key: 'location', label: '拠点別', data: locationOrderRanking, color: 'bg-indigo-600', unit: '件' },
+        { key: 'item', label: '品目別', data: itemOrderRanking, color: 'bg-amber-500', unit: '件' },
+        { key: 'missed', label: '配置忘れ率', data: missedRateByLocation, color: 'bg-rose-500', unit: '%' },
+      ];
+      const [rankingTab, setRankingTab] = useState('location');
+      const activeRanking = RANKING_TABS.find(t => t.key === rankingTab);
 
       const SESSION_MODE_LABEL = { checkin: '在庫確認', withdrawal: '予備持ち出し', adjustment: '棚卸修正', restock: '配置完了' };
 
       return (
         <div className="max-w-2xl mx-auto space-y-6">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 px-4">
+            <div className="bg-white border border-gray-200 p-3">
+              <div className="text-[10px] text-gray-400 tracking-widest uppercase">要確認の拠点</div>
+              <div className={`text-2xl font-medium mt-0.5 ${staleLocations.length > 0 ? 'text-rose-600' : 'text-gray-800'}`}>{staleLocations.length}</div>
+            </div>
+            <div className="bg-white border border-gray-200 p-3">
+              <div className="text-[10px] text-gray-400 tracking-widest uppercase">そろそろ危ない品目</div>
+              <div className={`text-2xl font-medium mt-0.5 ${upcomingReorderList.length > 0 ? 'text-amber-600' : 'text-gray-800'}`}>{upcomingReorderList.length}</div>
+            </div>
+            <div className="bg-white border border-gray-200 p-3">
+              <div className="text-[10px] text-gray-400 tracking-widest uppercase">要確認の発注</div>
+              <div className={`text-2xl font-medium mt-0.5 ${needsReviewOrders.length > 0 ? 'text-amber-600' : 'text-gray-800'}`}>{needsReviewOrders.length}</div>
+            </div>
+            <div className="bg-white border border-gray-200 p-3">
+              <div className="text-[10px] text-gray-400 tracking-widest uppercase">今月の確認件数</div>
+              <div className="text-2xl font-medium mt-0.5 text-gray-800">{thisMonthCheckCount}</div>
+            </div>
+          </div>
+
           <section>
-            <SectionLabel>拠点の確認状況</SectionLabel>
+            <div className="flex items-center justify-between px-4 mb-2">
+              <span className="text-[10px] text-gray-400 tracking-widest uppercase">拠点の確認状況</span>
+              {hiddenOkCount > 0 && !showAllLocations && (
+                <button onClick={() => setShowAllLocations(true)} className="text-[10px] text-gray-400 tracking-widest hover:text-gray-600">すべて表示（あと{hiddenOkCount}件）</button>
+              )}
+              {showAllLocations && (
+                <button onClick={() => setShowAllLocations(false)} className="text-[10px] text-gray-400 tracking-widest hover:text-gray-600">主要のみ表示</button>
+              )}
+            </div>
             <div className="bg-white border border-gray-200 mx-4 divide-y divide-gray-100">
-              {sortedLocations.map(loc => {
-                const stale = daysSince(loc.lastCheckedAt) >= staleCheckDays;
+              {visibleLocations.map(loc => {
+                const d = daysSince(loc.lastCheckedAt);
+                const stale = d >= staleCheckDays;
+                const dotColor = stale ? 'bg-rose-500' : d >= warnCheckDays ? 'bg-amber-500' : 'bg-emerald-500';
                 return (
                   <div key={loc.id} className="flex items-center justify-between px-4 py-3">
-                    <span className="text-sm text-gray-800">{loc.name}</span>
+                    <span className="flex items-center gap-2 text-sm text-gray-800">
+                      <span className={`w-2 h-2 rounded-full shrink-0 ${dotColor}`} />{loc.name}
+                    </span>
                     <span className={`text-[11px] tracking-wide ${stale ? 'text-rose-500' : 'text-gray-400'}`}>
                       {formatRelativeDate(loc.lastCheckedAt)}{loc.lastCheckedBy ? `（${loc.lastCheckedBy.name}）` : ''}{stale ? ' ・要確認' : ''}
                     </span>
@@ -1971,16 +2059,19 @@
           </section>
 
           <section>
-            <SectionLabel>必要在庫数を下回っている品目（{belowReorderList.length}件）</SectionLabel>
-            <div className="bg-white border border-gray-200 mx-4 divide-y divide-gray-100">
-              {belowReorderList.length === 0 && <p className="px-4 py-6 text-center text-xs text-gray-400">現在、必要在庫数を下回っている品目はありません</p>}
-              {belowReorderList.map(s => (
-                <div key={s.locationId + '_' + s.itemId} className="flex items-center justify-between px-4 py-3">
-                  <div>
-                    <div className="text-sm text-rose-600 font-medium">{s.item.name}</div>
-                    <div className="text-[10px] text-gray-400">{s.location.name}</div>
+            <SectionLabel>そろそろ発注が必要かもしれない品目（{upcomingReorderList.length}件）</SectionLabel>
+            <p className="text-[10px] text-gray-300 px-4 -mt-1 mb-2">過去の発注頻度からの目安です。実際の在庫数の確認ではありません。</p>
+            <div className="bg-white border border-gray-200 mx-4 p-4 space-y-3">
+              {upcomingReorderList.length === 0 && <p className="text-center text-xs text-gray-400 py-2">現在、目安に該当する品目はありません</p>}
+              {upcomingReorderList.map(r => (
+                <div key={r.key}>
+                  <div className="flex justify-between text-xs text-gray-600 mb-1">
+                    <span className="truncate pr-2">{r.itemName}／{r.locationName}</span>
+                    <span className="text-gray-400 shrink-0">前回発注から{r.daysSinceLast}日（平均{r.avgInterval}日周期）</span>
                   </div>
-                  <span className="text-xs text-rose-500">残り目安 {s.currentCount}{s.item.stockUnit}（必要在庫数 {s.item.reorderPoint}{s.item.stockUnit}以上）</span>
+                  <div className="h-1.5 bg-gray-100">
+                    <div className={`h-1.5 ${r.ratio >= 1 ? 'bg-rose-500' : 'bg-amber-500'}`} style={{ width: `${Math.min(100, r.ratio * 100)}%` }} />
+                  </div>
                 </div>
               ))}
             </div>
@@ -2010,21 +2101,16 @@
           </section>
 
           <section>
-            <SectionLabel>統計</SectionLabel>
-            <div className="bg-white border border-gray-200 mx-4 p-4 space-y-5">
-              <div>
-                <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-2">発注が多い拠点（減りやすい場所）</p>
-                <SimpleBarList data={locationOrderRanking} />
+            <div className="flex items-center justify-between px-4 mb-2">
+              <span className="text-[10px] text-gray-400 tracking-widest uppercase">統計</span>
+              <div className="inline-flex gap-1 bg-white border border-gray-200 p-1">
+                {RANKING_TABS.map(t => (
+                  <button key={t.key} onClick={() => setRankingTab(t.key)} className={`text-[11px] tracking-widest px-2.5 py-1 whitespace-nowrap transition-colors ${rankingTab === t.key ? 'bg-gray-100 text-gray-800 font-medium' : 'text-gray-400 hover:bg-gray-50'}`}>{t.label}</button>
+                ))}
               </div>
-              <div className="border-t border-gray-100 pt-4">
-                <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-2">発注が多い品目（減りやすい品目）</p>
-                <SimpleBarList data={itemOrderRanking} barColor="bg-amber-500" />
-              </div>
-              <div className="border-t border-gray-100 pt-4">
-                <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-2">不足報告が多いスタッフ（全期間の累計）</p>
-                <SimpleBarList data={staffActivityRanking} barColor="bg-emerald-600" />
-                <p className="text-[10px] text-gray-300 mt-2">数値は「発注が必要」と報告した回数の累計です。この数値自体は自動削除されず残り続けます。</p>
-              </div>
+            </div>
+            <div className="bg-white border border-gray-200 mx-4 p-4">
+              <SimpleBarList data={activeRanking.data} barColor={activeRanking.color} unit={activeRanking.unit} />
             </div>
           </section>
 
