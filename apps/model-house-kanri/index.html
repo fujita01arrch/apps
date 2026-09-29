@@ -359,6 +359,7 @@
       weekendCheckRequest: '{{to}}{{staffName}}さん\nお疲れ様です。本日{{locationName}}をご利用予定と伺いましたので、備品確認をお願いできますでしょうか。\nアプリから在庫確認をお願いします：{{appUrl}}',
       weekendCheckFollowup: '{{to}}{{staffName}}さん\nお疲れ様です。{{locationName}}の本日分の備品確認がまだ届いていないようです。\nお手数ですが、アプリから在庫確認をお願いできますでしょうか：{{appUrl}}',
       deliveryCompletionReminder: '{{to}}{{staffName}}さん\nお疲れ様です。{{locationName}}宛の備品の配置予定日（{{visitDate}}）を過ぎていますが、まだ配置報告が確認できていません。\nお手数ですが、配置が完了しましたらアプリから報告をお願いできますでしょうか：{{appUrl}}',
+      newCompletionViewingLocationNotice: '{{to}}カレンダーから新しい完成見学会の枠を検出したため、拠点として自動登録しました。\n\n{{sections}}\n\n拠点名・施主の氏名（機械的に分割しているため不正確な場合があります）・識別キーワードは、必要に応じて設定画面の「拠点」から修正してください：{{appUrl}}',
     };
     function messageTemplateOf(config, key) {
       const saved = config.messageTemplates && config.messageTemplates[key];
@@ -1654,6 +1655,7 @@
     };
 
     const BATCH_STEPS = [
+      { key: 'discoverCompletionViewingLocations', label: 'カレンダーから完成見学会の新規拠点を自動登録' },
       { key: 'autoSendOrderRequests', label: '発注依頼を自動送信' },
       { key: 'checkChatworkReplies', label: 'Chatwork返信を確認（到着日を反映）' },
       { key: 'assignDeliveries', label: '配達担当を自動割当' },
@@ -1785,6 +1787,7 @@
       { key: 'weekendCheckRequest', label: '土日：備品確認依頼文（モデル最終利用者へ）', vars: '{{to}}＝Chatwork TOメンション／{{staffName}}＝担当者名／{{locationName}}＝拠点名／{{appUrl}}＝アプリURL' },
       { key: 'weekendCheckFollowup', label: '土日：備品確認の再依頼文', vars: '{{to}}＝Chatwork TOメンション／{{staffName}}＝担当者名／{{locationName}}＝拠点名／{{appUrl}}＝アプリURL' },
       { key: 'deliveryCompletionReminder', label: '配置完了リマインド文（配達担当へ）', vars: '{{to}}＝Chatwork TOメンション／{{staffName}}＝担当者名／{{locationName}}＝拠点名／{{visitDate}}＝配置予定日／{{appUrl}}＝アプリURL' },
+      { key: 'newCompletionViewingLocationNotice', label: '完成見学会の新規拠点を自動登録した通知文（藤田さん宛）', vars: '{{to}}＝藤田さんへのメンション／{{sections}}＝登録した拠点の一覧（期間・住所、同姓拠点がある場合は警告付き）／{{appUrl}}＝アプリURL' },
     ];
 
     const MessageTemplatesSettingsPanel = ({ config, showAlert }) => {
@@ -1866,6 +1869,11 @@
       if (result.error) return 'エラー：' + result.error;
       if (result.skipped) return 'スキップしました：' + (result.reason || '');
       switch (step) {
+        case 'discoverCompletionViewingLocations': {
+          if (!result.registered) return `検出${result.scannedEvents ?? 0}件中、新規登録はありませんでした（既に登録済みか、対象の予定がありませんでした）。`;
+          const names = (result.registeredLocations || []).map(r => r.locationName).join('、');
+          return `新規に${result.registered}件の完成見学会拠点を登録しました：${names}\n※施主氏名は機械的に分割しているため、設定画面「拠点」から内容の確認をお願いします。`;
+        }
         case 'autoSendOrderRequests': {
           if (result.sentGroups === 0) return result.message || '対象となる発注点割れの品目はありませんでした。';
           let t = `${result.sentGroups}件のまとめ発注（合計${result.locations}拠点分）をChatworkへ送信しました。`;
