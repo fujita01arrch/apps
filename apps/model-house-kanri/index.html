@@ -1098,9 +1098,9 @@
     const inputCls = "w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:border-gray-500";
 
     // 完成見学会の「施主姓／施主名／所在地（〇〇区△△）」から、カレンダー識別キーワードの
-    // 候補を自動生成する（苗字様邸／フルネーム様邸／△△のみ／〇〇区△△／苗字のみ、の順）。
-    // 予定タイトルの表記ゆれ（「森下様邸｜@中央区寺脇」「＠寺脇（藤田）」等）に対応するため、
-    // 複数パターンを一度に登録できるようにしている（2026-09-29の要望）。
+    // 候補を自動生成する（苗字様邸／フルネーム様邸／△△のみ／〇〇区△△、の順）。
+    // 「苗字のみ」は短く一般的すぎて無関係な予定と誤マッチしやすいため生成しない
+    // （2026-09-29、藤田さんのフィードバックで除外）。
     function buildCompletionViewingKeywords(lastName, firstName, address) {
       const last = lastName.trim();
       const first = firstName.trim();
@@ -1113,11 +1113,10 @@
         if (m && m[2]) list.push(m[2]); // 「〇〇区△△」の△△部分のみ
         list.push(addr); // 「〇〇区△△」全体
       }
-      if (last) list.push(last);
       return [...new Set(list.filter(Boolean))];
     }
 
-    const LocationEditModal = ({ location, onClose, showAlert }) => {
+    const LocationEditModal = ({ location, locations, onClose, showAlert }) => {
       const isNew = !location;
       const [name, setName] = useState(location?.name || '');
       const [type, setType] = useState(location?.type || 'model_house');
@@ -1127,19 +1126,44 @@
       const [ownerAddress, setOwnerAddress] = useState(location?.ownerAddress || '');
       const [saving, setSaving] = useState(false);
 
-      // 施主姓・施主名・所在地からキーワード候補を作り、既存のキーワード欄に
-      // （重複を避けて）追加する。上書きではなく追加なので、何度押しても・
-      // 手動で調整した後でも安全に使える。
+      // 編集を開いた時点で保存されていた施主情報から生成されるはずだったキーワード。
+      // 「生成して反映」ボタンを押した時、これらは古い自動生成分とみなして取り除いてから
+      // 新しい施主情報のキーワードを追加する（手入力で足した分はそのまま残る）。
+      const previouslyGeneratedKeywords = buildCompletionViewingKeywords(
+        location?.ownerLastName || '', location?.ownerFirstName || '', location?.ownerAddress || ''
+      );
+
+      // 施主姓・施主名・所在地からキーワード候補を作り、キーワード欄に反映する。
+      // 前回このボタンで足したはずの古いキーワード（上のpreviouslyGeneratedKeywords）は
+      // 自動的に取り除いてから新しいものを追加するので、名前や住所を訂正した後にもう一度
+      // 押せば、古いキーワードが残り続けることなく入れ替わる。手入力で追加したキーワードは
+      // 対象外なので消えない。
       const applyGeneratedKeywords = () => {
         const generated = buildCompletionViewingKeywords(ownerLastName, ownerFirstName, ownerAddress);
         if (!generated.length) { showAlert('施主姓・施主名・所在地のいずれかを入力してから生成してください。'); return; }
         const existing = keywordsText.split(',').map(s => s.trim()).filter(Boolean);
-        const merged = [...new Set([...existing, ...generated])];
+        const withoutOldAuto = existing.filter(k => !previouslyGeneratedKeywords.includes(k));
+        const merged = [...new Set([...withoutOldAuto, ...generated])];
         setKeywordsText(merged.join(', '));
       };
 
       const save = async () => {
         if (!name.trim()) { showAlert('拠点名を入力してください。'); return; }
+
+        // 完成見学会同士で施主の苗字が重複していないか確認する（めったに無いはずだが、
+        // 万一重複すると別の拠点の予定と混同されてしまうため、登録前に必ず止める。
+        // 2026-09-29の要望）。
+        if (type === 'completion_viewing' && ownerLastName.trim()) {
+          const duplicate = (locations || []).find(l =>
+            l.id !== location?.id && l.type === 'completion_viewing' && l.isActive
+            && (l.ownerLastName || '').trim() && (l.ownerLastName || '').trim() === ownerLastName.trim()
+          );
+          if (duplicate) {
+            showAlert(`施主の苗字「${ownerLastName.trim()}」は、既存の拠点「${duplicate.name}」と重複しています。同じ苗字の完成見学会は誤って予定を取り違える恐れがあるため登録できません。拠点名や識別キーワードで区別できるよう調整してください。`);
+            return;
+          }
+        }
+
         setSaving(true);
         try {
           const keywords = keywordsText.split(',').map(s => s.trim()).filter(Boolean);
@@ -1182,8 +1206,9 @@
                 </div>
                 <FormField label="所在地（〇〇区△△）"><input className={inputCls} value={ownerAddress} onChange={e => setOwnerAddress(e.target.value)} placeholder="例：中央区寺脇" /></FormField>
                 <button type="button" onClick={applyGeneratedKeywords} className="text-[11px] tracking-widest border border-gray-300 text-gray-600 hover:bg-gray-100 px-3 py-1.5">
-                  ↓ 上記からキーワードを生成して追加
+                  ↓ 下のキーワード欄に反映する
                 </button>
+                <p className="text-[10px] text-gray-400 mt-1">押すと、上の施主情報から「苗字様邸」「フルネーム様邸」「地名部分のみ」「所在地全体」の4つを下のキーワード欄に入れます。名前や住所を後で直してもう一度押すと、前回このボタンで入れた分だけ新しい内容に入れ替わります（手入力で足したキーワードは消えません）。</p>
               </div>
             )}
             <FormField label="カレンダー識別キーワード（カンマ区切り、複数可）">
@@ -1405,7 +1430,7 @@
             ))}
           </div>
           {editing !== undefined && (
-            <LocationEditModal location={editing} onClose={() => setEditing(undefined)} showAlert={showAlert} />
+            <LocationEditModal location={editing} locations={locations} onClose={() => setEditing(undefined)} showAlert={showAlert} />
           )}
         </div>
       );
