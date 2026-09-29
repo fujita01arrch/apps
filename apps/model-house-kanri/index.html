@@ -1787,7 +1787,7 @@
       { key: 'weekendCheckRequest', label: '土日：備品確認依頼文（モデル最終利用者へ）', vars: '{{to}}＝Chatwork TOメンション／{{staffName}}＝担当者名／{{locationName}}＝拠点名／{{appUrl}}＝アプリURL' },
       { key: 'weekendCheckFollowup', label: '土日：備品確認の再依頼文', vars: '{{to}}＝Chatwork TOメンション／{{staffName}}＝担当者名／{{locationName}}＝拠点名／{{appUrl}}＝アプリURL' },
       { key: 'deliveryCompletionReminder', label: '配置完了リマインド文（配達担当へ）', vars: '{{to}}＝Chatwork TOメンション／{{staffName}}＝担当者名／{{locationName}}＝拠点名／{{visitDate}}＝配置予定日／{{appUrl}}＝アプリURL' },
-      { key: 'newCompletionViewingLocationNotice', label: '完成見学会の新規拠点を自動登録した通知文（藤田さん宛）', vars: '{{to}}＝藤田さんへのメンション／{{sections}}＝登録した拠点の一覧（期間・住所、同姓拠点がある場合は警告付き）／{{appUrl}}＝アプリURL' },
+      { key: 'newCompletionViewingLocationNotice', label: '完成見学会の新規拠点を自動登録した通知文（藤田さん宛）', vars: '{{to}}＝藤田さんへのメンション／{{sections}}＝登録した拠点の一覧（期間・住所。既存拠点と重複と判定しスキップしたものがあれば参考情報として併記）／{{appUrl}}＝アプリURL' },
     ];
 
     const MessageTemplatesSettingsPanel = ({ config, showAlert }) => {
@@ -1870,9 +1870,16 @@
       if (result.skipped) return 'スキップしました：' + (result.reason || '');
       switch (step) {
         case 'discoverCompletionViewingLocations': {
-          if (!result.registered) return `検出${result.scannedEvents ?? 0}件中、新規登録はありませんでした（既に登録済みか、対象の予定がありませんでした）。`;
+          const dupCount = result.skippedDuplicates || 0;
+          if (!result.registered) {
+            return dupCount
+              ? `新規登録はありませんでした（${dupCount}件は既存拠点と同一と判定しスキップ）。`
+              : `検出${result.scannedEvents ?? 0}件中、新規登録はありませんでした（対象の予定がないか、既に登録済みです）。`;
+          }
           const names = (result.registeredLocations || []).map(r => r.locationName).join('、');
-          return `新規に${result.registered}件の完成見学会拠点を登録しました：${names}\n※施主氏名は機械的に分割しているため、設定画面「拠点」から内容の確認をお願いします。`;
+          let t0 = `新規に${result.registered}件の完成見学会拠点を登録しました：${names}\n※施主氏名は機械的に分割しているため、設定画面「拠点」から内容の確認をお願いします。`;
+          if (dupCount) t0 += `\n（${dupCount}件は既存拠点と同一と判定しスキップしました）`;
+          return t0;
         }
         case 'autoSendOrderRequests': {
           if (result.sentGroups === 0) return result.message || '対象となる発注点割れの品目はありませんでした。';
