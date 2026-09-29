@@ -1097,12 +1097,46 @@
     );
     const inputCls = "w-full border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:border-gray-500";
 
+    // 完成見学会の「施主姓／施主名／所在地（〇〇区△△）」から、カレンダー識別キーワードの
+    // 候補を自動生成する（苗字様邸／フルネーム様邸／△△のみ／〇〇区△△／苗字のみ、の順）。
+    // 予定タイトルの表記ゆれ（「森下様邸｜@中央区寺脇」「＠寺脇（藤田）」等）に対応するため、
+    // 複数パターンを一度に登録できるようにしている（2026-09-29の要望）。
+    function buildCompletionViewingKeywords(lastName, firstName, address) {
+      const last = lastName.trim();
+      const first = firstName.trim();
+      const addr = address.trim();
+      const list = [];
+      if (last) list.push(`${last}様邸`);
+      if (last && first) list.push(`${last}${first}様邸`);
+      if (addr) {
+        const m = addr.match(/^(.+?区)(.+)$/);
+        if (m && m[2]) list.push(m[2]); // 「〇〇区△△」の△△部分のみ
+        list.push(addr); // 「〇〇区△△」全体
+      }
+      if (last) list.push(last);
+      return [...new Set(list.filter(Boolean))];
+    }
+
     const LocationEditModal = ({ location, onClose, showAlert }) => {
       const isNew = !location;
       const [name, setName] = useState(location?.name || '');
       const [type, setType] = useState(location?.type || 'model_house');
       const [keywordsText, setKeywordsText] = useState((location?.keywords || []).join(', '));
+      const [ownerLastName, setOwnerLastName] = useState(location?.ownerLastName || '');
+      const [ownerFirstName, setOwnerFirstName] = useState(location?.ownerFirstName || '');
+      const [ownerAddress, setOwnerAddress] = useState(location?.ownerAddress || '');
       const [saving, setSaving] = useState(false);
+
+      // 施主姓・施主名・所在地からキーワード候補を作り、既存のキーワード欄に
+      // （重複を避けて）追加する。上書きではなく追加なので、何度押しても・
+      // 手動で調整した後でも安全に使える。
+      const applyGeneratedKeywords = () => {
+        const generated = buildCompletionViewingKeywords(ownerLastName, ownerFirstName, ownerAddress);
+        if (!generated.length) { showAlert('施主姓・施主名・所在地のいずれかを入力してから生成してください。'); return; }
+        const existing = keywordsText.split(',').map(s => s.trim()).filter(Boolean);
+        const merged = [...new Set([...existing, ...generated])];
+        setKeywordsText(merged.join(', '));
+      };
 
       const save = async () => {
         if (!name.trim()) { showAlert('拠点名を入力してください。'); return; }
@@ -1110,11 +1144,14 @@
         try {
           const keywords = keywordsText.split(',').map(s => s.trim()).filter(Boolean);
           const ts = nowIso();
+          const ownerFields = type === 'completion_viewing'
+            ? { ownerLastName: ownerLastName.trim(), ownerFirstName: ownerFirstName.trim(), ownerAddress: ownerAddress.trim() }
+            : { ownerLastName: '', ownerFirstName: '', ownerAddress: '' };
           if (isNew) {
             const id = 'loc-' + Date.now();
-            await setDoc(docRef('locations', id), { id, name, type, keywords, isActive: true, order: 999, lastCheckedAt: null, lastCheckedBy: null, createdAt: ts, updatedAt: ts });
+            await setDoc(docRef('locations', id), { id, name, type, keywords, ...ownerFields, isActive: true, order: 999, lastCheckedAt: null, lastCheckedBy: null, createdAt: ts, updatedAt: ts });
           } else {
-            await updateDoc(docRef('locations', location.id), { name, type, keywords, updatedAt: ts });
+            await updateDoc(docRef('locations', location.id), { name, type, keywords, ...ownerFields, updatedAt: ts });
           }
           onClose();
         } catch (e) {
@@ -1126,7 +1163,7 @@
 
       return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
-          <div className="bg-white max-w-md w-full p-6 shadow-xl border border-gray-200">
+          <div className="bg-white max-w-md w-full p-6 shadow-xl border border-gray-200 max-h-[85vh] overflow-y-auto">
             <h3 className="font-serif tracking-wide text-sm text-gray-800 mb-4">{isNew ? '拠点を追加' : '拠点を編集'}</h3>
             <FormField label="拠点名"><input className={inputCls} value={name} onChange={e => setName(e.target.value)} /></FormField>
             <FormField label="種別">
@@ -1136,6 +1173,19 @@
                 <option value="office_reserve">事務所予備在庫</option>
               </select>
             </FormField>
+            {type === 'completion_viewing' && (
+              <div className="border border-gray-100 bg-gray-50 p-3 mb-3">
+                <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-2">施主情報（カレンダー識別キーワードの自動生成に使用）</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <FormField label="施主：苗字"><input className={inputCls} value={ownerLastName} onChange={e => setOwnerLastName(e.target.value)} placeholder="例：森下" /></FormField>
+                  <FormField label="施主：名前"><input className={inputCls} value={ownerFirstName} onChange={e => setOwnerFirstName(e.target.value)} placeholder="例：太郎" /></FormField>
+                </div>
+                <FormField label="所在地（〇〇区△△）"><input className={inputCls} value={ownerAddress} onChange={e => setOwnerAddress(e.target.value)} placeholder="例：中央区寺脇" /></FormField>
+                <button type="button" onClick={applyGeneratedKeywords} className="text-[11px] tracking-widest border border-gray-300 text-gray-600 hover:bg-gray-100 px-3 py-1.5">
+                  ↓ 上記からキーワードを生成して追加
+                </button>
+              </div>
+            )}
             <FormField label="カレンダー識別キーワード（カンマ区切り、複数可）">
               <input className={inputCls} value={keywordsText} onChange={e => setKeywordsText(e.target.value)} placeholder="例：森下, 内野" />
             </FormField>
