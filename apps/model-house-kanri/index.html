@@ -593,9 +593,14 @@
       useEffect(() => { setTapCounts(initialTapCounts); setDetailValues({}); setDetailOpen({}); }, [initialTapCounts]);
 
       const tapItem = (item) => {
+        // tapMaxは「何タップ分まで許容するか」（設定画面の表記「タップ上限（×いくつまで）」通り）。
+        // 上限の値は「タップ回数」ではなく「タップ回数×1タップの増分」でクランプする必要がある。
+        // ここをtapMaxだけでクランプしていたバグにより、tapIncrementが3以上の品目は
+        // 1回タップしただけで上限に達し、以降何度押しても増えなくなっていた（2026-09-29修正）。
         const increment = item.tapIncrement ?? 1;
-        const max = item.tapMax ?? 3;
-        setTapCounts(prev => ({ ...prev, [item.id]: Math.min((prev[item.id] ?? 0) + increment, max) }));
+        const maxTaps = item.tapMax ?? 3;
+        const capValue = increment * maxTaps;
+        setTapCounts(prev => ({ ...prev, [item.id]: Math.min((prev[item.id] ?? 0) + increment, capValue) }));
       };
       const resetItem = (itemId) => {
         setTapCounts(prev => ({ ...prev, [itemId]: 0 }));
