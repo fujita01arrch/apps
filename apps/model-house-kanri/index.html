@@ -978,7 +978,7 @@
                     </div>
                     <div className="text-[10px] text-gray-400 mt-0.5">{o.items.map(i => `${i.itemName}×${i.requestedLots ?? 1}${i.orderUnit || ''}`).join('、')}</div>
                     {o.orderRole === 'ADV本人手配' && (
-                      <div className="text-[10px] text-gray-400 mt-0.5">ご本人手配の品目です。ご準備でき次第「配置しました」を押してください。</div>
+                      <div className="text-[10px] text-gray-400 mt-0.5">配置ができ次第「配置しました」を押してください。</div>
                     )}
                     {o.deliveryAssignee && (
                       <div className={`text-[10px] mt-0.5 ${isMine ? 'text-indigo-700 font-medium' : 'text-gray-400'}`}>
