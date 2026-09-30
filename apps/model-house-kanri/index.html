@@ -338,6 +338,12 @@
       if (d === 1) return '昨日';
       return `${d}日前`;
     }
+    // 「9/30(水) 9:03」のような日時表示。バッチの最終自動実行日時など、日単位ではなく
+    // 分単位まで確認したい箇所で使う（formatRelativeDateは日単位なので用途が異なる）。
+    function formatDateTimeLabel(isoString) {
+      if (!isoString) return '未実行';
+      return new Date(isoString).toLocaleString('ja-JP', { month: 'numeric', day: 'numeric', weekday: 'short', hour: '2-digit', minute: '2-digit' });
+    }
     function stockDocId(locationId, itemId) { return `${locationId}_${itemId}`; }
     // usersのドキュメントIDはメールアドレス（小文字）を使う。ログイン前でも管理者が
     // スタッフ管理画面から先に登録できるようにするため（Firebase AuthのUIDはログインするまで
@@ -2723,6 +2729,9 @@
 
       return (
         <div className="max-w-2xl mx-auto space-y-6">
+          <p className="px-4 text-[10px] text-gray-400 tracking-widest">
+            最終自動実行：{formatDateTimeLabel(config.lastAutoRunAt)}
+          </p>
           <section>
             <SectionLabel>発注が必要な状態（{pendingGroups.length}件）</SectionLabel>
             <div className="bg-white border border-gray-200 mx-4 divide-y divide-gray-100">
