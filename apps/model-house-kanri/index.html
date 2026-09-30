@@ -1783,17 +1783,17 @@
     };
 
     const MESSAGE_TEMPLATE_FIELDS = [
-      { key: 'orderRequestOperations', label: '発注依頼文（業務管理宛）', vars: '{{sections}}＝品目一覧（拠点ごとにまとめた文字列）' },
-      { key: 'orderRequestMarketing', label: '発注依頼文（集客・マーケ宛）', vars: '{{sections}}＝品目一覧（拠点ごとにまとめた文字列）' },
-      { key: 'orderRequestAdvSelf', label: '準備依頼文（ADV本人手配）', vars: '{{to}}＝藤田さん・配置予定者へのメンション（送信時にGASが自動付与、プレビューでは空欄）／{{sections}}＝品目一覧（拠点ごとに配置予定者名も入る）／{{appUrl}}＝アプリURL' },
-      { key: 'deliveryRequest', label: '運搬依頼文（配達担当ADVへ）', vars: '{{to}}＝Chatwork TOメンション／{{staffName}}＝担当者名／{{locationName}}＝拠点名／{{visitDateLabel}}＝訪問予定日（例：9/27(土)）／{{items}}＝品目一覧（同じ担当者・同じ訪問日の発注はまとめて1通に）／{{appUrl}}＝アプリURL' },
-      { key: 'staleCheckNotice', label: '未確認アラート文（次の訪問者へ）', vars: '{{to}}＝Chatwork TOメンション／{{staffName}}＝担当者名／{{locationName}}＝拠点名／{{daysSince}}＝未確認日数／{{appUrl}}＝アプリURL' },
-      { key: 'staleOrderReplyNotice', label: '到着日未確定の要確認通知文（藤田さん宛）', vars: '{{to}}＝Chatwork TOメンション／{{locationName}}＝拠点名／{{orderRole}}＝発注担当区分／{{daysSince}}＝発注からの経過日数' },
-      { key: 'advShortageNotice', label: 'ADV不足報告の共有通知文（藤田さん宛）', vars: '{{to}}＝藤田さんへのメンション／{{advName}}＝報告したADV名／{{locationName}}＝拠点名／{{items}}＝品目一覧' },
-      { key: 'weekendCheckRequest', label: '土日：備品確認依頼文（モデル最終利用者へ）', vars: '{{to}}＝Chatwork TOメンション／{{staffName}}＝担当者名／{{locationName}}＝拠点名／{{appUrl}}＝アプリURL' },
-      { key: 'weekendCheckFollowup', label: '土日：備品確認の再依頼文', vars: '{{to}}＝Chatwork TOメンション／{{staffName}}＝担当者名／{{locationName}}＝拠点名／{{appUrl}}＝アプリURL' },
-      { key: 'deliveryCompletionReminder', label: '配置完了リマインド文（配達担当へ）', vars: '{{to}}＝Chatwork TOメンション／{{staffName}}＝担当者名／{{locationName}}＝拠点名／{{visitDate}}＝配置予定日／{{appUrl}}＝アプリURL' },
-      { key: 'newCompletionViewingLocationNotice', label: '完成見学会の新規拠点を自動登録した通知文（藤田さん宛）', vars: '{{to}}＝藤田さんへのメンション／{{sections}}＝登録した拠点の一覧（期間・住所。既存拠点と重複と判定しスキップしたものがあれば参考情報として併記）／{{appUrl}}＝アプリURL' },
+      { key: 'orderRequestOperations', label: '発注依頼文（業務管理宛）', vars: '{{sections}}＝品目一覧（拠点ごとにまとめた文字列）／※{{to}}はこのテンプレートでは使えません（書いても空欄になります。業務管理チャットへの投稿のため個人宛メンションを使わない仕様です）' },
+      { key: 'orderRequestMarketing', label: '発注依頼文（集客・マーケ宛）', vars: '{{sections}}＝品目一覧（拠点ごとにまとめた文字列）／※{{to}}はこのテンプレートでは使えません（書いても空欄になります。集客・マーケチャットへの投稿のため個人宛メンションを使わない仕様です）' },
+      { key: 'orderRequestAdvSelf', label: '準備依頼文（ADV本人手配）', vars: '{{to}}＝【必須・消さないでください】藤田さん・配置予定者へのメンション（送信時にGASが自動付与、プレビューでは空欄）。消すと宛先に通知が届かなくなります（エラー表示はありません）／{{sections}}＝品目一覧（拠点ごとに配置予定者名も入る）／{{appUrl}}＝アプリURL' },
+      { key: 'deliveryRequest', label: '運搬依頼文（配達担当ADVへ）', vars: '{{to}}＝【必須・消さないでください】Chatwork TOメンション。消すと宛先に通知が届かなくなります（エラー表示はありません）／{{staffName}}＝担当者名／{{locationName}}＝拠点名／{{visitDateLabel}}＝訪問予定日（例：9/27(土)）※「配置完了リマインド文」の{{visitDate}}とは別の変数名です／{{items}}＝品目一覧（同じ担当者・同じ訪問日の発注はまとめて1通に）／{{appUrl}}＝アプリURL' },
+      { key: 'staleCheckNotice', label: '未確認アラート文（次の訪問者へ）', vars: '{{to}}＝【必須・消さないでください】Chatwork TOメンション。消すと宛先に通知が届かなくなります／{{staffName}}＝担当者名／{{locationName}}＝拠点名／{{daysSince}}＝未確認日数／{{appUrl}}＝アプリURL' },
+      { key: 'staleOrderReplyNotice', label: '到着日未確定の要確認通知文（藤田さん宛）', vars: '{{to}}＝【必須・消さないでください】Chatwork TOメンション。消すと宛先に通知が届かなくなります／{{locationName}}＝拠点名／{{orderRole}}＝発注担当区分／{{daysSince}}＝発注からの経過日数／※{{appUrl}}はこのテンプレートでは使えません（書いても空欄になります）' },
+      { key: 'advShortageNotice', label: 'ADV不足報告の共有通知文（藤田さん宛）', vars: '{{to}}＝【必須・消さないでください】藤田さんへのメンション。消すと宛先に通知が届かなくなります／{{advName}}＝報告したADV名／{{locationName}}＝拠点名／{{items}}＝品目一覧／※{{appUrl}}はこのテンプレートでは使えません（書いても空欄になります）' },
+      { key: 'weekendCheckRequest', label: '土日：備品確認依頼文（モデル最終利用者へ）', vars: '{{to}}＝【必須・消さないでください】Chatwork TOメンション。消すと宛先に通知が届かなくなります／{{staffName}}＝担当者名／{{locationName}}＝拠点名／{{appUrl}}＝アプリURL' },
+      { key: 'weekendCheckFollowup', label: '土日：備品確認の再依頼文', vars: '{{to}}＝【必須・消さないでください】Chatwork TOメンション。消すと宛先に通知が届かなくなります／{{staffName}}＝担当者名／{{locationName}}＝拠点名／{{appUrl}}＝アプリURL' },
+      { key: 'deliveryCompletionReminder', label: '配置完了リマインド文（配達担当へ）', vars: '{{to}}＝【必須・消さないでください】Chatwork TOメンション。消すと宛先に通知が届かなくなります／{{staffName}}＝担当者名／{{locationName}}＝拠点名／{{visitDate}}＝配置予定日※「運搬依頼文」の{{visitDateLabel}}とは別の変数名です／{{appUrl}}＝アプリURL' },
+      { key: 'newCompletionViewingLocationNotice', label: '完成見学会の新規拠点を自動登録した通知文（藤田さん宛）', vars: '{{to}}＝【必須・消さないでください】藤田さんへのメンション。消すと宛先に通知が届かなくなります／{{sections}}＝登録した拠点の一覧（期間・住所。既存拠点と重複と判定しスキップしたものがあれば参考情報として併記）／{{appUrl}}＝アプリURL' },
     ];
 
     const MessageTemplatesSettingsPanel = ({ config, showAlert }) => {
@@ -1821,6 +1821,11 @@
       return (
         <div className="bg-white border border-gray-200 mx-4 p-4 space-y-4">
           <p className="text-xs text-gray-500">Chatworkへ自動送信される文面のテンプレートです。{'{{}}'}で囲まれた部分は自動で置き換わります。改行もそのまま反映されます。</p>
+          <p className="text-xs text-rose-600 bg-rose-50 border border-rose-200 p-2">
+            ⚠️重要：{'{{}}'}の中のつづりを一文字でも間違えたり、そのテンプレートに存在しない変数名を書いたりすると、エラーは表示されずその部分だけ空欄のまま静かに送信されます。
+            特に「【必須】」と書かれた{'{{to}}'}を誤って消したり書き換えたりすると、Chatworkでの宛先メンションが付かず誰にも通知が届きません（送信自体は正常に完了したように見えます）。
+            本文を編集したら、保存前に必ず下の「使える変数」を見比べ、{'{{}}'}の中が一字一句合っているか確認してください。不安なときは「初期値に戻す」でいつでも元に戻せます。
+          </p>
           {MESSAGE_TEMPLATE_FIELDS.map(f => (
             <div key={f.key} className="border-t border-gray-100 pt-3">
               <div className="flex items-center justify-between mb-1">
