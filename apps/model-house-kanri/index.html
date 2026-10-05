@@ -2455,9 +2455,7 @@
         : role === '集客・マーケ' ? config.chatworkContactIds?.marketing : null;
       const to = role === 'ADV本人手配' ? '' : buildToMentions(contactIds);
       const note = messageTemplateOf(config, 'deliverySelfPrepareNote');
-      const printNote = (role === 'ADV本人手配' && note.trim()) ? '
-
-' + note : '';
+      const printNote = (role === 'ADV本人手配' && note.trim()) ? '\n\n' + note : '';
       return renderTemplate(messageTemplateOf(config, key), { sections, to, printNote, appUrl: APP_URL });
     }
 
