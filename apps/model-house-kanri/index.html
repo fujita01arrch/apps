@@ -359,21 +359,42 @@
     function buildToMentions(idsStr) {
       return String(idsStr || '').split(/[,、\s]+/).map(s => s.trim()).filter(Boolean).map(id => `[To:${id}]`).join(' ');
     }
+    // 品目1行の書き方（部品テンプレート）に品目を当てはめる。GAS側（MessageTemplates.gs formatItemLine_）と同じ仕様にすること。
+    // {{qty}}＝数量、{{unit}}＝単位、{{unitNote}}＝単位の補足（例：（1箱=24足））。
+    function formatItemLine(tpl, item) {
+      const note = item.orderUnitLabel ? `（${item.orderUnitLabel}）` : '';
+      return renderTemplate(tpl, { itemName: item.itemName, qty: item.requestedLots || 1, unit: item.orderUnit || item.stockUnit || '', unitNote: note });
+    }
     const DEFAULT_MESSAGE_TEMPLATES = {
-      orderRequestOperations: '{{to}}お世話になっております。下記備品が少なくなってきましたので、発注をお願いいたします。\n\n{{sections}}\n\n到着予定日が分かりましたら、このメッセージを選択して「返信（Re）」機能でお知らせいただけますと、システムが自動で反映できて助かります（文面はいつも通りで大丈夫です。例：「9/24着です」）。\nよろしくお願いいたします。',
-      orderRequestMarketing: '{{to}}お疲れ様です。下記備品、在庫が少なくなってきましたのでご用意をお願いできますでしょうか。\n\n{{sections}}\n\nご用意いただけそうな時期が分かりましたら、このメッセージを選択して「返信（Re）」機能でお知らせいただけますと、システムが自動で反映できて助かります。よろしくお願いいたします。',
-      orderRequestAdvSelf: '{{to}}下記備品はADV本人手配のため、必要に応じてご準備をお願いします。\n\n{{sections}}\n\n配置後の報告はアプリからお願いします：{{appUrl}}',
-      deliveryRequest: '{{to}}{{staffName}}さん\nお疲れ様です！\n{{visitDateLabel}}に{{locationName}}へ行く際に下記の備品を持って行って頂きたいです。\n品目：\n{{items}}\nご都合が合わない場合はお手数ですがご一報ください。\n配置報告はアプリからお願いします：{{appUrl}}',
-      staleCheckNotice: '{{to}}{{staffName}}さん\nお疲れ様です。{{locationName}}は、{{daysSince}}日以上備品の在庫確認が行われていません。\n近く訪問される際に、アプリから在庫確認をお願いできますでしょうか：{{appUrl}}',
-      staleOrderReplyNotice: '{{to}}お疲れ様です。\n{{locationName}}宛の発注（{{orderRole}}）について、依頼から{{daysSince}}日経っても到着予定日のご連絡が確認できていません。\n要確認です。業者へのご確認をお願いします。',
-      advShortageNotice: '{{to}}{{advName}}さんより、{{locationName}}の備品不足報告がアプリに届きました。\n{{items}}\n※このメッセージは共有目的のみです。発注要否の判断・発注依頼は別途アプリ側で行われます。',
-      weekendCheckRequest: '{{to}}{{staffName}}さん\nお疲れ様です。本日{{locationName}}をご利用予定と伺いましたので、備品確認をお願いできますでしょうか。\nアプリから在庫確認をお願いします：{{appUrl}}',
-      weekendCheckFollowup: '{{to}}{{staffName}}さん\nお疲れ様です。{{locationName}}の本日分の備品確認がまだ届いていないようです。\nお手数ですが、アプリから在庫確認をお願いできますでしょうか：{{appUrl}}',
-      deliveryCompletionReminder: '{{to}}{{staffName}}さん\nお疲れ様です。{{locationName}}宛の備品の配置予定日（{{visitDate}}）を過ぎていますが、まだ配置報告が確認できていません。\nお手数ですが、配置が完了しましたらアプリから報告をお願いできますでしょうか：{{appUrl}}',
-      newCompletionViewingLocationNotice: '{{to}}カレンダーから新しい完成見学会の枠を検出したため、拠点として自動登録しました。\n\n{{sections}}\n\n拠点名・施主の氏名（機械的に分割しているため不正確な場合があります）・識別キーワードは、必要に応じて設定画面の「拠点」から修正してください：{{appUrl}}',
+      orderRequestOperations: '{{to}}\nお疲れ様です！\nモデルハウス・見学会について下記備品が少なくなってきましたので、発注をお願いいたします。\n\n{{sections}}\n\n到着予定日が分かりましたら、教えていただけますと助かります🙇\nよろしくお願いいたします。',
+      orderRequestMarketing: '{{to}}\nお疲れ様です！\nモデルハウス・見学会について下記備品が少なくなってきましたので、ご用意をお願いしたいです。\n\n{{sections}}\n\nご用意いただけそうな日が分かりましたらお知らせくださると助かります🙇\nよろしくお願いいたします。',
+      orderRequestAdvSelf: '{{to}}\nお疲れ様です！\n下記備品が不足していますので、次回行かれる際に配置をお願いいたします。\n\n{{sections}}\n\n⚠️⚠️アプリでの配置報告を必ずお願いいたします⚠️⚠️\n{{appUrl}}',
+      deliveryRequest: '{{to}}{{staffName}}さん\nお疲れ様です！\n{{visitDateLabel}}に備品が事務所に届く予定です。\n\n{{items}}\n\n到着後にロッカー前に用意しますので、配置をお願いいたします！\nご都合が合わない場合はお手数ですが藤田か染矢にご一報ください。\n\n⚠️⚠️アプリでの配置報告を必ずお願いいたします⚠️⚠️\n{{appUrl}}',
+      staleCheckNotice: '{{to}}{{staffName}}さん\nお疲れ様です。{{locationName}}は、{{daysSince}}日以上備品の在庫確認が行われていません。\n近く訪問される際に、アプリから在庫確認をお願いできますでしょうか。\n{{appUrl}}',
+      staleOrderReplyNotice: '{{to}}\nお疲れ様です。\n{{locationName}}宛の発注（{{orderRole}}）について、\n依頼から{{daysSince}}日経っても到着予定日のご連絡が確認できていません。\n要確認ですので、ご確認をお願いします☢',
+      advShortageNotice: '{{to}}\n📦📦📦📦📦📦📦📦📦📦📦📦\n{{advName}}さんより、以下の備品不足報告が届きました！\n場所｜{{locationName}}\n品目｜{{items}}\n📦📦📦📦📦📦📦📦📦📦📦📦',
+      weekendCheckRequest: '{{to}}{{staffName}}さん\nお疲れ様です！\n本日{{locationName}}を最後に使うかと思います。\nモデルを出る前に備品確認をお願いいたします！！\n\n⚠️⚠️アプリでの備品報告を必ずお願いいたします⚠️⚠️\n{{appUrl}}',
+      weekendCheckFollowup: '{{to}}{{staffName}}さん\nお疲れ様です。{{locationName}}の本日分の備品確認がまだできておりません！\nお手数ですが、アプリから在庫確認を必ずお願いいたします🙇\n\n⚠️⚠️アプリでの備品報告を必ずお願いいたします⚠️⚠️\n{{appUrl}}',
+      deliveryCompletionReminder: '{{to}}{{staffName}}さん\nお疲れ様です。{{locationName}}宛の備品の配置予定日（{{visitDate}}）を過ぎていますが、\nまだ配置報告が確認できていません。\n\n⚠️⚠️アプリでの配置報告を必ずお願いいたします⚠️⚠️\n{{appUrl}}\n\n※忘れた場合もアプリから記録をお願いします。',
+      newCompletionViewingLocationNotice: '{{to}}\nカレンダーから新しい完成見学会の枠を検出したため、拠点として自動登録しました。\n\n{{sections}}\n\n拠点名・施主の氏名（機械的に分割しているため不正確な場合があります）\n・識別キーワードは、必要に応じて設定画面の「拠点」から修正してください\n{{appUrl}}',
+      // ---- メッセージの部品（品目の書き方・見出し・注意書き）。GAS側 MessageTemplates.gs と同じ既定値にすること ----
+      itemLineOrder: '・{{itemName}}｜{{qty}}{{unit}}{{unitNote}}',
+      itemLineShortage: '・{{itemName}}｜{{qty}}{{unit}}',
+      itemLineDelivery: '・{{itemName}}｜{{qty}}{{unit}}',
+      sectionHeading: '▸{{locationName}}{{assignee}}',
+      assigneeLabel: '（配置予定：{{staffName}}さん）',
+      assigneeUnknownLabel: '（配置予定者：未定）',
+      deliveryLocationHeading: '▸{{locationName}}',
+      deliverySelfPrepareNote: '※印刷物関係はご自身で印刷等のご協力をお願いいたします🙇',
+      newLocationLine: '・{{locationName}}（{{periodLabel}}／{{address}}）',
+      newLocationSkippedHeader: '※以下は既存拠点「〇〇」と同一とみなしスキップしました（重複登録防止）：',
+      newLocationSkippedLine: '・{{locationName}} → 既存「{{existingLocationName}}」'
     };
+    // 「メッセージの部品」のキー。メッセージ本文と違い、空欄で保存したら空のまま使う（例：注意書きを無くす）。
+    const PART_TEMPLATE_KEYS = ['itemLineOrder', 'itemLineShortage', 'itemLineDelivery', 'sectionHeading', 'assigneeLabel', 'assigneeUnknownLabel', 'deliveryLocationHeading', 'deliverySelfPrepareNote', 'newLocationLine', 'newLocationSkippedHeader', 'newLocationSkippedLine'];
     function messageTemplateOf(config, key) {
       const saved = config.messageTemplates && config.messageTemplates[key];
+      if (PART_TEMPLATE_KEYS.includes(key)) return typeof saved === 'string' ? saved : DEFAULT_MESSAGE_TEMPLATES[key];
       return (saved && saved.trim()) ? saved : DEFAULT_MESSAGE_TEMPLATES[key];
     }
 
@@ -1803,17 +1824,28 @@
     };
 
     const MESSAGE_TEMPLATE_FIELDS = [
-      { key: 'orderRequestOperations', label: '発注依頼文（業務管理宛）', vars: '{{sections}}＝品目一覧（拠点ごとにまとめた文字列）／{{to}}＝業務管理担当者へのメンション（「連携設定」タブでChatworkアカウントIDを登録した場合のみ機能。カンマ区切りで複数人も可、全員分メンションされます。未登録なら空欄＝今まで通りルーム全体宛）' },
-      { key: 'orderRequestMarketing', label: '発注依頼文（集客・マーケ宛）', vars: '{{sections}}＝品目一覧（拠点ごとにまとめた文字列）／{{to}}＝集客・マーケ担当者へのメンション（「連携設定」タブでChatworkアカウントIDを登録した場合のみ機能。カンマ区切りで複数人も可、全員分メンションされます。未登録なら空欄＝今まで通りルーム全体宛）' },
-      { key: 'orderRequestAdvSelf', label: '準備依頼文（ADV本人手配）', vars: '{{to}}＝【必須・消さないでください】藤田さん・配置予定者へのメンション（送信時にGASが自動付与、プレビューでは空欄）。消すと宛先に通知が届かなくなります（エラー表示はありません）／{{sections}}＝品目一覧（拠点ごとに配置予定者名も入る）／{{appUrl}}＝アプリURL' },
-      { key: 'deliveryRequest', label: '運搬依頼文（配達担当ADVへ）', vars: '{{to}}＝【必須・消さないでください】Chatwork TOメンション。消すと宛先に通知が届かなくなります（エラー表示はありません）／{{staffName}}＝担当者名／{{locationName}}＝拠点名／{{visitDateLabel}}＝訪問予定日（例：9/27(土)）※「配置完了リマインド文」の{{visitDate}}とは別の変数名です／{{items}}＝品目一覧（「▸拠点名」の見出し＋業者発注分＋同じ拠点でまだ配置報告されていないADV本人手配分＋印刷物の注意書き。同じ担当者・同じ訪問日の発注はまとめて1通に。拠点名が入るため、本文の{{locationName}}と重なる場合は本文側を調整してください）／{{appUrl}}＝アプリURL' },
+      { key: 'orderRequestOperations', label: '発注依頼文（業務管理宛）', vars: '{{sections}}＝品目一覧（拠点ごとにまとめた文字列。拠点の見出し・品目の書き方は下の「メッセージの部品」で変更できます）／{{to}}＝業務管理担当者へのメンション（「連携設定」タブでChatworkアカウントIDを登録した場合のみ機能。カンマ区切りで複数人も可、全員分メンションされます。未登録なら空欄＝今まで通りルーム全体宛）' },
+      { key: 'orderRequestMarketing', label: '発注依頼文（集客・マーケ宛）', vars: '{{sections}}＝品目一覧（拠点ごとにまとめた文字列。拠点の見出し・品目の書き方は下の「メッセージの部品」で変更できます）／{{to}}＝集客・マーケ担当者へのメンション（「連携設定」タブでChatworkアカウントIDを登録した場合のみ機能。カンマ区切りで複数人も可、全員分メンションされます。未登録なら空欄＝今まで通りルーム全体宛）' },
+      { key: 'orderRequestAdvSelf', label: '準備依頼文（ADV本人手配）', vars: '{{to}}＝【必須・消さないでください】藤田さん・配置予定者へのメンション（送信時にGASが自動付与、プレビューでは空欄）。消すと宛先に通知が届かなくなります（エラー表示はありません）／{{sections}}＝品目一覧（拠点ごとに配置予定者名も入る。見出し・品目の書き方・配置予定者の表記は下の「メッセージの部品」で変更できます）／{{appUrl}}＝アプリURL' },
+      { key: 'deliveryRequest', label: '運搬依頼文（配達担当ADVへ）', vars: '{{to}}＝【必須・消さないでください】Chatwork TOメンション。消すと宛先に通知が届かなくなります（エラー表示はありません）／{{staffName}}＝担当者名／{{locationName}}＝拠点名／{{visitDateLabel}}＝訪問予定日（例：9/27(土)）※「配置完了リマインド文」の{{visitDate}}とは別の変数名です／{{items}}＝品目一覧（「▸拠点名」の見出し＋業者発注分＋同じ拠点でまだ配置報告されていないADV本人手配分＋印刷物の注意書き。同じ担当者・同じ訪問日の発注はまとめて1通に。拠点名が入るため、本文の{{locationName}}と重なる場合は本文側を調整してください。見出し・品目の書き方・注意書きは下の「メッセージの部品」で変更できます）／{{appUrl}}＝アプリURL' },
       { key: 'staleCheckNotice', label: '未確認アラート文（次の訪問者へ）', vars: '{{to}}＝【必須・消さないでください】Chatwork TOメンション。消すと宛先に通知が届かなくなります／{{staffName}}＝担当者名／{{locationName}}＝拠点名／{{daysSince}}＝未確認日数／{{appUrl}}＝アプリURL' },
       { key: 'staleOrderReplyNotice', label: '到着日未確定の要確認通知文（藤田さん宛）', vars: '{{to}}＝【必須・消さないでください】Chatwork TOメンション。消すと宛先に通知が届かなくなります／{{locationName}}＝拠点名／{{orderRole}}＝発注担当区分／{{daysSince}}＝発注からの経過日数／※{{appUrl}}はこのテンプレートでは使えません（書いても空欄になります）' },
-      { key: 'advShortageNotice', label: 'ADV不足報告の共有通知文（藤田さん宛）', vars: '{{to}}＝【必須・消さないでください】藤田さんへのメンション。消すと宛先に通知が届かなくなります／{{advName}}＝報告したADV名／{{locationName}}＝拠点名／{{items}}＝品目一覧／※{{appUrl}}はこのテンプレートでは使えません（書いても空欄になります）' },
+      { key: 'advShortageNotice', label: 'ADV不足報告の共有通知文（藤田さん宛）', vars: '{{to}}＝【必須・消さないでください】藤田さんへのメンション。消すと宛先に通知が届かなくなります／{{advName}}＝報告したADV名／{{locationName}}＝拠点名／{{items}}＝品目一覧（品目の書き方は下の「メッセージの部品」で変更できます）／※{{appUrl}}はこのテンプレートでは使えません（書いても空欄になります）' },
       { key: 'weekendCheckRequest', label: '土日：備品確認依頼文（モデル最終利用者へ）', vars: '{{to}}＝【必須・消さないでください】Chatwork TOメンション。消すと宛先に通知が届かなくなります／{{staffName}}＝担当者名／{{locationName}}＝拠点名／{{appUrl}}＝アプリURL' },
       { key: 'weekendCheckFollowup', label: '土日：備品確認の再依頼文', vars: '{{to}}＝【必須・消さないでください】Chatwork TOメンション。消すと宛先に通知が届かなくなります／{{staffName}}＝担当者名／{{locationName}}＝拠点名／{{appUrl}}＝アプリURL' },
       { key: 'deliveryCompletionReminder', label: '配置完了リマインド文（配達担当へ）', vars: '{{to}}＝【必須・消さないでください】Chatwork TOメンション。消すと宛先に通知が届かなくなります／{{staffName}}＝担当者名／{{locationName}}＝拠点名／{{visitDate}}＝配置予定日※「運搬依頼文」の{{visitDateLabel}}とは別の変数名です／{{appUrl}}＝アプリURL' },
-      { key: 'newCompletionViewingLocationNotice', label: '完成見学会の新規拠点を自動登録した通知文（藤田さん宛）', vars: '{{to}}＝【必須・消さないでください】藤田さんへのメンション。消すと宛先に通知が届かなくなります／{{sections}}＝登録した拠点の一覧（期間・住所。既存拠点と重複と判定しスキップしたものがあれば参考情報として併記）／{{appUrl}}＝アプリURL' },
+      { key: 'newCompletionViewingLocationNotice', label: '完成見学会の新規拠点を自動登録した通知文（藤田さん宛）', vars: '{{to}}＝【必須・消さないでください】藤田さんへのメンション。消すと宛先に通知が届かなくなります／{{sections}}＝登録した拠点の一覧（期間・住所。既存拠点と重複と判定しスキップしたものがあれば参考情報として併記。書き方は下の「メッセージの部品」で変更できます）／{{appUrl}}＝アプリURL' },
+      { key: 'itemLineOrder', part: true, rows: 2, label: '品目1行の書き方（発注依頼文・準備依頼文）', vars: '{{itemName}}＝品名／{{qty}}＝数量／{{unit}}＝単位（箱・個など）／{{unitNote}}＝単位の補足（例：（1箱=24足）。登録がなければ空欄）。この1行が品目の数だけ並び、各発注依頼文・準備依頼文の{{sections}}の中に入ります' },
+      { key: 'itemLineShortage', part: true, rows: 2, label: '品目1行の書き方（ADV不足報告の共有通知）', vars: '{{itemName}}＝品名／{{qty}}＝数量／{{unit}}＝単位。品目の数だけ並び、共有通知の{{items}}の中に入ります' },
+      { key: 'itemLineDelivery', part: true, rows: 2, label: '品目1行の書き方（運搬依頼文）', vars: '{{itemName}}＝品名／{{qty}}＝数量／{{unit}}＝単位。業者発注分と、まだ配置報告されていないADV本人手配分の両方に使われ、運搬依頼文の{{items}}の中に並びます' },
+      { key: 'sectionHeading', part: true, rows: 2, label: '拠点の見出し（発注依頼文・準備依頼文）', vars: '{{locationName}}＝拠点名／{{assignee}}＝配置予定者の表記（準備依頼文のみ。下の2つで変えられる。業務管理・集客マーケ宛では空欄）。拠点ごとの見出し1行として、品目の前に入ります' },
+      { key: 'assigneeLabel', part: true, rows: 2, label: '配置予定者の表記（準備依頼文）', vars: '{{staffName}}＝配置予定のADVの名前。カレンダーから配置予定者が分かった拠点の見出しに入ります' },
+      { key: 'assigneeUnknownLabel', part: true, rows: 2, label: '配置予定者が未定のときの表記（準備依頼文）', vars: '変数はありません。配置予定者がカレンダーから分からなかった拠点の見出しに入ります' },
+      { key: 'deliveryLocationHeading', part: true, rows: 2, label: '拠点の見出し（運搬依頼文）', vars: '{{locationName}}＝拠点名。運搬依頼文の{{items}}の先頭に入ります。空欄にすると見出しなしになります' },
+      { key: 'deliverySelfPrepareNote', part: true, rows: 3, label: 'ADV本人手配の注意書き（運搬依頼文）', vars: '変数はありません。運搬依頼文に、まだ配置報告されていないADV本人手配の品目を載せたときだけ、その品目の下に入ります。空欄にすると注意書きなしになります' },
+      { key: 'newLocationLine', part: true, rows: 2, label: '新規拠点1行の書き方（完成見学会の新規拠点の通知）', vars: '{{locationName}}＝拠点名／{{periodLabel}}＝期間／{{address}}＝住所。拠点の数だけ並び、通知の{{sections}}の中に入ります' },
+      { key: 'newLocationSkippedHeader', part: true, rows: 2, label: '重複スキップの見出し（完成見学会の新規拠点の通知）', vars: '変数はありません。既存拠点と同一とみなしてスキップした拠点があるときだけ、通知の{{sections}}の後半に入ります' },
+      { key: 'newLocationSkippedLine', part: true, rows: 2, label: '重複スキップ1行の書き方（完成見学会の新規拠点の通知）', vars: '{{locationName}}＝カレンダーから検出した拠点名／{{existingLocationName}}＝既存の拠点名' },
     ];
 
     const MessageTemplatesSettingsPanel = ({ config, showAlert }) => {
@@ -1846,17 +1878,28 @@
             特に「【必須】」と書かれた{'{{to}}'}を誤って消したり書き換えたりすると、Chatworkでの宛先メンションが付かず誰にも通知が届きません（送信自体は正常に完了したように見えます）。
             本文を編集したら、保存前に必ず下の「使える変数」を見比べ、{'{{}}'}の中が一字一句合っているか確認してください。不安なときは「初期値に戻す」でいつでも元に戻せます。
           </p>
-          {MESSAGE_TEMPLATE_FIELDS.map(f => (
-            <div key={f.key} className="border-t border-gray-100 pt-3">
-              <div className="flex items-center justify-between mb-1">
-                <label className="text-xs text-gray-700">{f.label}</label>
-                <button onClick={() => resetOne(f.key)} className="text-[10px] text-gray-400 hover:text-gray-700 underline">初期値に戻す</button>
+          {MESSAGE_TEMPLATE_FIELDS.map((f, idx) => (
+            <div key={f.key}>
+              {f.part && !MESSAGE_TEMPLATE_FIELDS[idx - 1]?.part && (
+                <div className="border-t-2 border-gray-300 pt-4 mb-3">
+                  <p className="text-xs text-gray-800 font-medium">メッセージの部品（品目の書き方・見出し・注意書き）</p>
+                  <p className="text-[10px] text-gray-500 mt-1 leading-relaxed">
+                    上のメッセージ本文の{'{{items}}'}や{'{{sections}}'}の中身になる部分です。ここを変えると、届く文面の品目の並びや見出しが変わります。
+                    本文と違い、空欄にして保存すると、その部分は何も入りません（本文は空欄にすると初期値に戻ります）。「初期値に戻す」で、いつでも元に戻せます。
+                  </p>
+                </div>
+              )}
+              <div className="border-t border-gray-100 pt-3">
+                <div className="flex items-center justify-between mb-1">
+                  <label className="text-xs text-gray-700">{f.label}</label>
+                  <button onClick={() => resetOne(f.key)} className="text-[10px] text-gray-400 hover:text-gray-700 underline">初期値に戻す</button>
+                </div>
+                <textarea
+                  rows={f.rows || 4} value={values[f.key]} onChange={e => setValues(v => ({ ...v, [f.key]: e.target.value }))}
+                  className="w-full border border-gray-300 p-2 text-xs leading-relaxed focus:outline-none focus:border-gray-500"
+                />
+                <p className="text-[10px] text-gray-400 mt-1">{f.vars}</p>
               </div>
-              <textarea
-                rows={4} value={values[f.key]} onChange={e => setValues(v => ({ ...v, [f.key]: e.target.value }))}
-                className="w-full border border-gray-300 p-2 text-xs leading-relaxed focus:outline-none focus:border-gray-500"
-              />
-              <p className="text-[10px] text-gray-400 mt-1">{f.vars}</p>
             </div>
           ))}
           <button onClick={save} disabled={saving} className="bg-gray-800 text-white hover:bg-gray-900 transition-colors px-4 py-2 text-xs tracking-widest disabled:opacity-50">{saving ? '保存中...' : '保存'}</button>
@@ -2396,14 +2439,13 @@
     // ChatworkアカウントIDを使うだけ）なのでここで計算でき、GAS側（buildOrderRequestTextGas_）とも
     // 完全に一致する。未登録なら空欄（＝ルーム全体宛のまま、2026-09-30追加）。
     function buildOrderRequestText(role, locationGroups, config) {
+      // 拠点の見出しと品目行は、設定画面の「メッセージの部品」で変えられる。GAS側 buildOrderRequestTextGas_ と同じ作り方にすること。
       const sections = locationGroups.map(g => {
-        const itemLines = g.lines.map(l => {
-          const orderUnit = l.item.orderUnit || l.item.stockUnit || '';
-          const label = l.item.orderUnitLabel ? `（${l.item.orderUnitLabel}）` : '';
-          // GAS側（AutoOrderRequest.gs buildOrderRequestTextGas_）と演算子を完全に一致させること
-          return `・${l.itemName}：${l.requestedLots || 1}${orderUnit}${label}`;
-        }).join('\n');
-        return `▼${g.location.name}\n${itemLines}`;
+        const itemLines = g.lines.map(l => formatItemLine(messageTemplateOf(config, 'itemLineOrder'), {
+          itemName: l.itemName, requestedLots: l.requestedLots, orderUnit: l.item.orderUnit,
+          stockUnit: l.item.stockUnit, orderUnitLabel: l.item.orderUnitLabel,
+        })).join('\n');
+        return renderTemplate(messageTemplateOf(config, 'sectionHeading'), { locationName: g.location.name, assignee: '' }) + '\n' + itemLines;
       }).join('\n\n');
 
       const key = role === '業務管理' ? 'orderRequestOperations'
