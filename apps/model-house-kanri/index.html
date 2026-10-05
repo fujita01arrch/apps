@@ -366,17 +366,17 @@
       return renderTemplate(tpl, { itemName: item.itemName, qty: item.requestedLots || 1, unit: item.orderUnit || item.stockUnit || '', unitNote: note });
     }
     const DEFAULT_MESSAGE_TEMPLATES = {
-      orderRequestOperations: '{{to}}\nお疲れ様です！\nモデルハウス・見学会について下記備品が少なくなってきましたので、発注をお願いいたします。\n\n{{sections}}\n\n到着予定日が分かりましたら、教えていただけますと助かります🙇\nよろしくお願いいたします。',
-      orderRequestMarketing: '{{to}}\nお疲れ様です！\nモデルハウス・見学会について下記備品が少なくなってきましたので、ご用意をお願いしたいです。\n\n{{sections}}\n\nご用意いただけそうな日が分かりましたらお知らせくださると助かります🙇\nよろしくお願いいたします。',
-      orderRequestAdvSelf: '{{to}}\nお疲れ様です！\n下記備品が不足していますので、次回行かれる際に配置をお願いいたします。\n\n{{sections}}\n\n⚠️⚠️アプリでの配置報告を必ずお願いいたします⚠️⚠️\n{{appUrl}}',
-      deliveryRequest: '{{to}}{{staffName}}さん\nお疲れ様です！\n{{visitDateLabel}}に備品が事務所に届く予定です。\n\n{{items}}\n\n到着後にロッカー前に用意しますので、配置をお願いいたします！\nご都合が合わない場合はお手数ですが藤田か染矢にご一報ください。\n\n⚠️⚠️アプリでの配置報告を必ずお願いいたします⚠️⚠️\n{{appUrl}}',
+      orderRequestOperations: '{{to}}\nお疲れ様です！\n[info][title]モデルハウス・見学会について下記備品が少なくなってきましたので、発注をお願いいたします。[/title]\n{{sections}}\n[/info]\n\n到着予定日が分かりましたら、教えていただけますと助かります🙇\nよろしくお願いいたします。',
+      orderRequestMarketing: '{{to}}\nお疲れ様です！\n[info][title]モデルハウス・見学会について下記備品が少なくなってきましたので、ご用意をお願いしたいです。[/title]\n{{sections}}\n[/info]\n\nご用意いただけそうな日が分かりましたらお知らせくださると助かります🙇\nよろしくお願いいたします。',
+      orderRequestAdvSelf: '{{to}}\nお疲れ様です！\n[info][title]下記備品が不足していますので、次回行かれる際に配置をお願いいたします。[/title]\n{{sections}}\n[/info]\n\n⚠️⚠️アプリでの配置報告を必ずお願いいたします⚠️⚠️\n{{appUrl}}',
+      deliveryRequest: '{{to}}{{staffName}}さん\nお疲れ様です！\n[info][title]備品の運搬・配置のお願い[/title]事務所に届く日｜{{arrivalDateLabel}}\nモデルに行く日｜{{visitDateLabel}}\n\n{{items}}\n[/info]\n到着後にロッカー前に用意しますので、配置をお願いいたします！\nご都合が合わない場合はお手数ですが藤田か染矢にご一報ください。\n\n⚠️⚠️アプリでの配置報告を必ずお願いいたします⚠️⚠️\n{{appUrl}}',
       staleCheckNotice: '{{to}}{{staffName}}さん\nお疲れ様です。{{locationName}}は、{{daysSince}}日以上備品の在庫確認が行われていません。\n近く訪問される際に、アプリから在庫確認をお願いできますでしょうか。\n{{appUrl}}',
-      staleOrderReplyNotice: '{{to}}\nお疲れ様です。\n{{locationName}}宛の発注（{{orderRole}}）について、\n依頼から{{daysSince}}日経っても到着予定日のご連絡が確認できていません。\n要確認ですので、ご確認をお願いします☢',
-      advShortageNotice: '{{to}}\n📦📦📦📦📦📦📦📦📦📦📦📦\n{{advName}}さんより、以下の備品不足報告が届きました！\n場所｜{{locationName}}\n品目｜{{items}}\n📦📦📦📦📦📦📦📦📦📦📦📦',
+      staleOrderReplyNotice: '{{to}}\nお疲れ様です。\n[info][title]☢ 要確認：到着予定日のご連絡が確認できていません[/title]{{locationName}}宛の発注（{{orderRole}}）について、\n依頼から{{daysSince}}日経っても到着予定日のご連絡が確認できていません。[/info]\nご確認をお願いします。',
+      advShortageNotice: '{{to}}\n[info][title]📦 {{advName}}さんより、備品不足の報告が届きました[/title]場所｜{{locationName}}\n{{items}}\n[/info]',
       weekendCheckRequest: '{{to}}{{staffName}}さん\nお疲れ様です！\n本日{{locationName}}を最後に使うかと思います。\nモデルを出る前に備品確認をお願いいたします！！\n\n⚠️⚠️アプリでの備品報告を必ずお願いいたします⚠️⚠️\n{{appUrl}}',
       weekendCheckFollowup: '{{to}}{{staffName}}さん\nお疲れ様です。{{locationName}}の本日分の備品確認がまだできておりません！\nお手数ですが、アプリから在庫確認を必ずお願いいたします🙇\n\n⚠️⚠️アプリでの備品報告を必ずお願いいたします⚠️⚠️\n{{appUrl}}',
       deliveryCompletionReminder: '{{to}}{{staffName}}さん\nお疲れ様です。{{locationName}}宛の備品の配置予定日（{{visitDate}}）を過ぎていますが、\nまだ配置報告が確認できていません。\n\n⚠️⚠️アプリでの配置報告を必ずお願いいたします⚠️⚠️\n{{appUrl}}\n\n※忘れた場合もアプリから記録をお願いします。',
-      newCompletionViewingLocationNotice: '{{to}}\nカレンダーから新しい完成見学会の枠を検出したため、拠点として自動登録しました。\n\n{{sections}}\n\n拠点名・施主の氏名（機械的に分割しているため不正確な場合があります）\n・識別キーワードは、必要に応じて設定画面の「拠点」から修正してください\n{{appUrl}}',
+      newCompletionViewingLocationNotice: '{{to}}\nカレンダーから新しい完成見学会の枠を検出したため、拠点として自動登録しました。\n[info][title]自動登録した拠点[/title]{{sections}}[/info]\n拠点名・施主の氏名（機械的に分割しているため不正確な場合があります）\n・識別キーワードは、必要に応じて設定画面の「拠点」から修正してください\n{{appUrl}}',
       // ---- メッセージの部品（品目の書き方・見出し・注意書き）。GAS側 MessageTemplates.gs と同じ既定値にすること ----
       itemLineOrder: '・{{itemName}}｜{{qty}}{{unit}}{{unitNote}}',
       itemLineShortage: '・{{itemName}}｜{{qty}}{{unit}}',
@@ -1827,7 +1827,7 @@
       { key: 'orderRequestOperations', label: '発注依頼文（業務管理宛）', vars: '{{sections}}＝品目一覧（拠点ごとにまとめた文字列。拠点の見出し・品目の書き方は下の「メッセージの部品」で変更できます）／{{to}}＝業務管理担当者へのメンション（「連携設定」タブでChatworkアカウントIDを登録した場合のみ機能。カンマ区切りで複数人も可、全員分メンションされます。未登録なら空欄＝今まで通りルーム全体宛）' },
       { key: 'orderRequestMarketing', label: '発注依頼文（集客・マーケ宛）', vars: '{{sections}}＝品目一覧（拠点ごとにまとめた文字列。拠点の見出し・品目の書き方は下の「メッセージの部品」で変更できます）／{{to}}＝集客・マーケ担当者へのメンション（「連携設定」タブでChatworkアカウントIDを登録した場合のみ機能。カンマ区切りで複数人も可、全員分メンションされます。未登録なら空欄＝今まで通りルーム全体宛）' },
       { key: 'orderRequestAdvSelf', label: '準備依頼文（ADV本人手配）', vars: '{{to}}＝【必須・消さないでください】藤田さん・配置予定者へのメンション（送信時にGASが自動付与、プレビューでは空欄）。消すと宛先に通知が届かなくなります（エラー表示はありません）／{{sections}}＝品目一覧（拠点ごとに配置予定者名も入る。見出し・品目の書き方・配置予定者の表記は下の「メッセージの部品」で変更できます）／{{appUrl}}＝アプリURL' },
-      { key: 'deliveryRequest', label: '運搬依頼文（配達担当ADVへ）', vars: '{{to}}＝【必須・消さないでください】Chatwork TOメンション。消すと宛先に通知が届かなくなります（エラー表示はありません）／{{staffName}}＝担当者名／{{locationName}}＝拠点名／{{visitDateLabel}}＝訪問予定日（例：9/27(土)）※「配置完了リマインド文」の{{visitDate}}とは別の変数名です／{{items}}＝品目一覧（「▸拠点名」の見出し＋業者発注分＋同じ拠点でまだ配置報告されていないADV本人手配分＋印刷物の注意書き。同じ担当者・同じ訪問日の発注はまとめて1通に。拠点名が入るため、本文の{{locationName}}と重なる場合は本文側を調整してください。見出し・品目の書き方・注意書きは下の「メッセージの部品」で変更できます）／{{appUrl}}＝アプリURL' },
+      { key: 'deliveryRequest', label: '運搬依頼文（配達担当ADVへ）', vars: '{{to}}＝【必須・消さないでください】Chatwork TOメンション。消すと宛先に通知が届かなくなります（エラー表示はありません）／{{staffName}}＝担当者名／{{locationName}}＝拠点名／{{arrivalDateLabel}}＝備品が事務所に届く予定日（例：10/7(水)。到着日が複数に分かれるときは「10/7(水)・10/9(金)」のように並びます）／{{visitDateLabel}}＝この担当ADVがモデルハウスへ運搬・配置に行く予定日（カレンダーの訪問予定から自動決定。例：9/27(土)）※「配置完了リマインド文」の{{visitDate}}とは別の変数名です／{{items}}＝品目一覧（「▸拠点名」の見出し＋業者発注分＋同じ拠点でまだ配置報告されていないADV本人手配分＋印刷物の注意書き。同じ担当者・同じ訪問日の発注はまとめて1通に。拠点名が入るため、本文の{{locationName}}と重なる場合は本文側を調整してください。見出し・品目の書き方・注意書きは下の「メッセージの部品」で変更できます）／{{appUrl}}＝アプリURL' },
       { key: 'staleCheckNotice', label: '未確認アラート文（次の訪問者へ）', vars: '{{to}}＝【必須・消さないでください】Chatwork TOメンション。消すと宛先に通知が届かなくなります／{{staffName}}＝担当者名／{{locationName}}＝拠点名／{{daysSince}}＝未確認日数／{{appUrl}}＝アプリURL' },
       { key: 'staleOrderReplyNotice', label: '到着日未確定の要確認通知文（藤田さん宛）', vars: '{{to}}＝【必須・消さないでください】Chatwork TOメンション。消すと宛先に通知が届かなくなります／{{locationName}}＝拠点名／{{orderRole}}＝発注担当区分／{{daysSince}}＝発注からの経過日数／※{{appUrl}}はこのテンプレートでは使えません（書いても空欄になります）' },
       { key: 'advShortageNotice', label: 'ADV不足報告の共有通知文（藤田さん宛）', vars: '{{to}}＝【必須・消さないでください】藤田さんへのメンション。消すと宛先に通知が届かなくなります／{{advName}}＝報告したADV名／{{locationName}}＝拠点名／{{items}}＝品目一覧（品目の書き方は下の「メッセージの部品」で変更できます）／※{{appUrl}}はこのテンプレートでは使えません（書いても空欄になります）' },
@@ -1873,6 +1873,7 @@
       return (
         <div className="bg-white border border-gray-200 mx-4 p-4 space-y-4">
           <p className="text-xs text-gray-500">Chatworkへ自動送信される文面のテンプレートです。{'{{}}'}で囲まれた部分は自動で置き換わります。改行もそのまま反映されます。</p>
+          <p className="text-xs text-gray-500">Chatworkの囲み枠（グレーのカード表示）は、{'[info][title]見出し[/title]本文[/info]'}と書くと使えます。見出しと本文の両方を囲めるので、「このお願いの要点」「品目一覧」などを枠に入れると見やすくなります。{'[info]'}と{'[/info]'}は必ずセットで書いてください（片方が欠けると枠が表示されません）。</p>
           <p className="text-xs text-rose-600 bg-rose-50 border border-rose-200 p-2">
             ⚠️重要：{'{{}}'}の中のつづりを一文字でも間違えたり、そのテンプレートに存在しない変数名を書いたりすると、エラーは表示されずその部分だけ空欄のまま静かに送信されます。
             特に「【必須】」と書かれた{'{{to}}'}を誤って消したり書き換えたりすると、Chatworkでの宛先メンションが付かず誰にも通知が届きません（送信自体は正常に完了したように見えます）。
