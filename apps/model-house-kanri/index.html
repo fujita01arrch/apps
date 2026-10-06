@@ -373,7 +373,7 @@
       orderRequestOperations: '{{to}}\nお疲れ様です！\n[info][title]モデルハウス・見学会について下記備品が少なくなってきましたので、発注をお願いいたします。[/title]{{sections}}\n[/info]\n\n到着予定日が分かりましたら、教えていただけますと助かります🙇\nよろしくお願いいたします。',
       orderRequestMarketing: '{{to}}\nお疲れ様です！\n[info][title]モデルハウス・見学会について下記備品が少なくなってきましたので、ご用意をお願いしたいです。[/title]{{sections}}\n[/info]\n\nご用意いただけそうな日が分かりましたらお知らせくださると助かります🙇\nよろしくお願いいたします。',
       orderRequestAdvSelf: '{{to}}\nお疲れ様です！\n[info][title]下記備品が不足していますので、次回行かれる際に配置をお願いいたします。[/title]{{sections}}{{printNote}}\n[/info]\n\n⚠️⚠️アプリでの配置報告を必ずお願いいたします⚠️⚠️\n{{appUrl}}',
-      deliveryRequest: '{{to}}{{staffName}}さん\nお疲れ様です！\n[info][title]備品の運搬・配置のお願い[/title]事務所に届く日｜{{arrivalDateLabel}}\nモデルに行く日｜{{visitDateLabel}}\n\n{{items}}\n[/info]\n\n到着後にロッカー前に用意しますので、配置をお願いいたします！\nご都合が合わない場合はお手数ですが藤田か染矢にご一報ください。\n\n⚠️⚠️アプリでの配置報告を必ずお願いいたします⚠️⚠️\n{{appUrl}}',
+      deliveryRequest: '{{to}}{{staffName}}さん\nお疲れ様です！\n[info][title]備品の運搬・配置のお願い[/title]{{arrivalLine}}モデルに行く日｜{{visitDateLabel}}\n\n{{items}}\n[/info]\n\n{{guidance}}\nご都合が合わない場合はお手数ですが藤田か染矢にご一報ください。\n\n⚠️⚠️アプリでの配置報告を必ずお願いいたします⚠️⚠️\n{{appUrl}}',
       staleCheckNotice: '{{to}}{{staffName}}さん\nお疲れ様です。\n[info][title]在庫確認のお願い[/title]▸{{locationName}}\n{{daysSince}}日以上、備品の在庫確認が行われていません。\n{{visitDateLabel}}に訪問される際に、アプリから在庫確認をお願いできますでしょうか。[/info]\n\n{{appUrl}}',
       staleOrderReplyNotice: '{{to}}\nお疲れ様です。\n[info][title]☢ 要確認：到着予定日のご連絡が確認できていません[/title]▸{{locationName}}（{{orderRole}}宛の発注）\n{{items}}\n依頼から{{daysSince}}日経っても、到着予定日のご連絡が確認できていません。\n{{orderRole}}に確認をお願いします。[/info]',
       advShortageNotice: '{{to}}\n[info][title]📦 {{advName}}さんより、備品不足の報告が届きました[/title]▸{{locationName}}\n{{items}}\n[/info]',
@@ -389,13 +389,18 @@
       assigneeLabel: '配置予定｜{{staffName}}さん\nモデルに行く日｜{{visitDateLabel}}',
       assigneeUnknownLabel: '配置予定｜未定',
       deliveryLocationHeading: '▸{{locationName}}',
+      deliveryArrivalLine: '事務所に届く日｜{{arrivalDateLabel}}',
+      deliveryWarehouseHeading: '【倉庫にある分】',
+      deliveryWarehouseNote: '業務管理より：「{{note}}」',
+      deliveryGuidanceOffice: '到着後にロッカー前に用意しますので、配置をお願いいたします！',
+      deliveryGuidanceWarehouse: '倉庫にある分は、お手数ですが、持ち出して配置をお願いいたします！',
       deliverySelfPrepareNote: '※印刷物関係はご自身で印刷等のご協力をお願いいたします🙇',
       newLocationLine: '・{{locationName}}（{{periodLabel}}／{{address}}）',
       newLocationSkippedHeader: '※以下は既存拠点「〇〇」と同一とみなしスキップしました（重複登録防止）：',
       newLocationSkippedLine: '・{{locationName}} → 既存「{{existingLocationName}}」'
     };
     // 「メッセージの部品」のキー。メッセージ本文と違い、空欄で保存したら空のまま使う（例：注意書きを無くす）。
-    const PART_TEMPLATE_KEYS = ['itemLineOrder', 'itemLineShortage', 'itemLineDelivery', 'sectionHeading', 'assigneeLabel', 'assigneeUnknownLabel', 'deliveryLocationHeading', 'deliverySelfPrepareNote', 'newLocationLine', 'newLocationSkippedHeader', 'newLocationSkippedLine'];
+    const PART_TEMPLATE_KEYS = ['itemLineOrder', 'itemLineShortage', 'itemLineDelivery', 'sectionHeading', 'assigneeLabel', 'assigneeUnknownLabel', 'deliveryLocationHeading', 'deliveryArrivalLine', 'deliveryWarehouseHeading', 'deliveryWarehouseNote', 'deliveryGuidanceOffice', 'deliveryGuidanceWarehouse', 'deliverySelfPrepareNote', 'newLocationLine', 'newLocationSkippedHeader', 'newLocationSkippedLine'];
     function messageTemplateOf(config, key) {
       const saved = config.messageTemplates && config.messageTemplates[key];
       if (PART_TEMPLATE_KEYS.includes(key)) return typeof saved === 'string' ? saved : DEFAULT_MESSAGE_TEMPLATES[key];
@@ -815,6 +820,7 @@
                         発注 ×{line.requestedLots ?? 1}{item.orderUnit || ''}
                         {order.status === '依頼送信済み' && order.requestedAt ? `／発注日 ${order.requestedAt.slice(0, 10)}` : ''}
                         {order.status === '配達待ち' && order.deliveryScheduledDate ? `／鴨江到着予定 ${order.deliveryScheduledDate}` : ''}
+                        {order.status === '配達待ち' && order.fulfillment === 'warehouse' ? '／倉庫から持ち出し' : ''}
                         {order.status === '配達待ち' && order.deliveryVisitDate ? `／運搬・配置予定 ${order.deliveryVisitDate}` : ''}
                         {order.status === '配達待ち' && order.deliveryAssignee ? `／配達担当 ${order.deliveryAssignee.name}` : ''}
                       </div>
@@ -1042,6 +1048,7 @@
                       </div>
                     )}
                     {o.deliveryScheduledDate && <div className="text-[10px] text-gray-400 mt-0.5">鴨江到着予定：{o.deliveryScheduledDate}</div>}
+                    {o.fulfillment === 'warehouse' && <div className="text-xs text-amber-700 mt-0.5">倉庫にあります（持ち出して配置してください）{o.warehouseNote ? '　業務管理より：「' + o.warehouseNote + '」' : ''}</div>}
                     {hasMissed && (
                       <div className="text-[10px] text-rose-500 mt-0.5">
                         未配置：{o.items.filter(i => o.missedItemIds.includes(i.itemId)).map(i => i.itemName).join('、')}（次の訪問時にお願いします）
@@ -2022,7 +2029,7 @@
       { key: 'orderRequestOperations', label: '発注依頼文（業務管理宛）', vars: '{{sections}}＝品目一覧（拠点ごとにまとめた文字列。拠点の見出し・品目の書き方は下の「メッセージの部品」で変更できます）／{{to}}＝業務管理担当者へのメンション（「連携設定」タブでChatworkアカウントIDを登録した場合のみ機能。カンマ区切りで複数人も可、全員分メンションされます。未登録なら空欄＝今まで通りルーム全体宛）' },
       { key: 'orderRequestMarketing', label: '発注依頼文（集客・マーケ宛）', vars: '{{sections}}＝品目一覧（拠点ごとにまとめた文字列。拠点の見出し・品目の書き方は下の「メッセージの部品」で変更できます）／{{to}}＝集客・マーケ担当者へのメンション（「連携設定」タブでChatworkアカウントIDを登録した場合のみ機能。カンマ区切りで複数人も可、全員分メンションされます。未登録なら空欄＝今まで通りルーム全体宛）' },
       { key: 'orderRequestAdvSelf', label: '準備依頼文（ADV本人手配）', vars: '{{to}}＝【必須・消さないでください】藤田さん・配置予定者へのメンション（送信時にGASが自動付与、プレビューでは空欄）。消すと宛先に通知が届かなくなります（エラー表示はありません）／{{sections}}＝品目一覧（拠点ごとに「▸拠点名」「配置予定｜配置予定者」「モデルに行く日｜日付」「・品目」が入る。見出し・品目の書き方・配置予定者の表記は下の「メッセージの部品」で変更できます）／{{printNote}}＝印刷物の注意書き（品目一覧の下に空行をあけて入る。注意書きは下の「メッセージの部品」で変更・削除できます。送信時にGASが入れるため、プレビューには出ません）／{{appUrl}}＝アプリURL' },
-      { key: 'deliveryRequest', label: '運搬依頼文（配達担当ADVへ）', vars: '{{to}}＝【必須・消さないでください】Chatwork TOメンション。消すと宛先に通知が届かなくなります（エラー表示はありません）／{{staffName}}＝担当者名／{{locationName}}＝拠点名／{{arrivalDateLabel}}＝備品が事務所に届く予定日（例：10/7(水)。到着日が複数に分かれるときは「10/7(水)・10/9(金)」のように並びます）／{{visitDateLabel}}＝この担当ADVがモデルハウスへ運搬・配置に行く予定日（カレンダーの訪問予定から自動決定。例：9/27(土)）※「配置完了リマインド文」の{{visitDate}}とは別の変数名です／{{items}}＝品目一覧（「▸拠点名」の見出し＋業者発注分＋同じ拠点でまだ配置報告されていないADV本人手配分＋印刷物の注意書き。同じ担当者・同じ訪問日の発注はまとめて1通に。拠点名が入るため、本文の{{locationName}}と重なる場合は本文側を調整してください。見出し・品目の書き方・注意書きは下の「メッセージの部品」で変更できます）／{{appUrl}}＝アプリURL' },
+      { key: 'deliveryRequest', label: '運搬依頼文（配達担当ADVへ）', vars: '{{to}}＝【必須・消さないでください】Chatwork TOメンション。消すと宛先に通知が届かなくなります（エラー表示はありません）／{{staffName}}＝担当者名／{{locationName}}＝拠点名／{{arrivalLine}}＝「事務所に届く日｜10/7(水)」の行（事務所に届く分があるときだけ。倉庫から持ち出す分だけのときは空欄。書き方は下の「メッセージの部品」で変更できます）／{{arrivalDateLabel}}＝備品が事務所に届く予定日（到着日が複数に分かれるときは「10/7(水)・10/9(金)」のように並びます）／{{guidance}}＝枠の下の案内文（事務所に届く分／倉庫にある分、それぞれの動き方。部品で変更できます）／{{visitDateLabel}}＝この担当ADVがモデルハウスへ運搬・配置に行く予定日（カレンダーの訪問予定から自動決定。例：9/27(土)）※「配置完了リマインド文」の{{visitDate}}とは別の変数名です／{{items}}＝品目一覧（「▸拠点名」の見出し＋業者発注分＋同じ拠点でまだ配置報告されていないADV本人手配分＋印刷物の注意書き。同じ担当者・同じ訪問日の発注はまとめて1通に。拠点名が入るため、本文の{{locationName}}と重なる場合は本文側を調整してください。見出し・品目の書き方・注意書きは下の「メッセージの部品」で変更できます）／{{appUrl}}＝アプリURL' },
       { key: 'staleCheckNotice', label: '未確認アラート文（次の訪問者へ）', vars: '{{to}}＝【必須・消さないでください】Chatwork TOメンション。消すと宛先に通知が届かなくなります／{{staffName}}＝担当者名／{{locationName}}＝拠点名／{{daysSince}}＝未確認日数／{{visitDateLabel}}＝この担当者が次にこの拠点へ行く予定日（カレンダーの訪問予定から自動決定。例：10/9(金)）／{{appUrl}}＝アプリURL' },
       { key: 'staleOrderReplyNotice', label: '到着日未確定の要確認通知文（藤田さん宛）', vars: '{{to}}＝【必須・消さないでください】Chatwork TOメンション。消すと宛先に通知が届かなくなります／{{locationName}}＝拠点名／{{orderRole}}＝発注担当区分／{{items}}＝到着予定日が未確認の品目一覧（品目の書き方は下の「メッセージの部品」で変更できます）／{{daysSince}}＝発注からの経過日数／※{{appUrl}}はこのテンプレートでは使えません（書いても空欄になります）' },
       { key: 'advShortageNotice', label: 'ADV不足報告の共有通知文（藤田さん宛）', vars: '{{to}}＝【必須・消さないでください】藤田さんへのメンション。消すと宛先に通知が届かなくなります／{{advName}}＝報告したADV名／{{locationName}}＝拠点名／{{items}}＝品目一覧（品目の書き方は下の「メッセージの部品」で変更できます）／※{{appUrl}}はこのテンプレートでは使えません（書いても空欄になります）' },
@@ -2037,6 +2044,11 @@
       { key: 'assigneeLabel', part: true, rows: 2, label: '配置予定者の表記（準備依頼文）', vars: '{{staffName}}＝配置予定のADVの名前／{{visitDateLabel}}＝その人がこの拠点へ行く予定日（カレンダーの訪問予定。例：10/9(金)）。カレンダーから配置予定者が分かった拠点の、見出しの下に入ります（2行にしてもOK）' },
       { key: 'assigneeUnknownLabel', part: true, rows: 2, label: '配置予定者が未定のときの表記（準備依頼文）', vars: '変数はありません。配置予定者がカレンダーから分からなかった拠点の、見出しの下に入ります' },
       { key: 'deliveryLocationHeading', part: true, rows: 2, label: '拠点の見出し（運搬依頼文）', vars: '{{locationName}}＝拠点名。運搬依頼文の{{items}}の先頭に入ります。空欄にすると見出しなしになります' },
+      { key: 'deliveryArrivalLine', part: true, rows: 2, label: '「事務所に届く日」の行（運搬依頼文）', vars: '{{arrivalDateLabel}}＝備品が事務所に届く予定日。運搬依頼文の{{arrivalLine}}になります（事務所に届く分があるときだけ出ます。倉庫にある分だけのときは出ません）' },
+      { key: 'deliveryWarehouseHeading', part: true, rows: 2, label: '「倉庫にある分」の見出し（運搬依頼文）', vars: '変数はありません。業務管理の返信が「倉庫にあるものを持って行ってください」だった品目の上に入ります。空欄にすると見出しなしになります' },
+      { key: 'deliveryWarehouseNote', part: true, rows: 2, label: '業務管理の返信の添え方（運搬依頼文の倉庫にある分）', vars: '{{note}}＝業務管理の返信の原文（宛名などは除く）。倉庫にある分の品目の下に入ります' },
+      { key: 'deliveryGuidanceOffice', part: true, rows: 2, label: '案内文：事務所に届く分（運搬依頼文）', vars: '変数はありません。運搬依頼文の{{guidance}}の中で、事務所に届く分があるときに入ります' },
+      { key: 'deliveryGuidanceWarehouse', part: true, rows: 2, label: '案内文：倉庫にある分（運搬依頼文）', vars: '変数はありません。運搬依頼文の{{guidance}}の中で、倉庫にある分があるときに入ります' },
       { key: 'deliverySelfPrepareNote', part: true, rows: 3, label: '印刷物の注意書き（運搬依頼文・準備依頼文）', vars: '変数はありません。運搬依頼文に、まだ配置報告されていないADV本人手配の品目を載せたときだけ、その品目の下に入ります。準備依頼文では、品目一覧の下に必ず入ります。空欄にすると注意書きなしになります' },
       { key: 'newLocationLine', part: true, rows: 2, label: '新規拠点1行の書き方（完成見学会の新規拠点の通知）', vars: '{{locationName}}＝拠点名／{{periodLabel}}＝期間／{{address}}＝住所。拠点の数だけ並び、通知の{{sections}}の中に入ります' },
       { key: 'newLocationSkippedHeader', part: true, rows: 2, label: '重複スキップの見出し（完成見学会の新規拠点の通知）', vars: '変数はありません。既存拠点と同一とみなしてスキップした拠点があるときだけ、通知の{{sections}}の後半に入ります' },
@@ -2847,6 +2859,7 @@
               <div className="text-[10px] text-gray-400 mt-0.5">
                 発注日：{order.requestedAt ? order.requestedAt.slice(0, 10) : '不明'}
                 {order.deliveryScheduledDate ? `／鴨江到着予定 ${order.deliveryScheduledDate}` : ''}
+                {order.fulfillment === 'warehouse' ? '／倉庫から持ち出し（業務管理の返信）' : ''}
               </div>
               {order.orderRole === 'ADV本人手配' ? (
                 <div className="text-[10px] text-gray-400 mt-0.5">ご本人手配（ADVが直接調達・配置）</div>
