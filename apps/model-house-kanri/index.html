@@ -607,7 +607,9 @@
       const ITEM_STALE_DAYS = 30;
       const staleNoteFor = (item) => {
         if (isWithdrawal) return null;
-        const at = stockLevels[stockDocId(location.id, item.id)]?.lastCheckedAt;
+        // 備品ごとの記録が無い場合は、拠点の最終確認日で代用する（記録の整理などで備品ごとの記録が無くても、
+        // 拠点が最近確認されていれば、強調しない）。どちらも無ければ「まだ確認されていません」。
+        const at = stockLevels[stockDocId(location.id, item.id)]?.lastCheckedAt || location.lastCheckedAt;
         if (!at) return 'まだ確認されていません';
         const days = Math.floor((Date.now() - new Date(at).getTime()) / 86400000);
         return days >= ITEM_STALE_DAYS ? `${days}日間、確認されていません` : null;
