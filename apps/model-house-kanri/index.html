@@ -1572,6 +1572,54 @@
 
       const filtered = items.filter(i => i.category === category).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
+      // ---- 備品の並び替え（2026-10-06）----
+      // 在庫確認の画面は、全カテゴリの備品を「順番の数字（order）」で一列に並べる。そのため、カテゴリごとに
+      // 番号の帯（1000刻み）を持たせ、帯の中で10刻みに振り直す。移動のたびに全カテゴリを振り直すので、
+      // 以前に追加した備品の番号の重複（999のまま）やかたよりも、あわせて整う。
+      const [busy, setBusy] = useState(false);
+      const buildOrders = (swapId, dir) => {
+        const result = {};
+        const cats = [...ITEM_CATEGORIES, null]; // null＝カテゴリが不明な備品（最後の帯）
+        cats.forEach((cat, ci) => {
+          const list = items
+            .filter(i => (cat === null ? !ITEM_CATEGORIES.includes(i.category) : i.category === cat))
+            .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+          if (swapId) {
+            const idx = list.findIndex(i => i.id === swapId);
+            const j = idx + dir;
+            if (idx !== -1 && j >= 0 && j < list.length) { const t = list[idx]; list[idx] = list[j]; list[j] = t; }
+          }
+          list.forEach((it, k) => { result[it.id] = ci * 1000 + (k + 1) * 10; });
+        });
+        return result;
+      };
+      const applyOrders = async (orders) => {
+        setBusy(true);
+        try {
+          const batch = writeBatch(db);
+          let n = 0;
+          items.forEach(it => {
+            if (orders[it.id] !== undefined && it.order !== orders[it.id]) {
+              batch.update(docRef('equipmentItems', it.id), { order: orders[it.id], updatedAt: nowIso() });
+              n++;
+            }
+          });
+          if (n > 0) await batch.commit();
+          return n;
+        } catch (e) {
+          showAlert('並び替えに失敗しました。' + (e && e.message ? ' ' + e.message : ''));
+          return -1;
+        } finally {
+          setBusy(false);
+        }
+      };
+      const move = (item, dir) => applyOrders(buildOrders(item.id, dir));
+      const tidy = async () => {
+        const n = await applyOrders(buildOrders(null, 0));
+        if (n === 0) showAlert('すでに整っています。');
+        else if (n > 0) showAlert('並びを整えました（' + n + '件）。');
+      };
+
       return (
         <div>
           <div className="flex items-center justify-between gap-2 px-4 mb-2 flex-wrap">
@@ -1580,12 +1628,20 @@
                 <button key={c} onClick={() => setCategory(c)} className={`text-[11px] tracking-widest px-3 py-1.5 whitespace-nowrap transition-colors ${category === c ? 'bg-gray-100 text-gray-800 font-medium' : 'text-gray-400 hover:bg-gray-50'}`}>{c}</button>
               ))}
             </div>
-            <button onClick={() => setEditing(null)} className="flex items-center gap-1 text-[11px] tracking-widest bg-gray-800 text-white hover:bg-gray-900 px-3 py-1.5 shrink-0">
-              <PlusIcon className="w-3.5 h-3.5" />備品を追加
-            </button>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => showConfirm('全カテゴリの備品の並びを、カテゴリごとに整えます（いまの順番は、そのまま保ちます）。よろしいですか？', tidy, '整える')}
+                disabled={busy}
+                className="text-[11px] tracking-widest border border-gray-300 text-gray-600 hover:bg-gray-100 px-3 py-1.5 disabled:opacity-50"
+              >並びを整える</button>
+              <button onClick={() => setEditing(null)} className="flex items-center gap-1 text-[11px] tracking-widest bg-gray-800 text-white hover:bg-gray-900 px-3 py-1.5 shrink-0">
+                <PlusIcon className="w-3.5 h-3.5" />備品を追加
+              </button>
+            </div>
           </div>
+          <p className="text-[10px] text-gray-400 px-4 mb-2">▲▼で順番を入れ替えると、在庫確認の画面にも同じ順で出ます。</p>
           <div className="bg-white border border-gray-200 mx-4 divide-y divide-gray-100">
-            {filtered.map(item => (
+            {filtered.map((item, idx) => (
               <div key={item.id} className={`flex items-center justify-between px-4 py-3 ${!item.isActive ? 'opacity-50' : ''}`}>
                 <div>
                   <div className="text-sm text-gray-800">{item.name}{!item.isActive && '（無効）'}</div>
@@ -1595,6 +1651,8 @@
                   </div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
+                  <button onClick={() => move(item, -1)} disabled={busy || idx === 0} aria-label="上へ" title="上へ" className="text-gray-400 hover:text-gray-700 disabled:opacity-25 text-xs px-1">▲</button>
+                  <button onClick={() => move(item, 1)} disabled={busy || idx === filtered.length - 1} aria-label="下へ" title="下へ" className="text-gray-400 hover:text-gray-700 disabled:opacity-25 text-xs px-1">▼</button>
                   <button onClick={() => setEditing(item)} className="text-gray-400 hover:text-gray-700"><EditIcon className="w-4 h-4" /></button>
                   <button
                     onClick={() => showConfirm(`「${item.name}」を${item.isActive ? '無効化' : '再度有効化'}しますか？`, () => toggleActive(item), item.isActive ? '無効化する' : '有効化する')}
