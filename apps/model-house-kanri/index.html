@@ -1133,6 +1133,11 @@
               {openId === g.id && (
                 <div className="px-4 pb-4 border-t border-gray-100 pt-3">
                   <p className="text-sm text-gray-600 whitespace-pre-wrap leading-relaxed">{g.bodyText}</p>
+                  {g.linkUrl && (
+                    <a href={g.linkUrl} target="_blank" rel="noopener noreferrer" className="inline-block mt-3 text-xs tracking-widest bg-gray-800 text-white hover:bg-gray-900 px-4 py-2">
+                      {g.linkLabel || '開く'}
+                    </a>
+                  )}
                   {(g.imageUrls || []).map((url, i) => (
                     <img key={i} src={url} alt="" className="mt-3 max-w-full border border-gray-200" />
                   ))}
@@ -1795,10 +1800,14 @@
       const [title, setTitle] = useState(guide?.title || '');
       const [bodyText, setBodyText] = useState(guide?.bodyText || '');
       const [imageUrlsText, setImageUrlsText] = useState((guide?.imageUrls || []).join('\n'));
+      const [linkUrl, setLinkUrl] = useState(guide?.linkUrl || '');
+      const [linkLabel, setLinkLabel] = useState(guide?.linkLabel || '');
       const [saving, setSaving] = useState(false);
 
       const save = async () => {
         if (!title.trim()) { showAlert('タイトルを入力してください。'); return; }
+        // リンクは、https:// または http:// で始まるものだけ受け付ける（誤入力や、不正なリンクを防ぐ）
+        if (linkUrl.trim() && !/^https?:\/\//i.test(linkUrl.trim())) { showAlert('リンクのURLは、https:// から始めてください。'); return; }
         setSaving(true);
         try {
           const ts = nowIso();
@@ -1806,9 +1815,9 @@
           const imageUrls = imageUrlsText.split('\n').map(s => s.trim()).filter(Boolean);
           if (isNew) {
             const id = 'guide-' + Date.now();
-            await setDoc(docRef('guides', id), { id, title, bodyText, imageUrls, order: 999, updatedAt: ts, updatedBy });
+            await setDoc(docRef('guides', id), { id, title, bodyText, imageUrls, linkUrl: linkUrl.trim(), linkLabel: linkLabel.trim(), order: 999, updatedAt: ts, updatedBy });
           } else {
-            await updateDoc(docRef('guides', guide.id), { title, bodyText, imageUrls, updatedAt: ts, updatedBy });
+            await updateDoc(docRef('guides', guide.id), { title, bodyText, imageUrls, linkUrl: linkUrl.trim(), linkLabel: linkLabel.trim(), updatedAt: ts, updatedBy });
           }
           onClose();
         } catch (e) {
@@ -1826,6 +1835,12 @@
             <FormField label="本文"><textarea rows={10} className={inputCls} value={bodyText} onChange={e => setBodyText(e.target.value)} /></FormField>
             <FormField label="画像URL（1行に1つ。Googleドライブ等の共有リンクを貼り付け）">
               <textarea rows={3} className={inputCls} value={imageUrlsText} onChange={e => setImageUrlsText(e.target.value)} placeholder="https://..." />
+            </FormField>
+            <FormField label="資料へのリンク（PDFなどのURL。入れると、本文の下に「開く」ボタンが出ます。空欄ならなし）">
+              <input className={inputCls} value={linkUrl} onChange={e => setLinkUrl(e.target.value)} placeholder="https://..." />
+            </FormField>
+            <FormField label="ボタンの表示名（空欄なら「開く」）">
+              <input className={inputCls} value={linkLabel} onChange={e => setLinkLabel(e.target.value)} placeholder="例：PDFを開く" />
             </FormField>
             <div className="flex justify-end gap-2 mt-4">
               <button onClick={onClose} className="px-4 py-2 text-xs tracking-widest border border-gray-300 text-gray-600 hover:bg-gray-100">キャンセル</button>
