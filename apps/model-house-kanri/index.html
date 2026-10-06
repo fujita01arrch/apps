@@ -1033,7 +1033,7 @@
                       <div className="text-sm text-gray-800">{o.locationName}</div>
                       {isMine && <span className="text-[9px] tracking-widest bg-indigo-600 text-white px-1.5 py-0.5 shrink-0">あなた宛</span>}
                     </div>
-                    <div className="text-[10px] text-gray-400 mt-0.5">{o.items.map(i => `${i.itemName}×${i.requestedLots ?? 1}${i.orderUnit || ''}`).join('、')}</div>
+                    <div className="text-[10px] text-gray-400 mt-0.5">{(hasMissed ? o.items.filter(i => o.missedItemIds.includes(i.itemId)) : o.items).map(i => `${i.itemName}×${i.requestedLots ?? 1}${i.orderUnit || ''}`).join('、')}</div>
                     {o.orderRole === 'ADV本人手配' && (
                       <div className="text-[10px] text-gray-400 mt-0.5">配置ができ次第「配置しました」を押してください。</div>
                     )}
