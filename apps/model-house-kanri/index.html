@@ -1051,7 +1051,7 @@
                     {o.fulfillment === 'warehouse' && <div className="text-xs text-amber-700 mt-0.5">倉庫にあります（持ち出して配置してください）{o.warehouseNote ? '　業務管理より：「' + o.warehouseNote + '」' : ''}</div>}
                     {hasMissed && (
                       <div className="text-[10px] text-rose-500 mt-0.5">
-                        未配置：{o.items.filter(i => o.missedItemIds.includes(i.itemId)).map(i => i.itemName).join('、')}（次の訪問時にお願いします）
+                        前回の配置漏れ：{o.items.filter(i => o.missedItemIds.includes(i.itemId)).map(i => i.itemName).join('、')}（次の訪問時にお願いします）
                       </div>
                     )}
                     <div className="flex gap-2 mt-2">
