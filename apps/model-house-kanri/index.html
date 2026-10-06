@@ -777,7 +777,13 @@
           )}
 
           <div className="bg-white border border-gray-200 mx-4 mt-2">
-            {relevantItems.map(item => {
+            {relevantItems.map((item, idx) => {
+              // グループの小見出し（薄いグレー）。前の備品とグループが変わるところに入れる（設定の備品の「グループ」）。
+              const prevGroup = idx > 0 ? (relevantItems[idx - 1].group || '') : '';
+              const groupHeading = (item.group && item.group !== prevGroup)
+                ? <div className="px-3 py-1.5 text-[11px] tracking-widest text-gray-500 bg-gray-100 border-b border-gray-100">{item.group}</div>
+                : null;
+              const renderRow = () => {
               // 進行中の発注がある品目は、持ち出しモードかどうかに関わらずステータス表示を優先する
               // （持ち出しモード側だけこのチェックを飛ばしていたため、発注中の品目でも数量入力できてしまう
               // 不整合があった。常にここで先に判定する）。
@@ -847,6 +853,8 @@
                   )}
                 </React.Fragment>
               );
+              };
+              return <React.Fragment key={item.id}>{groupHeading}{renderRow()}</React.Fragment>;
             })}
             {relevantItems.length === 0 && <p className="text-center text-xs text-gray-400 py-10">この拠点に紐づく備品がありません</p>}
           </div>
@@ -1472,7 +1480,7 @@
     const ORDER_ROLES = ['業務管理', '集客・マーケ', 'ADV本人手配'];
     const ITEM_CATEGORIES = ['商談用', '消耗品', '掃除用品', '鴨江個人用'];
 
-    const ItemEditModal = ({ item, onClose, showAlert }) => {
+    const ItemEditModal = ({ item, onClose, showAlert, allItems }) => {
       const isNew = !item;
       const [category, setCategory] = useState(item?.category || ITEM_CATEGORIES[0]);
       const [name, setName] = useState(item?.name || '');
@@ -1486,7 +1494,10 @@
       const [tapMax, setTapMax] = useState(item?.tapMax ?? 3);
       const [appliesToCompletionViewing, setAppliesToCompletionViewing] = useState(item?.appliesToCompletionViewing !== false);
       const [note, setNote] = useState(item?.note || '');
+      const [group, setGroup] = useState(item?.group || '');
       const [saving, setSaving] = useState(false);
+      // 候補：すでに使われているグループ名（同じ名前を選びやすくする）
+      const groupCandidates = useMemo(() => [...new Set((allItems || []).map(i => i.group).filter(Boolean))], [allItems]);
 
       const save = async () => {
         if (!name.trim()) { showAlert('品目名を入力してください。'); return; }
@@ -1502,6 +1513,7 @@
             tapIncrement: Math.max(1, Number(tapIncrement) || 1),
             tapMax: Math.max(1, Number(tapMax) || 1),
             appliesToCompletionViewing,
+            group: group.trim(),
             note, updatedAt: ts,
           };
           if (isNew) {
@@ -1552,6 +1564,10 @@
                 完成見学会でも使用する（オフにすると完成見学会の在庫確認画面には表示されません）
               </label>
             )}
+            <FormField label="グループ（在庫確認の画面で、グループごとに薄いグレーの小見出しが入ります。空欄なら小見出しなし）">
+              <input className={inputCls} list="item-group-candidates" value={group} onChange={e => setGroup(e.target.value)} placeholder="例：商談道具、掃除用具・消耗品" />
+              <datalist id="item-group-candidates">{groupCandidates.map(g => <option key={g} value={g} />)}</datalist>
+            </FormField>
             <FormField label="備考"><input className={inputCls} value={note} onChange={e => setNote(e.target.value)} /></FormField>
             <div className="flex justify-end gap-2 mt-4">
               <button onClick={onClose} className="px-4 py-2 text-xs tracking-widest border border-gray-300 text-gray-600 hover:bg-gray-100">キャンセル</button>
@@ -1573,25 +1589,22 @@
       const filtered = items.filter(i => i.category === category).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
       // ---- 備品の並び替え（2026-10-06）----
-      // 在庫確認の画面は、全カテゴリの備品を「順番の数字（order）」で一列に並べる。そのため、カテゴリごとに
-      // 番号の帯（1000刻み）を持たせ、帯の中で10刻みに振り直す。移動のたびに全カテゴリを振り直すので、
-      // 以前に追加した備品の番号の重複（999のまま）やかたよりも、あわせて整う。
+      // 在庫確認の画面は、全備品を「順番の数字（order）」で一列に並べる（グループは小見出しで区切るだけ）。
+      // ▲▼は、このカテゴリの一覧で隣り合う2つの備品の順番を入れ替える。念のため、全備品の順番の数字を
+      // 10刻みで振り直す（以前に追加した備品の番号の重複を解消する）。ほかの備品の相対的な位置は変わらない。
       const [busy, setBusy] = useState(false);
       const buildOrders = (swapId, dir) => {
-        const result = {};
-        const cats = [...ITEM_CATEGORIES, null]; // null＝カテゴリが不明な備品（最後の帯）
-        cats.forEach((cat, ci) => {
-          const list = items
-            .filter(i => (cat === null ? !ITEM_CATEGORIES.includes(i.category) : i.category === cat))
-            .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
-          if (swapId) {
-            const idx = list.findIndex(i => i.id === swapId);
-            const j = idx + dir;
-            if (idx !== -1 && j >= 0 && j < list.length) { const t = list[idx]; list[idx] = list[j]; list[j] = t; }
+        const rank = {};
+        [...items].sort((a, b) => (a.order ?? 0) - (b.order ?? 0)).forEach((it, k) => { rank[it.id] = (k + 1) * 10; });
+        if (swapId) {
+          const idx = filtered.findIndex(i => i.id === swapId);
+          const j = idx + dir;
+          if (idx !== -1 && j >= 0 && j < filtered.length) {
+            const a = filtered[idx].id, b = filtered[j].id;
+            const t = rank[a]; rank[a] = rank[b]; rank[b] = t;
           }
-          list.forEach((it, k) => { result[it.id] = ci * 1000 + (k + 1) * 10; });
-        });
-        return result;
+        }
+        return rank;
       };
       const applyOrders = async (orders) => {
         setBusy(true);
@@ -1614,11 +1627,6 @@
         }
       };
       const move = (item, dir) => applyOrders(buildOrders(item.id, dir));
-      const tidy = async () => {
-        const n = await applyOrders(buildOrders(null, 0));
-        if (n === 0) showAlert('すでに整っています。');
-        else if (n > 0) showAlert('並びを整えました（' + n + '件）。');
-      };
 
       return (
         <div>
@@ -1628,25 +1636,18 @@
                 <button key={c} onClick={() => setCategory(c)} className={`text-[11px] tracking-widest px-3 py-1.5 whitespace-nowrap transition-colors ${category === c ? 'bg-gray-100 text-gray-800 font-medium' : 'text-gray-400 hover:bg-gray-50'}`}>{c}</button>
               ))}
             </div>
-            <div className="flex items-center gap-2 shrink-0">
-              <button
-                onClick={() => showConfirm('全カテゴリの備品の並びを、カテゴリごとに整えます（いまの順番は、そのまま保ちます）。よろしいですか？', tidy, '整える')}
-                disabled={busy}
-                className="text-[11px] tracking-widest border border-gray-300 text-gray-600 hover:bg-gray-100 px-3 py-1.5 disabled:opacity-50"
-              >並びを整える</button>
-              <button onClick={() => setEditing(null)} className="flex items-center gap-1 text-[11px] tracking-widest bg-gray-800 text-white hover:bg-gray-900 px-3 py-1.5 shrink-0">
-                <PlusIcon className="w-3.5 h-3.5" />備品を追加
-              </button>
-            </div>
+            <button onClick={() => setEditing(null)} className="flex items-center gap-1 text-[11px] tracking-widest bg-gray-800 text-white hover:bg-gray-900 px-3 py-1.5 shrink-0">
+              <PlusIcon className="w-3.5 h-3.5" />備品を追加
+            </button>
           </div>
-          <p className="text-[10px] text-gray-400 px-4 mb-2">▲▼で順番を入れ替えると、在庫確認の画面にも同じ順で出ます。</p>
+          <p className="text-[10px] text-gray-400 px-4 mb-2">▲▼で順番を入れ替えると、在庫確認の画面にも同じ順で出ます。「グループ」を入れると、在庫確認の画面で、グループごとに薄いグレーの小見出しが入ります。</p>
           <div className="bg-white border border-gray-200 mx-4 divide-y divide-gray-100">
             {filtered.map((item, idx) => (
               <div key={item.id} className={`flex items-center justify-between px-4 py-3 ${!item.isActive ? 'opacity-50' : ''}`}>
                 <div>
                   <div className="text-sm text-gray-800">{item.name}{!item.isActive && '（無効）'}</div>
                   <div className="text-[10px] text-gray-400 mt-0.5">
-                    {item.orderRole} ／ 必要在庫数 {item.reorderPoint ?? '—'}{item.stockUnit}以上 ／ 発注単位 {item.orderUnit}{item.orderUnitLabel ? `（${item.orderUnitLabel}）` : ''}
+                    {item.group ? `グループ：${item.group} ／ ` : ''}{item.orderRole} ／ 必要在庫数 {item.reorderPoint ?? '—'}{item.stockUnit}以上 ／ 発注単位 {item.orderUnit}{item.orderUnitLabel ? `（${item.orderUnitLabel}）` : ''}
                     {item.category !== '鴨江個人用' && (item.appliesToCompletionViewing === false ? ' ／ 完成見学会：対象外' : ' ／ 完成見学会：対象')}
                   </div>
                 </div>
@@ -1663,7 +1664,7 @@
             ))}
             {filtered.length === 0 && <p className="px-4 py-6 text-center text-xs text-gray-400">このカテゴリの品目はまだありません</p>}
           </div>
-          {editing !== undefined && <ItemEditModal item={editing} onClose={() => setEditing(undefined)} showAlert={showAlert} />}
+          {editing !== undefined && <ItemEditModal item={editing} allItems={items} onClose={() => setEditing(undefined)} showAlert={showAlert} />}
         </div>
       );
     };
