@@ -1454,14 +1454,88 @@
       );
     };
 
-    const LocationsSettingsPanel = ({ locations, showAlert, showConfirm }) => {
+    // 無効にした拠点のデータを、完全に削除する（元に戻せない）。GAS（handleDeleteLocationData_）が実行する。
+    // 先に「確認用（dryRun）」で、消える件数を見せ、「削除」と入力してから実行する。
+    // 消すもの：在庫の記録・在庫確認の記録・拠点そのもの。消さないもの：発注の履歴。
+    const LocationDeleteModal = ({ location, user, onClose, showAlert }) => {
+      const [info, setInfo] = useState(null);
+      const [error, setError] = useState('');
+      const [typed, setTyped] = useState('');
+      const [busy, setBusy] = useState(true);
+      const firstLine = (e) => String((e && e.message) || e).split('\n')[0];
+
+      useEffect(() => {
+        let alive = true;
+        (async () => {
+          try {
+            const r = await callGasFunction('handleDeleteLocationData_', [{ locationId: location.id, dryRun: true, approverEmail: user.email }]);
+            if (alive) setInfo(r);
+          } catch (e) {
+            if (alive) setError(firstLine(e));
+          } finally {
+            if (alive) setBusy(false);
+          }
+        })();
+        return () => { alive = false; };
+      }, []);
+
+      const run = async () => {
+        setBusy(true);
+        try {
+          await callGasFunction('handleDeleteLocationData_', [{ locationId: location.id, dryRun: false, approverEmail: user.email }]);
+          showAlert('「' + location.name + '」のデータを削除しました。');
+          onClose();
+        } catch (e) {
+          setError(firstLine(e));
+          setBusy(false);
+        }
+      };
+
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white max-w-md w-full p-6 shadow-xl border border-gray-200">
+            <h3 className="font-serif tracking-wide text-sm text-gray-800 mb-1">拠点のデータを削除</h3>
+            <p className="text-xs text-gray-500 mb-3">{location.name}</p>
+            {busy && !info && !error && <p className="text-xs text-gray-400 py-4">確認しています...</p>}
+            {error && <p className="text-xs text-rose-600 bg-rose-50 border border-rose-200 p-2 mb-3">{error}</p>}
+            {info && (
+              <div className="text-xs text-gray-700 space-y-1 mb-3">
+                <p>削除するもの：</p>
+                <p className="pl-3">・在庫の記録：{info.stockLevels}件</p>
+                <p className="pl-3">・在庫確認の記録：{info.stockCheckSessions}件</p>
+                <p className="pl-3">・拠点そのもの（一覧から完全に消えます）</p>
+                <p className="text-gray-500">削除しないもの：発注の履歴（{info.ordersKept}件。統計や、過去の記録として残ります）</p>
+                <p className="text-rose-600 font-medium pt-1">この操作は、元に戻せません。</p>
+                <p className="pt-2">実行するには、下の欄に「削除」と入力してください。</p>
+                <input className={inputCls} value={typed} onChange={e => setTyped(e.target.value)} placeholder="削除" />
+              </div>
+            )}
+            <div className="flex justify-end gap-2 mt-3">
+              <button onClick={onClose} className="px-4 py-2 text-xs tracking-widest border border-gray-300 text-gray-600 hover:bg-gray-100">閉じる</button>
+              {info && (
+                <button onClick={run} disabled={busy || typed.trim() !== '削除'} className="px-4 py-2 text-xs tracking-widest bg-rose-600 text-white hover:bg-rose-700 disabled:opacity-40">
+                  {busy ? '処理中...' : '完全に削除する'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      );
+    };
+
+    const LocationsSettingsPanel = ({ locations, user, showAlert, showConfirm }) => {
       const [editing, setEditing] = useState(undefined); // undefined=閉じている, null=新規, obj=編集
+      const [deleting, setDeleting] = useState(null); // データ削除の対象の拠点
+      const [showInactive, setShowInactive] = useState(false); // 無効な拠点は、一覧の下で、たたんでおく
 
       const toggleActive = async (loc) => {
         await updateDoc(docRef('locations', loc.id), { isActive: !loc.isActive, updatedAt: nowIso() });
       };
 
       const typeLabel = { model_house: '常設モデルハウス', completion_viewing: '完成見学会', office_reserve: '事務所予備在庫' };
+      const sortedLocations = [...locations].sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+      const activeLocations = sortedLocations.filter(l => l.isActive);
+      const inactiveLocations = sortedLocations.filter(l => !l.isActive);
 
       return (
         <div>
@@ -1471,22 +1545,52 @@
             </button>
           </div>
           <div className="bg-white border border-gray-200 mx-4 divide-y divide-gray-100">
-            {locations.sort((a, b) => (a.order ?? 0) - (b.order ?? 0)).map(loc => (
-              <div key={loc.id} className={`flex items-center justify-between px-4 py-3 ${!loc.isActive ? 'opacity-50' : ''}`}>
+            {activeLocations.map(loc => (
+              <div key={loc.id} className="flex items-center justify-between px-4 py-3">
                 <div>
-                  <div className="text-sm text-gray-800">{loc.name}{!loc.isActive && '（無効）'}</div>
+                  <div className="text-sm text-gray-800">{loc.name}</div>
                   <div className="text-[10px] text-gray-400 mt-0.5">{typeLabel[loc.type] || loc.type} ／ キーワード：{(loc.keywords || []).join('、') || 'なし'}</div>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <button onClick={() => setEditing(loc)} className="text-gray-400 hover:text-gray-700"><EditIcon className="w-4 h-4" /></button>
                   <button
-                    onClick={() => showConfirm(`「${loc.name}」を${loc.isActive ? '無効化' : '再度有効化'}しますか？`, () => toggleActive(loc), loc.isActive ? '無効化する' : '有効化する')}
+                    onClick={() => showConfirm(`「${loc.name}」を無効化しますか？`, () => toggleActive(loc), '無効化する')}
                     className="text-gray-400 hover:text-rose-500"
                   ><TrashIcon className="w-4 h-4" /></button>
                 </div>
               </div>
             ))}
+            {activeLocations.length === 0 && <p className="px-4 py-6 text-center text-xs text-gray-400">有効な拠点はありません</p>}
           </div>
+          {inactiveLocations.length > 0 && (
+            <div className="mx-4 mt-4">
+              <button onClick={() => setShowInactive(v => !v)} className="w-full flex items-center justify-between text-[11px] tracking-widest text-gray-500 bg-gray-100 px-4 py-2">
+                <span>無効な拠点（{inactiveLocations.length}件）</span>
+                <span>{showInactive ? '▲ たたむ' : '▼ ひらく'}</span>
+              </button>
+              {showInactive && (
+                <div className="bg-white border border-gray-200 border-t-0 divide-y divide-gray-100">
+                  {inactiveLocations.map(loc => (
+                    <div key={loc.id} className="flex items-center justify-between px-4 py-3">
+                      <div className="opacity-60">
+                        <div className="text-sm text-gray-800">{loc.name}（無効）</div>
+                        <div className="text-[10px] text-gray-400 mt-0.5">{typeLabel[loc.type] || loc.type} ／ キーワード：{(loc.keywords || []).join('、') || 'なし'}</div>
+                      </div>
+                      <div className="flex items-center gap-3 shrink-0">
+                        <button
+                          onClick={() => showConfirm(`「${loc.name}」を、再度有効にしますか？`, () => toggleActive(loc), '有効にする')}
+                          className="text-[11px] text-gray-500 hover:text-gray-800 underline"
+                        >有効に戻す</button>
+                        <button onClick={() => setDeleting(loc)} className="text-[11px] text-rose-500 hover:text-rose-700 underline">データを削除</button>
+                      </div>
+                    </div>
+                  ))}
+                  <p className="px-4 py-2 text-[10px] text-gray-400">「データを削除」は、その拠点の在庫の記録などを、完全に消します（元に戻せません）。発注の履歴は残ります。</p>
+                </div>
+              )}
+            </div>
+          )}
+          {deleting && <LocationDeleteModal location={deleting} user={user} onClose={() => setDeleting(null)} showAlert={showAlert} />}
           {editing !== undefined && (
             <LocationEditModal location={editing} locations={locations} onClose={() => setEditing(undefined)} showAlert={showAlert} />
           )}
@@ -2002,7 +2106,7 @@
               <button key={t.key} onClick={() => setTab(t.key)} className={`text-[11px] tracking-widest px-3 py-1.5 whitespace-nowrap ${tab === t.key ? 'bg-gray-800 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>{t.label}</button>
             ))}
           </div>
-          {tab === 'locations' && <LocationsSettingsPanel locations={locations} showAlert={showAlert} showConfirm={showConfirm} />}
+          {tab === 'locations' && <LocationsSettingsPanel locations={locations} user={user} showAlert={showAlert} showConfirm={showConfirm} />}
           {tab === 'items' && <EquipmentSettingsPanel items={items} showAlert={showAlert} showConfirm={showConfirm} />}
           {tab === 'guides' && <GuidesSettingsPanel showAlert={showAlert} showConfirm={showConfirm} user={user} />}
           {tab === 'staff' && <StaffSettingsPanel staffList={staffList} user={user} isAdmin={isAdmin} showAlert={showAlert} showConfirm={showConfirm} />}
