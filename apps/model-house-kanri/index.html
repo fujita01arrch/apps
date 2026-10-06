@@ -282,16 +282,20 @@
     // 隣の×ボタンで0に戻す（在庫OKへキャンセル）。ADVが正確な残数を数えず、
     // 「どのくらい足りなそうか」を体感でワンタップだけで伝えられるようにする。
     // ============================================================
-    const TapRow = ({ item, count, onTap, onReset, children }) => {
+    const TapRow = ({ item, count, onTap, onReset, staleNote, children }) => {
       const isLow = count > 0;
+      // 1か月以上確認されていない備品（staleNoteあり）は、強調表示して「確認してください」を出す。
+      // 「発注が必要」をタップしたあとは、通常の赤表示を優先する。
+      const isStale = !!staleNote && !isLow;
       return (
-        <div className={`border-b border-gray-100 last:border-b-0 ${isLow ? 'bg-rose-50' : ''}`}>
+        <div className={`border-b border-gray-100 last:border-b-0 ${isLow ? 'bg-rose-50' : isStale ? 'bg-orange-50' : ''}`}>
           <div className="w-full flex items-center justify-between py-3.5 px-3">
             <button onClick={onTap} className="flex-1 min-w-0 text-left pr-3">
-              <div className={`text-sm ${isLow ? 'text-rose-600 font-medium' : 'text-gray-800'}`}>{item.name}</div>
+              <div className={`text-sm ${isLow ? 'text-rose-600 font-medium' : isStale ? 'text-orange-700 font-medium' : 'text-gray-800'}`}>{item.name}</div>
               <div className="text-[10px] text-gray-400 tracking-wide mt-0.5">
                 必要在庫数：{item.reorderPoint != null ? `${item.reorderPoint}${item.stockUnit}以上` : '未設定'}
               </div>
+              {isStale && <div className="text-[11px] text-orange-600 mt-0.5">確認してください（{staleNote}）</div>}
             </button>
             <div className="flex items-center gap-1.5 shrink-0">
               <button
@@ -598,6 +602,17 @@
         .filter(i => i.isActive && isItemApplicableToLocation(i, location))
         .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
 
+      // 備品ごとの最終確認日（stockLevels.lastCheckedAt）から、1か月（30日）以上確認されていない備品を見つける。
+      // 一度も確認されていない（記録が無い）備品も対象。事務所の持ち出し画面では出さない。
+      const ITEM_STALE_DAYS = 30;
+      const staleNoteFor = (item) => {
+        if (isWithdrawal) return null;
+        const at = stockLevels[stockDocId(location.id, item.id)]?.lastCheckedAt;
+        if (!at) return 'まだ確認されていません';
+        const days = Math.floor((Date.now() - new Date(at).getTime()) / 86400000);
+        return days >= ITEM_STALE_DAYS ? `${days}日間、確認されていません` : null;
+      };
+
       // 拠点×品目ごとに、進行中（配達済みでない）の発注があるかを引けるようにしておく。
       // 「発注が必要」とタップして送信した後、他の人がこの画面を開いても
       // 発注状況が分かるようにするため（発注済みかどうかをここに表示する）。
@@ -841,7 +856,7 @@
               const count = tapCounts[item.id] ?? 0;
               return (
                 <React.Fragment key={item.id}>
-                  <TapRow item={item} count={count} onTap={() => tapItem(item)} onReset={() => resetItem(item.id)}>
+                  <TapRow item={item} count={count} staleNote={staleNoteFor(item)} onTap={() => tapItem(item)} onReset={() => resetItem(item.id)}>
                     <button onClick={() => toggleDetailOpen(item.id, item)} className="text-[10px] text-gray-400 underline shrink-0">
                       {detailOpen[item.id] ? '詳細入力を閉じる' : '正確な残数を入力（任意）'}
                     </button>
