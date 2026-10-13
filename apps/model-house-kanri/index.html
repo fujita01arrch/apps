@@ -2016,7 +2016,7 @@
             <p className="text-[10px] text-gray-400 tracking-widest uppercase mb-2">② 発注依頼の完全自動化</p>
             <label className="flex items-start gap-2 text-sm text-gray-700">
               <input type="checkbox" className="mt-0.5" checked={orderRequestAutoSendEnabled} onChange={e => setOrderRequestAutoSendEnabled(e.target.checked)} />
-              <span>GASが、発注点割れの品目を自動的にとりまとめてChatworkへ送信する（業務管理・集客マーケ宛は、月・火・木の15時台。ADV本人手配宛は、平日の1日3回のバッチ。土日は送らず、月曜に送ります）<br /><span className="text-xs text-gray-400">OFFの場合：発注管理画面で管理者が「依頼文を作成」→「Chatworkへ自動送信」を押した時だけ送信されます。ONにしても、発注管理画面の「Chatworkへ自動送信」ボタンは引き続き使えるので、バッチを待たず今すぐ送ることもできます。</span></span>
+              <span>GASが、発注点割れの品目を自動的にとりまとめてChatworkへ送信する（月・火・木の15時台に1回だけ。それ以外の曜日に報告された分は、次の月・火・木の15時台にまとめて送ります）<br /><span className="text-xs text-gray-400">OFFの場合：発注管理画面で管理者が「依頼文を作成」→「Chatworkへ自動送信」を押した時だけ送信されます。ONにしても、発注管理画面の「Chatworkへ自動送信」ボタンは引き続き使えるので、バッチを待たず今すぐ送ることもできます。</span></span>
             </label>
           </div>
           <p className="text-xs text-gray-400 mt-3">※バッチ処理を今すぐ手動実行したい場合は、上部ナビの「実行」タブから行えます。</p>
