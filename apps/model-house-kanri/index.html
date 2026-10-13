@@ -1888,19 +1888,23 @@
       );
     };
 
-    const BATCH_STEPS = [
-      { key: 'discoverCompletionViewingLocations', label: 'カレンダーから完成見学会の新規拠点を自動登録' },
-      { key: 'autoSendOrderRequests', label: '発注依頼を自動送信' },
+    // 設定の「実行」画面のボタン。Chatworkに送らない処理と、送る処理を、別々に分けている（2026-10-13）。
+    const NO_SEND_STEPS = [
       { key: 'checkChatworkReplies', label: 'Chatwork返信を確認（到着日を反映）' },
-      { key: 'assignDeliveries', label: '配達担当を自動割当' },
-      { key: 'checkStaleLocations', label: '未確認アラートを送信' },
-      { key: 'checkStaleOrderReplies', label: '到着日未確定の発注に要確認アラート' },
       { key: 'cleanupOldLogs', label: '古い履歴ログを削除（35日以上前）' },
+    ];
+    const SEND_STEPS = [
+      { key: 'autoSendOrderRequests', label: '発注依頼を自動送信（業務管理・集客マーケ・ADV本人手配）' },
+      { key: 'assignDeliveries', label: 'ADVへの運搬依頼を送信（同じ拠点の返信待ちは待機）' },
+      { key: 'checkStaleOrderReplies', label: '到着日未確定の発注に要確認アラートを送信' },
+      { key: 'checkStaleLocations', label: '未確認アラートを送信' },
+      { key: 'discoverCompletionViewingLocations', label: '完成見学会の新規拠点を自動登録（新規があれば通知）' },
       { key: 'notifyAdvShortageReports', label: '不足報告の通知を送信' },
       { key: 'checkWeekendModelUsage', label: '土日：モデル最終利用者へ備品確認依頼（8時台の処理）' },
       { key: 'checkWeekendModelUsageFollowup', label: '土日：確認・発注が無ければ再依頼（18時台の処理）' },
       { key: 'checkPendingDeliveryCompletion', label: '配置未報告のリマインドを送信（20時台の処理）' },
     ];
+    const BATCH_STEPS = NO_SEND_STEPS.concat(SEND_STEPS);
 
     const BasicSettingsPanel = ({ config, showAlert }) => {
       const [staleCheckDays, setStaleCheckDays] = useState(config.staleCheckDays ?? 14);
@@ -2176,7 +2180,11 @@
           return `新着メッセージ${result.messagesChecked}件を確認し、${result.matched}件を「配達待ち」に反映しました（${byReply}要確認：${result.needsReview}件／対象外：${result.other}件）。`;
         }
         case 'assignDeliveries': {
-          if (result.candidateOrders === 0) return result.message || '到着日確定済みで担当者未設定の発注はありませんでした。';
+          if (result.candidateOrders === 0) {
+            let t1 = result.message || '運搬依頼を出せる発注はありませんでした。';
+            if (result.skippedReasons && result.skippedReasons.length) t1 += String.fromCharCode(10) + '保留（' + result.skipped + '件）：' + String.fromCharCode(10) + '・' + result.skippedReasons.join(String.fromCharCode(10) + '・');
+            return t1;
+          }
           let t2 = `候補${result.candidateOrders}件のうち${result.assigned}件の配達担当を自動割当しました。`;
           if (result.skippedReasons && result.skippedReasons.length) t2 += `\n保留（${result.skipped}件）：\n・` + result.skippedReasons.join('\n・');
           return t2;
@@ -2200,12 +2208,12 @@
       }
     }
 
-    const BatchRunView = ({ config, user, showAlert }) => {
+    const BatchRunView = ({ config, user, locations, orders, showAlert, showConfirm }) => {
       const [runningStep, setRunningStep] = useState(null);
       const [lastResults, setLastResults] = useState([]); // [{step,label,text}]
+      const [forceSavingId, setForceSavingId] = useState(null);
 
-      // 定時（9/12/17時）を待たずに、バッチ処理を今すぐ実行する（管理者専用）。
-      // 実際にChatworkへメッセージが送られる可能性があるため、GAS側でも承認者メールの
+      // 定時を待たずに、処理を今すぐ実行する（管理者専用）。Chatworkへ送る処理は、GAS側でも承認者メールの
       // ホワイトリストを二重チェックしている。
       const runBatchStep = async (step, label) => {
         setRunningStep(step);
@@ -2213,9 +2221,10 @@
           const result = await callGasFunction('handleRunBatchStep_', [{ step, approverEmail: user.email }]);
 
           const ts = new Date().toLocaleTimeString('ja-JP');
-          if (step === 'all' && result && result.result) {
+          if ((step === 'allNoSend' || step === 'allSend') && result && result.result) {
             const all = result.result;
-            const entries = BATCH_STEPS.map(s => ({
+            const list = step === 'allNoSend' ? NO_SEND_STEPS : SEND_STEPS;
+            const entries = list.filter(s => all[s.key] !== undefined).map(s => ({
               step: s.key, label: s.label, at: ts, text: formatBatchStepResult(s.key, all[s.key]),
             }));
             setLastResults(entries);
@@ -2223,29 +2232,113 @@
             setLastResults([{ step, label, at: ts, text: formatBatchStepResult(step, result && result.result) }]);
           }
         } catch (e) {
-          showAlert('実行に失敗しました。\n' + (e && e.message ? e.message : ''));
+          showAlert('実行に失敗しました。' + String.fromCharCode(10) + (e && e.message ? e.message : ''));
         } finally {
           setRunningStep(null);
         }
       };
 
+      // Chatworkへ送る処理は、実行前に確認を出す
+      const confirmAndRun = (step, label) => {
+        showConfirm(`「${label}」を今すぐ実行します。実際にChatworkへメッセージが送られる可能性があります。よろしいですか？`, () => runBatchStep(step, label), '実行する');
+      };
+
+      // 拠点ごとの「次の自動処理で、運搬依頼を強制送信」の予約
+      const setForce = async (loc, on) => {
+        setForceSavingId(loc.id);
+        try {
+          await updateDoc(docRef('locations', loc.id), on
+            ? { forceDeliveryNext: true, forceDeliveryRequestedAt: nowIso(), forceDeliveryRequestedBy: user.email, updatedAt: nowIso() }
+            : { forceDeliveryNext: false, updatedAt: nowIso() });
+        } catch (e) {
+          showAlert('予約の変更に失敗しました。' + String.fromCharCode(10) + (e && e.message ? e.message : ''));
+        } finally {
+          setForceSavingId(null);
+        }
+      };
+
+      const targetLocations = [...(locations || [])]
+        .filter(l => l.isActive && l.type !== 'office_reserve')
+        .sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+      const waitingCount = (locId) => (orders || []).filter(o => o.locationId === locId && o.status === '依頼送信済み' && o.orderRole !== 'ADV本人手配' && !o.needsReview).length;
+      const readyCount = (locId) => (orders || []).filter(o => o.locationId === locId && o.status === '配達待ち' && !o.deliveryAssignee && (o.deliveryScheduledDate || o.fulfillment === 'warehouse') && o.orderRole !== 'ADV本人手配').length;
+
+      const stepBtnCls = 'text-left text-xs tracking-wide border border-gray-300 text-gray-700 hover:bg-gray-100 px-3 py-2.5 disabled:opacity-50';
       return (
         <div className="max-w-xl mx-auto space-y-4">
           <section>
-            <SectionLabel>バッチ処理の手動実行（管理者専用）</SectionLabel>
+            <SectionLabel>Chatworkに送らない処理（管理者専用）</SectionLabel>
             <div className="bg-white border border-gray-200 mx-4 p-4">
-              <p className="text-xs text-gray-500 mb-3">定時（毎日9:00・12:00・17:00）を待たず、今すぐ実行できます。実際にChatworkへメッセージが送られる可能性があります。</p>
+              <p className="text-xs text-gray-500 mb-3">Chatworkへは何も送りません。データの更新・整理だけを今すぐ行います。</p>
               <div className="flex flex-col gap-2">
-                {BATCH_STEPS.map(s => (
-                  <button
-                    key={s.key} onClick={() => runBatchStep(s.key, s.label)} disabled={!!runningStep}
-                    className="text-left text-xs tracking-wide border border-gray-300 text-gray-700 hover:bg-gray-100 px-3 py-2.5 disabled:opacity-50"
-                  >{runningStep === s.key ? '実行中...' : s.label}</button>
+                {NO_SEND_STEPS.map(s => (
+                  <button key={s.key} onClick={() => runBatchStep(s.key, s.label)} disabled={!!runningStep} className={stepBtnCls}>
+                    {runningStep === s.key ? '実行中...' : s.label}
+                  </button>
                 ))}
                 <button
-                  onClick={() => runBatchStep('all', 'すべて実行')} disabled={!!runningStep}
+                  onClick={() => runBatchStep('allNoSend', '送らない処理をすべて実行')} disabled={!!runningStep}
+                  className="text-xs tracking-widest bg-gray-700 text-white hover:bg-gray-800 px-3 py-2.5 disabled:opacity-50"
+                >{runningStep === 'allNoSend' ? '実行中...' : '送らない処理をすべて実行'}</button>
+              </div>
+            </div>
+          </section>
+
+          <section>
+            <SectionLabel>Chatworkへ自動送信する処理（管理者専用）</SectionLabel>
+            <div className="bg-white border border-gray-200 mx-4 p-4">
+              <p className="text-xs text-rose-600 mb-1">押すと、実際にChatworkへメッセージが送られる可能性があります（確認が出ます）。</p>
+              <p className="text-[11px] text-gray-500 mb-3">定時の送信は、発注依頼と運搬依頼が月・火・木の15時台、そのほかは毎日の9時台・12時台・17時台などです。ここでは、定時を待たずに今すぐ実行します。</p>
+              <div className="flex flex-col gap-2">
+                {SEND_STEPS.map(s => (
+                  <button key={s.key} onClick={() => confirmAndRun(s.key, s.label)} disabled={!!runningStep} className={stepBtnCls}>
+                    {runningStep === s.key ? '実行中...' : s.label}
+                  </button>
+                ))}
+                <button
+                  onClick={() => confirmAndRun('allSend', '送る処理をまとめて実行')} disabled={!!runningStep}
                   className="text-xs tracking-widest bg-indigo-700 text-white hover:bg-indigo-800 px-3 py-2.5 disabled:opacity-50"
-                >{runningStep === 'all' ? '実行中...' : 'すべて実行（1日3回のバッチと同じ内容）'}</button>
+                >{runningStep === 'allSend' ? '実行中...' : '送る処理をまとめて実行（月・火・木の15時台の処理＋未確認アラートなど）'}</button>
+              </div>
+            </div>
+          </section>
+
+          <section>
+            <SectionLabel>拠点ごとの「運搬依頼の強制送信」予約（管理者専用）</SectionLabel>
+            <div className="bg-white border border-gray-200 mx-4">
+              <p className="text-[11px] text-gray-500 px-4 pt-3 pb-2">
+                運搬依頼は、同じ拠点に業者への発注の返信待ちが残っていると、まとめて1通にするため待機します。状況を把握していて、待たずに送りたい拠点は、予約してください。
+                <b>次の自動処理（月・火・木の15時台）で、到着日が決まっている分だけを、返信待ちを待たずに送ります。</b>
+                送ったあと、予約は自動で解除されます。返信待ちの分は、到着日が決まったあとに、別の通知で届きます。今すぐ送りたいときは、予約してから、上の「ADVへの運搬依頼を送信」を押してください。
+              </p>
+              <div className="divide-y divide-gray-100 border-t border-gray-100">
+                {targetLocations.map(loc => {
+                  const w = waitingCount(loc.id);
+                  const r = readyCount(loc.id);
+                  const reserved = !!loc.forceDeliveryNext;
+                  return (
+                    <div key={loc.id} className="px-4 py-3 flex items-center justify-between gap-3">
+                      <div className="min-w-0">
+                        <div className="text-sm text-gray-800">{loc.name}</div>
+                        <div className="text-[10px] text-gray-400 mt-0.5">返信待ち：{w}件／運搬依頼の待ち：{r}件{w > 0 && r > 0 && !reserved ? '（返信待ちのため、運搬依頼は待機中）' : ''}</div>
+                        {reserved && <div className="text-[10px] text-indigo-600 mt-0.5">予約中：次の自動処理で、返信待ちを待たずに送ります</div>}
+                      </div>
+                      {reserved ? (
+                        <button
+                          onClick={() => setForce(loc, false)} disabled={forceSavingId === loc.id}
+                          className="shrink-0 text-[11px] border border-gray-300 text-gray-600 hover:bg-gray-100 px-3 py-1.5 disabled:opacity-50"
+                        >予約を取り消す</button>
+                      ) : (
+                        <button
+                          onClick={() => showConfirm(`「${loc.name}」の運搬依頼を、次の自動処理で、返信待ちを待たずに送る予約にしますか？（到着日が決まっている分だけが送られます）`, () => setForce(loc, true), '予約する')}
+                          disabled={forceSavingId === loc.id}
+                          className="shrink-0 text-[11px] bg-gray-800 text-white hover:bg-gray-900 px-3 py-1.5 disabled:opacity-50"
+                        >次の自動処理で強制送信</button>
+                      )}
+                    </div>
+                  );
+                })}
+                {targetLocations.length === 0 && <p className="px-4 py-6 text-center text-xs text-gray-400">有効な拠点がありません</p>}
               </div>
             </div>
           </section>
