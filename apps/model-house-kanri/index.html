@@ -391,7 +391,7 @@
       deliveryLocationHeading: '▸{{locationName}}',
       deliveryArrivalLine: '事務所に届く日｜{{arrivalDateLabel}}',
       deliveryWarehouseHeading: '【倉庫にある分】',
-      deliveryWarehouseNote: '業務管理より：「{{note}}」',
+      deliveryWarehouseNote: '{{from}}より：「{{note}}」',
       deliveryGuidanceOffice: '到着後にロッカー前に用意しますので、配置をお願いいたします！',
       deliveryGuidanceWarehouse: '倉庫にある分は、お手数ですが、持ち出して配置をお願いいたします！',
       deliverySelfPrepareNote: '※印刷物関係はご自身で印刷等のご協力をお願いいたします🙇',
@@ -958,8 +958,8 @@
 
       // missedItemIds: 直近の「忘れました」報告で配置できなかった品目。次にこの拠点へ行く人へ
       // 自動でChatwork通知するロジックはPhase2（カレンダー連携）で実装予定。ここでは記録のみ行う。
-      const reportDelivered = async (order, missedItemIds = []) => {
-        setSubmittingId(order.id);
+      const reportDelivered = async (order, missedItemIds = [], silent = false) => {
+        if (!silent) setSubmittingId(order.id);
         try {
           const ts = nowIso();
           const actor = { uid: user.uid, name: user.displayName || user.email };
@@ -1009,60 +1009,148 @@
           batch.update(docRef('locations', order.locationId), { lastCheckedAt: ts, lastCheckedBy: actor, updatedAt: ts });
           await batch.commit();
 
-          showAlert(allDelivered ? '配置完了を記録しました。ありがとうございます。' : '未配置の品目を記録しました。次にこの拠点へ行く方への連絡は、現状は藤田さん・染矢さんへ別途ご連絡ください（自動通知はPhase2で対応予定です）。');
+          if (!silent) showAlert(allDelivered ? '配置完了を記録しました。ありがとうございます。' : '未配置の品目を記録しました。次にこの拠点へ行く方への連絡は、現状は藤田さん・染矢さんへ別途ご連絡ください（自動通知はPhase2で対応予定です）。');
+          return true;
         } catch (e) {
           showAlert('記録に失敗しました。\n' + (e && e.message ? e.message : ''));
+          return false;
         } finally {
-          setSubmittingId(null);
-          setMissedModalOrder(null);
+          if (!silent) {
+            setSubmittingId(null);
+            setMissedModalOrder(null);
+          }
+        }
+      };
+
+      // 配置報告の画面では、同じ拠点・同じ配達担当・同じ運搬・配置予定日の発注を、1枚のカードにまとめて表示する
+      // （2026-10-14の要望）。担当や予定日が決まっていない発注は、1件ずつ別のカードのまま。
+      // 予定日が入っていない発注（ADV本人手配など）は、同じ拠点・同じ担当の、いちばん早い予定日のカードに加える。
+      const pendingItemsOf = (o) => (o.missedItemIds && o.missedItemIds.length > 0) ? o.items.filter(i => o.missedItemIds.includes(i.itemId)) : o.items;
+      const cleanReplyNote = (text) => {
+        let t = String(text || '')
+          .replace(/\[qt\][\s\S]*?\[\/qt\]/g, ' ')
+          .replace(/\[\/?[A-Za-z_]+(?:[:=\s][^\]]*)?\]/g, ' ')
+          .replace(/\S+\.(?:jpe?g|png|gif|heic|pdf|xlsx?|docx?|pptx?|zip)\s*\([\d.,]+\s*[KMG]?B\)/gi, ' ')
+          .replace(/[ \t\u3000\r\n]+/g, ' ')
+          .trim();
+        for (let k = 0; k < 6; k++) {
+          const m = /^[^\s]{1,40}さん\s+/.exec(t);
+          if (!m) break;
+          t = t.slice(m[0].length);
+        }
+        if (t.length > 80) t = t.slice(0, 80) + '…';
+        return t;
+      };
+      const buildCards = (list) => {
+        const emailOf = (o) => (o.deliveryAssignee && o.deliveryAssignee.email) ? o.deliveryAssignee.email.toLowerCase() : '';
+        const cards = [];
+        const buckets = {};
+        list.forEach(o => {
+          const em = emailOf(o);
+          if (!em) { cards.push([o]); return; }
+          const k = o.locationId + '|' + em;
+          (buckets[k] = buckets[k] || []).push(o);
+        });
+        Object.keys(buckets).forEach(k => {
+          const byDate = {};
+          const noDate = [];
+          buckets[k].forEach(o => {
+            if (o.deliveryVisitDate) (byDate[o.deliveryVisitDate] = byDate[o.deliveryVisitDate] || []).push(o);
+            else noDate.push(o);
+          });
+          const dates = Object.keys(byDate).sort();
+          if (dates.length) byDate[dates[0]] = byDate[dates[0]].concat(noDate);
+          else if (noDate.length) byDate['none'] = noDate;
+          Object.keys(byDate).forEach(d => cards.push(byDate[d]));
+        });
+        const firstIndex = (g) => Math.min(...g.map(o => list.indexOf(o)));
+        return cards.sort((a, b) => firstIndex(a) - firstIndex(b));
+      };
+      const cards = buildCards(orders);
+      const groupKey = (g) => g.map(o => o.id).join('+');
+
+      // 1枚のカードにまとめた発注を、まとめて報告する。発注ごとに、配置できなかった品目だけを分けて記録する。
+      const reportDeliveredGroup = async (g, missedItemIds = []) => {
+        setSubmittingId(groupKey(g));
+        let allDone = true;
+        let ok = true;
+        for (const o of g) {
+          const mine = missedItemIds.filter(id => o.items.some(i => i.itemId === id));
+          const done = await reportDelivered(o, mine, true);
+          if (!done) { ok = false; break; }
+          if (mine.length > 0) allDone = false;
+        }
+        setSubmittingId(null);
+        setMissedModalOrder(null);
+        if (ok) {
+          showAlert(allDone ? '配置完了を記録しました。ありがとうございます。' : '未配置の品目を記録しました。次にこの拠点へ行く方への連絡は、現状は藤田さん・染矢さんへ別途ご連絡ください（自動通知はPhase2で対応予定です）。');
         }
       };
 
       return (
         <div className="max-w-xl mx-auto space-y-6">
           <section>
-            <SectionLabel>配達待ちの発注（{orders.length}件）</SectionLabel>
+            <SectionLabel>配達待ちの発注（{cards.length}件）</SectionLabel>
             <div className="bg-white border border-gray-200 mx-4 divide-y divide-gray-100">
-              {orders.length === 0 && <p className="px-4 py-10 text-center text-xs text-gray-400">現在、配置待ちの発注はありません</p>}
-              {orders.map(o => {
-                const hasMissed = o.missedItemIds && o.missedItemIds.length > 0;
-                const isMine = !!(o.deliveryAssignee && o.deliveryAssignee.email && o.deliveryAssignee.email.toLowerCase() === (user.email || '').toLowerCase());
+              {cards.length === 0 && <p className="px-4 py-10 text-center text-xs text-gray-400">現在、配置待ちの発注はありません</p>}
+              {cards.map(g => {
+                const first = g[0];
+                const key = groupKey(g);
+                const hasMissed = g.some(o => o.missedItemIds && o.missedItemIds.length > 0);
+                const isMine = g.some(o => !!(o.deliveryAssignee && o.deliveryAssignee.email && o.deliveryAssignee.email.toLowerCase() === (user.email || '').toLowerCase()));
+                const assignee = (g.find(o => o.deliveryAssignee) || {}).deliveryAssignee;
+                const visitDate = (g.find(o => o.deliveryVisitDate) || {}).deliveryVisitDate;
+                const arrivalDates = [...new Set(g.filter(o => o.fulfillment !== 'warehouse' && o.deliveryScheduledDate).map(o => o.deliveryScheduledDate))].sort();
+                const shownItems = g.flatMap(o => pendingItemsOf(o));
+                const warehouseOrders = g.filter(o => o.fulfillment === 'warehouse');
+                const notes = [];
+                warehouseOrders.forEach(o => {
+                  const text = cleanReplyNote(o.warehouseNote);
+                  const from = o.orderRole || '業務管理';
+                  if (text && !notes.some(n => n.text === text && n.from === from)) notes.push({ text, from });
+                });
+                const missedNames = g.flatMap(o => (o.missedItemIds && o.missedItemIds.length > 0) ? o.items.filter(i => o.missedItemIds.includes(i.itemId)).map(i => i.itemName) : []);
                 return (
-                  <div key={o.id} className={`px-4 py-4 ${isMine ? 'bg-indigo-50 border-l-4 border-indigo-500' : ''}`}>
+                  <div key={key} className={`px-4 py-4 ${isMine ? 'bg-indigo-50 border-l-4 border-indigo-500' : ''}`}>
                     <div className="flex items-center gap-2">
-                      <div className="text-sm text-gray-800">{o.locationName}</div>
+                      <div className="text-sm text-gray-800">{first.locationName}</div>
                       {isMine && <span className="text-[9px] tracking-widest bg-indigo-600 text-white px-1.5 py-0.5 shrink-0">あなた宛</span>}
                     </div>
-                    <div className="text-[10px] text-gray-400 mt-0.5">{(hasMissed ? o.items.filter(i => o.missedItemIds.includes(i.itemId)) : o.items).map(i => `${i.itemName}×${i.requestedLots ?? 1}${i.orderUnit || ''}`).join('、')}</div>
-                    {o.orderRole === 'ADV本人手配' && (
+                    <div className="text-[10px] text-gray-400 mt-0.5">{shownItems.map(i => `${i.itemName}×${i.requestedLots ?? 1}${i.orderUnit || ''}`).join('、')}</div>
+                    {g.some(o => o.orderRole === 'ADV本人手配') && (
                       <div className="text-[10px] text-gray-400 mt-0.5">配置ができ次第「配置しました」を押してください。</div>
                     )}
-                    {o.deliveryAssignee && (
+                    {assignee && (
                       <div className={`text-[10px] mt-0.5 ${isMine ? 'text-indigo-700 font-medium' : 'text-gray-400'}`}>
-                        配達担当：{o.deliveryAssignee.name}{isMine ? '（あなたです）' : ''}
+                        配達担当：{assignee.name}{isMine ? '（あなたです）' : ''}
                       </div>
                     )}
-                    {o.deliveryVisitDate && (
+                    {visitDate && (
                       <div className={`text-[10px] mt-0.5 ${isMine ? 'text-indigo-700 font-medium' : 'text-gray-400'}`}>
-                        運搬・配置予定：{o.deliveryVisitDate}
+                        運搬・配置予定：{visitDate}
                       </div>
                     )}
-                    {o.deliveryScheduledDate && <div className="text-[10px] text-gray-400 mt-0.5">鴨江到着予定：{o.deliveryScheduledDate}</div>}
-                    {o.fulfillment === 'warehouse' && <div className="text-xs text-amber-700 mt-0.5">倉庫にあります（持ち出して配置してください）{o.warehouseNote ? '　業務管理より：「' + o.warehouseNote + '」' : ''}</div>}
+                    {arrivalDates.length > 0 && <div className="text-[10px] text-gray-400 mt-0.5">鴨江到着予定：{arrivalDates.join('・')}</div>}
+                    {warehouseOrders.length > 0 && (
+                      <div className="text-xs text-amber-700 mt-0.5">
+                        倉庫にあります（持ち出して配置してください）：{warehouseOrders.flatMap(o => pendingItemsOf(o)).map(i => i.itemName).join('、')}
+                        {notes.map((n, idx) => <div key={idx} className="text-[11px] text-amber-700/80 mt-0.5">{n.from}より：「{n.text}」</div>)}
+                      </div>
+                    )}
                     {hasMissed && (
                       <div className="text-[10px] text-rose-500 mt-0.5">
-                        前回の配置漏れ：{o.items.filter(i => o.missedItemIds.includes(i.itemId)).map(i => i.itemName).join('、')}（次の訪問時にお願いします）
+                        前回の配置漏れ：{missedNames.join('、')}（次の訪問時にお願いします）
                       </div>
                     )}
                     <div className="flex gap-2 mt-2">
                       <button
-                        onClick={() => showConfirm(`${o.locationName}へ備品をすべて配置しましたか？`, () => reportDelivered(o, []), '配置しました')}
-                        disabled={submittingId === o.id || !isRegistered}
+                        onClick={() => showConfirm(`${first.locationName}へ備品をすべて配置しましたか？`, () => reportDeliveredGroup(g, []), '配置しました')}
+                        disabled={submittingId === key || !isRegistered}
                         className="flex-1 bg-gray-800 text-white hover:bg-gray-900 transition-colors px-4 py-2.5 text-xs tracking-widest disabled:opacity-50"
-                      >{submittingId === o.id ? '記録中...' : '配置しました'}</button>
+                      >{submittingId === key ? '記録中...' : '配置しました'}</button>
                       <button
-                        onClick={() => setMissedModalOrder(o)}
-                        disabled={submittingId === o.id || !isRegistered}
+                        onClick={() => setMissedModalOrder(g)}
+                        disabled={submittingId === key || !isRegistered}
                         className="flex-1 border border-gray-300 text-gray-600 hover:bg-gray-100 transition-colors px-4 py-2.5 text-xs tracking-widest disabled:opacity-50"
                       >忘れました</button>
                     </div>
@@ -1074,15 +1162,11 @@
 
           {missedModalOrder && (
             <MissedItemsModal
-              order={missedModalOrder}
-              pendingItems={
-                (missedModalOrder.missedItemIds && missedModalOrder.missedItemIds.length > 0)
-                  ? missedModalOrder.items.filter(i => missedModalOrder.missedItemIds.includes(i.itemId))
-                  : missedModalOrder.items
-              }
-              saving={submittingId === missedModalOrder.id}
+              order={{ locationName: missedModalOrder[0].locationName }}
+              pendingItems={missedModalOrder.flatMap(o => pendingItemsOf(o))}
+              saving={submittingId === groupKey(missedModalOrder)}
               onClose={() => setMissedModalOrder(null)}
-              onConfirm={(missedItemIds) => reportDelivered(missedModalOrder, missedItemIds)}
+              onConfirm={(missedItemIds) => reportDeliveredGroup(missedModalOrder, missedItemIds)}
             />
           )}
 
@@ -2050,7 +2134,7 @@
       { key: 'deliveryLocationHeading', part: true, rows: 2, label: '拠点の見出し（運搬依頼文）', vars: '{{locationName}}＝拠点名。運搬依頼文の{{items}}の先頭に入ります。空欄にすると見出しなしになります' },
       { key: 'deliveryArrivalLine', part: true, rows: 2, label: '「事務所に届く日」の行（運搬依頼文）', vars: '{{arrivalDateLabel}}＝備品が事務所に届く予定日。運搬依頼文の{{arrivalLine}}になります（事務所に届く分があるときだけ出ます。倉庫にある分だけのときは出ません）' },
       { key: 'deliveryWarehouseHeading', part: true, rows: 2, label: '「倉庫にある分」の見出し（運搬依頼文）', vars: '変数はありません。業務管理の返信が「倉庫にあるものを持って行ってください」だった品目の上に入ります。空欄にすると見出しなしになります' },
-      { key: 'deliveryWarehouseNote', part: true, rows: 2, label: '業務管理の返信の添え方（運搬依頼文の倉庫にある分）', vars: '{{note}}＝業務管理の返信の原文（宛名などは除く）。倉庫にある分の品目の下に入ります' },
+      { key: 'deliveryWarehouseNote', part: true, rows: 2, label: '返信の添え方（運搬依頼文の倉庫にある分）', vars: '{{note}}＝返信の原文（宛名・添付などは除き、80文字まで）／{{from}}＝返信した担当区分（業務管理・集客・マーケ）。倉庫にある分の品目の下に入ります' },
       { key: 'deliveryGuidanceOffice', part: true, rows: 2, label: '案内文：事務所に届く分（運搬依頼文）', vars: '変数はありません。運搬依頼文の{{guidance}}の中で、事務所に届く分があるときに入ります' },
       { key: 'deliveryGuidanceWarehouse', part: true, rows: 2, label: '案内文：倉庫にある分（運搬依頼文）', vars: '変数はありません。運搬依頼文の{{guidance}}の中で、倉庫にある分があるときに入ります' },
       { key: 'deliverySelfPrepareNote', part: true, rows: 3, label: '印刷物の注意書き（運搬依頼文・準備依頼文）', vars: '変数はありません。運搬依頼文に、まだ配置報告されていないADV本人手配の品目を載せたときだけ、その品目の下に入ります。準備依頼文では、品目一覧の下に必ず入ります。空欄にすると注意書きなしになります' },
@@ -2952,7 +3036,7 @@
               <div className="text-[10px] text-gray-400 mt-0.5">
                 発注日：{order.requestedAt ? order.requestedAt.slice(0, 10) : '不明'}
                 {order.deliveryScheduledDate ? `／鴨江到着予定 ${order.deliveryScheduledDate}` : ''}
-                {order.fulfillment === 'warehouse' ? '／倉庫から持ち出し（業務管理の返信）' : ''}
+                {order.fulfillment === 'warehouse' ? ('／倉庫から持ち出し（' + order.orderRole + 'の返信）') : ''}
               </div>
               {order.orderRole === 'ADV本人手配' ? (
                 <div className="text-[10px] text-gray-400 mt-0.5">ご本人手配（ADVが直接調達・配置）</div>
