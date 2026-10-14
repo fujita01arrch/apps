@@ -1982,6 +1982,7 @@
     const NO_SEND_STEPS = [
       { key: 'checkChatworkReplies', label: 'Chatwork返信を確認（到着日を反映）' },
       { key: 'cleanupOldLogs', label: '古い履歴ログを削除（35日以上前）' },
+      { key: 'dailyReportPreview', label: '日次チェックのプレビュー（秘書チャットへは送らない）' },
     ];
     const SEND_STEPS = [
       { key: 'autoSendOrderRequests', label: '発注依頼を自動送信（業務管理・集客マーケ・ADV本人手配）' },
@@ -1993,6 +1994,7 @@
       { key: 'checkWeekendModelUsage', label: '土日：モデル最終利用者へ備品確認依頼（8時台の処理）' },
       { key: 'checkWeekendModelUsageFollowup', label: '土日：確認・発注が無ければ再依頼（18時台の処理）' },
       { key: 'checkPendingDeliveryCompletion', label: '配置未報告のリマインドを送信（20時台の処理）' },
+      { key: 'dailyReport', label: '日次チェックを実行して、秘書チャットへ報告（毎朝8時台の処理）' },
     ];
     const BATCH_STEPS = NO_SEND_STEPS.concat(SEND_STEPS);
 
@@ -2289,6 +2291,12 @@
           let t3 = `${result.candidateOrders}件のうち${result.flagged}件を要確認にしました（通知：${result.notified}件）。`;
           if (!result.roomConfigured) t3 += '\n※ADV備品発注依頼ルームが未設定のため、Chatworkへの通知は送られていません。';
           return t3;
+        }
+        case 'dailyReportPreview':
+        case 'dailyReport': {
+          const plain = String(result.text || '').replace(/\[\/?(?:info|title|code)\]/g, '');
+          const sendNote = step === 'dailyReport' ? (result.sent ? '秘書チャットへ送りました。' : '秘書チャットへは送っていません（' + (result.reason || '') + '）。') + String.fromCharCode(10) : '';
+          return sendNote + plain;
         }
         case 'cleanupOldLogs': {
           if (result.deleted === 0) return '削除対象の古いログはありませんでした。';
