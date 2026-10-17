@@ -102,11 +102,13 @@
 
     // デバッグ用：アクセストークンに実際に付与されているスコープをGoogleのtokeninfoで確認する。
     // 「The caller does not have permission」がスコープ不足によるものか切り分けるために使う。
+    // audは「このトークンを発行したOAuthクライアントID」で、先頭の数字がGCPプロジェクト番号。
+    // Apps Script側のGCPプロジェクト番号と一致していないと403になるため、あわせて表示する。
     async function debugTokenScopes_(accessToken) {
       try {
         const res = await fetch(`https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=${encodeURIComponent(accessToken)}`);
         const json = await res.json();
-        return json.scope || '(取得できませんでした)';
+        return `${json.scope || '(取得できませんでした)'}\n[診断] 発行先クライアント(aud): ${json.aud || json.azp || '(不明)'}\n[診断] アカウント: ${json.email || '(不明)'}`;
       } catch (e) {
         return '(tokeninfo取得エラー)';
       }
@@ -124,7 +126,8 @@
         const detail = json.error.details && json.error.details[0];
         const message = (detail && detail.errorMessage) || json.error.message || '不明なエラー';
         const scopes = await debugTokenScopes_(accessToken);
-        throw new Error(message + '\n[診断] 付与されたスコープ: ' + scopes);
+        const raw = JSON.stringify(json.error).slice(0, 600);
+        throw new Error(message + '\n[診断] HTTP ' + res.status + ' / ' + (json.error.status || '') + '\n[診断] 付与されたスコープ: ' + scopes + '\n[診断] 応答: ' + raw);
       }
       return json.response ? json.response.result : undefined;
     }
