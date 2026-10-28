@@ -2615,6 +2615,8 @@
       const RANK = { overdue: 0, missed: 1, wait: 2, ordered: 3, transit: 4, adv: 5, hold: 6 };
       const cards = useMemo(() => {
         const itemById = Object.fromEntries((items || []).map(i => [i.id, i]));
+        // stockLevels は、{ドキュメントID: データ} の辞書（配列ではない）。どちらでも動くようにする
+        const levelList = Array.isArray(stockLevels) ? stockLevels : Object.values(stockLevels || {});
         const todayIso = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10); // 日本時間の今日
         const md = (iso) => (iso ? String(iso).slice(5, 10).replace('-', '/') : '');
         const result = [...(locations || [])]
@@ -2622,7 +2624,7 @@
           .map(loc => {
             const rows = {};
             // ① 不足が報告された品目（必要在庫数を下回った品目）
-            (stockLevels || []).filter(s => s.locationId === loc.id && s.belowReorderPoint).forEach(s => {
+            levelList.filter(s => s.locationId === loc.id && s.belowReorderPoint).forEach(s => {
               const it = itemById[s.itemId];
               rows[s.itemId] = {
                 itemId: s.itemId, name: it ? it.name : s.itemId,
