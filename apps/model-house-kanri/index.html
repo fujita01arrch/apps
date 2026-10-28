@@ -2603,7 +2603,106 @@
       );
     };
 
-    const DashboardView = ({ locations, items, orders, recentSessions, staleCheckDays }) => {
+    // 拠点（モデルハウス・見学会）ごとの、足りないものと状況の一覧（2026-10-28の要望）。
+    // 不足の報告（stockLevels）と、進行中の発注（orders）から、品目ごとに、いまの段階を出す。
+    // 段階：発注待ち（報告済み・まだ依頼していない）／保留中／発注済み（返信待ち）／配達待ち（届く日・担当・運搬日）／
+    //       ADVが用意中（本人手配）／配置報告待ち（運搬日を過ぎた）／配置漏れ（前回置けなかった）
+    const LocationStatusBoard = ({ locations, items, stockLevels, orders, staleCheckDays }) => {
+      const KIND_CLS = {
+        overdue: 'bg-rose-100 text-rose-700', missed: 'bg-rose-100 text-rose-700', wait: 'bg-rose-50 text-rose-600',
+        ordered: 'bg-amber-100 text-amber-700', transit: 'bg-indigo-100 text-indigo-700', adv: 'bg-gray-100 text-gray-600', hold: 'bg-gray-100 text-gray-500',
+      };
+      const RANK = { overdue: 0, missed: 1, wait: 2, ordered: 3, transit: 4, adv: 5, hold: 6 };
+      const cards = useMemo(() => {
+        const itemById = Object.fromEntries((items || []).map(i => [i.id, i]));
+        const todayIso = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10); // 日本時間の今日
+        const md = (iso) => (iso ? String(iso).slice(5, 10).replace('-', '/') : '');
+        const result = [...(locations || [])]
+          .filter(l => l.isActive && l.type !== 'office_reserve')
+          .map(loc => {
+            const rows = {};
+            // ① 不足が報告された品目（必要在庫数を下回った品目）
+            (stockLevels || []).filter(s => s.locationId === loc.id && s.belowReorderPoint).forEach(s => {
+              const it = itemById[s.itemId];
+              rows[s.itemId] = {
+                itemId: s.itemId, name: it ? it.name : s.itemId,
+                qty: (s.requestedLots || 1) + ((it && (it.orderUnit || it.stockUnit)) || ''),
+                kind: s.orderHold ? 'hold' : 'wait',
+                label: s.orderHold ? '保留中' : '発注待ち',
+                detail: s.orderHold ? '管理者が「今回は発注しない」にしています' : '不足の報告済み。次の発注依頼（月・火・木の15時台）でまとめて依頼します',
+              };
+            });
+            // ② 進行中の発注（配達済み以外）。発注の段階が、①より優先
+            (orders || []).filter(o => o.locationId === loc.id && o.status !== '配達済み').forEach(o => {
+              const missed = o.missedItemIds || [];
+              (o.items || []).forEach(it => {
+                if (missed.length > 0 && !missed.includes(it.itemId)) return; // 前回、配置済みの品目は除く
+                const base = { itemId: it.itemId, name: it.itemName, qty: (it.requestedLots ?? 1) + (it.orderUnit || '') };
+                let r;
+                if (o.status === '依頼送信済み' && o.orderRole === 'ADV本人手配') {
+                  r = { ...base, kind: 'adv', label: 'ADVが用意中', detail: '配置したら、「配置報告」で報告' };
+                } else if (o.status === '依頼送信済み') {
+                  r = { ...base, kind: 'ordered', label: '発注済み', detail: o.orderRole + 'へ依頼済み。到着日の返信待ち' + (o.needsReview ? '（要確認）' : '') };
+                } else if (o.status === '配達待ち') {
+                  const where = o.fulfillment === 'warehouse' ? ((o.pickupPlace === 'freespace' ? '事務所のフリースペース' : '倉庫') + 'から持ち出し') : ('届く日 ' + md(o.deliveryScheduledDate));
+                  const who = o.deliveryAssignee ? ('担当 ' + o.deliveryAssignee.name + (o.deliveryVisitDate ? '・運搬 ' + md(o.deliveryVisitDate) : '')) : '運搬の担当は調整中';
+                  const overdue = !!(o.deliveryVisitDate && o.deliveryVisitDate < todayIso && !o.deliveryNoticePending);
+                  const isMissed = missed.length > 0;
+                  r = {
+                    ...base, kind: isMissed ? 'missed' : (overdue ? 'overdue' : 'transit'),
+                    label: isMissed ? '配置漏れ' : (overdue ? '配置報告待ち' : '配達待ち'),
+                    detail: where + '／' + who + (overdue ? '（予定日を過ぎています）' : '') + (isMissed ? '（前回の配置漏れ）' : ''),
+                  };
+                } else {
+                  r = { ...base, kind: 'ordered', label: o.status || '進行中', detail: '' };
+                }
+                rows[it.itemId] = r;
+              });
+            });
+            const list = Object.values(rows).sort((a, b) => RANK[a.kind] - RANK[b.kind]);
+            const urgent = list.filter(r => r.kind === 'overdue' || r.kind === 'missed' || r.kind === 'wait').length;
+            return { loc, list, urgent, stale: daysSince(loc.lastCheckedAt) >= staleCheckDays, lastLabel: formatRelativeDate(loc.lastCheckedAt) };
+          });
+        // 要対応が多い拠点を上に。同じなら、進行中が多い順、最後に拠点の並び順
+        return result.sort((a, b) => (b.urgent - a.urgent) || (b.list.length - a.list.length) || ((a.loc.order ?? 0) - (b.loc.order ?? 0)));
+      }, [locations, items, stockLevels, orders, staleCheckDays]);
+
+      return (
+        <section>
+          <SectionLabel>拠点ごとの状況（足りないもの）</SectionLabel>
+          <p className="text-[10px] text-gray-300 px-4 -mt-1 mb-2">不足の報告と、進行中の発注から作っています。赤は、対応が必要なものです。</p>
+          <div className="mx-4 space-y-2">
+            {cards.length === 0 && <p className="text-center text-xs text-gray-400 py-4">拠点がありません</p>}
+            {cards.map(({ loc, list, urgent, stale, lastLabel }) => (
+              <div key={loc.id} className="bg-white border border-gray-200">
+                <div className="flex items-center justify-between gap-2 px-4 py-2.5 border-b border-gray-100">
+                  <span className="text-sm text-gray-800 truncate">{loc.name}</span>
+                  <span className={`shrink-0 text-[10px] tracking-wide px-1.5 py-0.5 ${list.length === 0 ? 'bg-emerald-50 text-emerald-700' : urgent > 0 ? 'bg-rose-50 text-rose-600' : 'bg-amber-50 text-amber-700'}`}>
+                    {list.length === 0 ? '足りないものなし' : urgent > 0 ? ('要対応 ' + urgent + '件／全' + list.length + '件') : ('進行中 ' + list.length + '件')}
+                  </span>
+                </div>
+                {list.length > 0 && (
+                  <div className="divide-y divide-gray-50">
+                    {list.map(r => (
+                      <div key={r.itemId} className="px-4 py-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs text-gray-800 truncate">{r.name}<span className="text-gray-400">　×{r.qty}</span></span>
+                          <span className={`shrink-0 text-[10px] px-1.5 py-0.5 ${KIND_CLS[r.kind]}`}>{r.label}</span>
+                        </div>
+                        {r.detail && <div className="text-[10px] text-gray-400 mt-0.5">{r.detail}</div>}
+                      </div>
+                    ))}
+                  </div>
+                )}
+                <div className="px-4 py-1.5 text-[10px] text-gray-300 border-t border-gray-50">最終確認：{lastLabel}{stale ? '・要確認' : ''}</div>
+              </div>
+            ))}
+          </div>
+        </section>
+      );
+    };
+
+    const DashboardView = ({ locations, items, stockLevels, orders, recentSessions, staleCheckDays }) => {
       const itemById = useMemo(() => Object.fromEntries(items.map(i => [i.id, i])), [items]);
       const sortedLocations = [...locations].filter(l => l.isActive).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
       // 「そろそろ確認（黄）」は、公式な「要確認（赤）」の一歩手前として、staleCheckDaysの3日前から表示する
@@ -2728,6 +2827,8 @@
               <div className="text-2xl font-medium mt-0.5 text-gray-800">{thisMonthCheckCount}</div>
             </div>
           </div>
+
+          <LocationStatusBoard locations={locations} items={items} stockLevels={stockLevels} orders={orders} staleCheckDays={staleCheckDays} />
 
           <section>
             <div className="flex items-center justify-between px-4 mb-2">
