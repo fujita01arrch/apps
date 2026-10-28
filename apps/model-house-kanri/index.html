@@ -2676,7 +2676,7 @@
       return (
         <section>
           <SectionLabel>拠点ごとの状況（足りないもの・発注状況）</SectionLabel>
-          <p className="text-[10px] text-gray-300 px-4 -mt-1 mb-2">不足の報告と、進行中の発注から作っています。赤は、対応が必要なものです。</p>
+          <p className="text-[10px] text-gray-300 px-4 -mt-1 mb-2">「×」の数は、補充してほしい量（不足を報告した数・発注した数）です。赤は、対応が必要なものです。</p>
 
           {/* 全体の発注状況：段階ごとの件数 */}
           <div className="flex flex-wrap gap-1.5 px-4 mb-2">
@@ -2686,62 +2686,39 @@
             {Object.keys(totals).length === 0 && <span className="text-[11px] text-emerald-700">足りないものは、ありません</span>}
           </div>
 
-          {/* ひと目：拠点ごとに、足りない品目を並べる */}
-          <div className="bg-white border border-gray-200 mx-4 divide-y divide-gray-100">
-            {cards.length === 0 && <p className="text-center text-xs text-gray-400 py-4">拠点がありません</p>}
-            {cards.map(({ loc, list, urgent }) => (
-              <div key={loc.id} className="px-4 py-2.5">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm text-gray-800 truncate">{loc.name}</span>
-                  <span className={`shrink-0 text-[10px] ${list.length === 0 ? 'text-emerald-600' : urgent > 0 ? 'text-rose-600' : 'text-amber-700'}`}>
-                    {list.length === 0 ? '足りないものなし' : urgent > 0 ? ('要対応 ' + urgent + '件') : ('進行中 ' + list.length + '件')}
-                  </span>
-                </div>
-                {list.length > 0 && (
-                  <div className="flex flex-wrap gap-1 mt-1.5">
-                    {list.map(r => (
-                      <span key={r.itemId} className={`text-[10px] px-1.5 py-0.5 ${KIND_CLS[r.kind]}`}>{r.name}・{r.label}</span>
-                    ))}
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
-          <div className="px-4 mt-2">
-            <button onClick={() => setShowDetail(v => !v)} className="text-[11px] tracking-widest text-gray-500 hover:text-gray-800 underline">
-              {showDetail ? '▲ くわしい表示をとじる' : '▼ くわしく見る（品目ごとの届く日・担当・運搬日）'}
-            </button>
-          </div>
-
-          {showDetail && (
-          <div className="mx-4 mt-2 space-y-2">
+          {/* 1モデル1カード：品目ごとに、数量と段階を1行で */}
+          <div className="mx-4 grid grid-cols-1 sm:grid-cols-2 gap-2">
             {cards.length === 0 && <p className="text-center text-xs text-gray-400 py-4">拠点がありません</p>}
             {cards.map(({ loc, list, urgent, stale, lastLabel }) => (
-              <div key={loc.id} className="bg-white border border-gray-200">
-                <div className="flex items-center justify-between gap-2 px-4 py-2.5 border-b border-gray-100">
+              <div key={loc.id} className={`bg-white border ${urgent > 0 ? 'border-rose-200' : 'border-gray-200'}`}>
+                <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-gray-100">
                   <span className="text-sm text-gray-800 truncate">{loc.name}</span>
-                  <span className={`shrink-0 text-[10px] tracking-wide px-1.5 py-0.5 ${list.length === 0 ? 'bg-emerald-50 text-emerald-700' : urgent > 0 ? 'bg-rose-50 text-rose-600' : 'bg-amber-50 text-amber-700'}`}>
-                    {list.length === 0 ? '足りないものなし' : urgent > 0 ? ('要対応 ' + urgent + '件／全' + list.length + '件') : ('進行中 ' + list.length + '件')}
+                  <span className={`shrink-0 text-[10px] px-1.5 py-0.5 ${list.length === 0 ? 'bg-emerald-50 text-emerald-700' : urgent > 0 ? 'bg-rose-50 text-rose-600' : 'bg-amber-50 text-amber-700'}`}>
+                    {list.length === 0 ? '足りないものなし' : urgent > 0 ? ('要対応 ' + urgent + '件') : ('進行中 ' + list.length + '件')}
                   </span>
                 </div>
                 {list.length > 0 && (
                   <div className="divide-y divide-gray-50">
                     {list.map(r => (
-                      <div key={r.itemId} className="px-4 py-2">
+                      <div key={r.itemId} className="px-3 py-1.5">
                         <div className="flex items-center justify-between gap-2">
-                          <span className="text-xs text-gray-800 truncate">{r.name}<span className="text-gray-400">　×{r.qty}</span></span>
+                          <span className="text-xs text-gray-800 truncate">{r.name}<span className="font-medium text-gray-900">　×{r.qty}</span></span>
                           <span className={`shrink-0 text-[10px] px-1.5 py-0.5 ${KIND_CLS[r.kind]}`}>{r.label}</span>
                         </div>
-                        {r.detail && <div className="text-[10px] text-gray-400 mt-0.5">{r.detail}</div>}
+                        {showDetail && r.detail && <div className="text-[10px] text-gray-400 mt-0.5">{r.detail}</div>}
                       </div>
                     ))}
                   </div>
                 )}
-                <div className="px-4 py-1.5 text-[10px] text-gray-300 border-t border-gray-50">最終確認：{lastLabel}{stale ? '・要確認' : ''}</div>
+                <div className="px-3 py-1 text-[10px] text-gray-300 border-t border-gray-50">最終確認：{lastLabel}{stale ? '・要確認' : ''}</div>
               </div>
             ))}
           </div>
-          )}
+          <div className="px-4 mt-2">
+            <button onClick={() => setShowDetail(v => !v)} className="text-[11px] tracking-widest text-gray-500 hover:text-gray-800 underline">
+              {showDetail ? '▲ 届く日・担当・運搬日の表示をとじる' : '▼ 届く日・担当・運搬日も表示する'}
+            </button>
+          </div>
         </section>
       );
     };
@@ -2847,6 +2824,8 @@
         { key: 'missed', label: '配置忘れ率', data: missedRateByLocation, color: 'bg-rose-500', unit: '%' },
       ];
       const [rankingTab, setRankingTab] = useState('location');
+      const [showOrderHistory, setShowOrderHistory] = useState(false); // 発注履歴は、折りたたむ（2026-10-28の要望）
+      const [showSessionHistory, setShowSessionHistory] = useState(false);
       const activeRanking = RANKING_TABS.find(t => t.key === rankingTab);
 
       const SESSION_MODE_LABEL = { checkin: '在庫確認', withdrawal: '予備持ち出し', adjustment: '棚卸修正', restock: '配置完了' };
@@ -2960,7 +2939,11 @@
           </section>
 
           <section>
-            <SectionLabel>発注履歴（だれが・いつ・何を）</SectionLabel>
+            <button onClick={() => setShowOrderHistory(v => !v)} className="w-full flex items-center justify-between px-4 mb-2 text-left">
+              <span className="text-[10px] text-gray-400 tracking-widest uppercase">発注履歴（だれが・いつ・何を）</span>
+              <span className="text-[10px] text-gray-400">{showOrderHistory ? '▲ とじる' : '▼ ひらく（直近20件）'}</span>
+            </button>
+            {showOrderHistory && (
             <div className="bg-white border border-gray-200 mx-4 divide-y divide-gray-100">
               {orders.length === 0 && <p className="px-4 py-6 text-center text-xs text-gray-400">まだ発注履歴がありません</p>}
               {orders.slice(0, 20).map(o => (
@@ -2974,10 +2957,15 @@
                 </div>
               ))}
             </div>
+            )}
           </section>
 
           <section>
-            <SectionLabel>最近の確認・配置履歴（直近{sortedRecentSessions.length}件）</SectionLabel>
+            <button onClick={() => setShowSessionHistory(v => !v)} className="w-full flex items-center justify-between px-4 mb-2 text-left">
+              <span className="text-[10px] text-gray-400 tracking-widest uppercase">最近の確認・配置履歴（直近{sortedRecentSessions.length}件）</span>
+              <span className="text-[10px] text-gray-400">{showSessionHistory ? '▲ とじる' : '▼ ひらく'}</span>
+            </button>
+            {showSessionHistory && (
             <div className="bg-white border border-gray-200 mx-4 divide-y divide-gray-100">
               {sortedRecentSessions.length === 0 && <p className="px-4 py-6 text-center text-xs text-gray-400">まだ記録がありません</p>}
               {sortedRecentSessions.map(s => (
@@ -2993,7 +2981,8 @@
                 </div>
               ))}
             </div>
-            <p className="text-[10px] text-gray-300 text-center mt-2">この一覧は直近35日分のみです（それより古い個別記録は自動削除されますが、上の統計の数値自体は消えずに残ります）。</p>
+            )}
+            {showSessionHistory && <p className="text-[10px] text-gray-300 text-center mt-2">この一覧は直近35日分のみです（それより古い個別記録は自動削除されますが、上の統計の数値自体は消えずに残ります）。</p>}
           </section>
         </div>
       );
