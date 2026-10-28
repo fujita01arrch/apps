@@ -2631,11 +2631,102 @@
       );
     };
 
+    // カードの品目の「編集」：届く日・運搬（配置）予定日・担当者を変える（2026-10-28の要望）。
+    // 配置漏れで担当が変わるとき・スケジュールの都合で担当や日を変えるときに使う。変更すると「通知待ち」に戻し、
+    // 次の月・火・木の15時台に、新しい担当者へ運搬依頼のチャットが送られる（GAS側の仕組み）。
+    const DeliveryEditModal = ({ order, orders, staffList, user, showAlert, onClose }) => {
+      const isWarehouse = order.fulfillment === 'warehouse';
+      const emailOf = (a) => ((a && a.email) || '').toLowerCase();
+      const [scheduled, setScheduled] = useState(order.deliveryScheduledDate || '');
+      const [visit, setVisit] = useState(order.deliveryVisitDate || '');
+      const [assignee, setAssignee] = useState(emailOf(order.deliveryAssignee));
+      const [withSiblings, setWithSiblings] = useState(true);
+      const [saving, setSaving] = useState(false);
+      const [error, setError] = useState('');
+
+      const staffOptions = (staffList || []).map(s => ({ email: (s.email || s.id || '').toLowerCase(), name: s.displayName || s.email || s.id, uid: s.uid || null })).filter(s => s.email);
+      if (order.deliveryAssignee && emailOf(order.deliveryAssignee) && !staffOptions.some(s => s.email === emailOf(order.deliveryAssignee))) {
+        staffOptions.push({ email: emailOf(order.deliveryAssignee), name: order.deliveryAssignee.name || emailOf(order.deliveryAssignee), uid: order.deliveryAssignee.uid || null });
+      }
+      // 同じ拠点・同じ運搬日・同じ担当者で、一緒に運ぶ予定の他の発注（担当を変えるとき、バラバラにならないように）
+      const siblings = (order.deliveryVisitDate && emailOf(order.deliveryAssignee))
+        ? (orders || []).filter(o => o.id !== order.id && o.locationId === order.locationId && o.status === '配達待ち'
+            && o.deliveryVisitDate === order.deliveryVisitDate && emailOf(o.deliveryAssignee) === emailOf(order.deliveryAssignee))
+        : [];
+
+      const save = async () => {
+        setError('');
+        const todayIso = new Date(Date.now() + 9 * 3600000).toISOString().slice(0, 10);
+        if (visit && visit < todayIso) { setError('運搬・配置予定日が、過去の日付になっています。今日以降の日付にしてください'); return; }
+        if (!isWarehouse && scheduled && visit && visit < scheduled) { setError('運搬・配置予定日が、届く日より前になっています。日付を確かめてください'); return; }
+        const picked = staffOptions.find(s => s.email === assignee);
+        const nextAssignee = assignee ? { uid: picked ? picked.uid : null, email: picked ? picked.email : assignee, name: picked ? picked.name : assignee } : null;
+        const changed = emailOf(nextAssignee) !== emailOf(order.deliveryAssignee) || (visit || '') !== (order.deliveryVisitDate || '')
+          || (!isWarehouse && (scheduled || '') !== (order.deliveryScheduledDate || ''));
+        if (!changed) { onClose(); return; }
+        const ts = nowIso();
+        const who = user && user.email ? user.email : null;
+        const common = { deliveryVisitDate: visit || null, deliveryAssignee: nextAssignee, deliveryNoticePending: !!(nextAssignee && visit), deliveryEditedBy: who, deliveryEditedAt: ts, updatedAt: ts };
+        setSaving(true);
+        try {
+          const batch = writeBatch(db);
+          batch.update(docRef('orders', order.id), isWarehouse ? common : { ...common, deliveryScheduledDate: scheduled || null });
+          if (withSiblings) siblings.forEach(o => batch.update(docRef('orders', o.id), common));
+          await batch.commit();
+          showAlert('変更しました。' + (nextAssignee && visit ? '次の月・火・木の15時台に、新しい担当者へ運搬依頼のチャットが送られます。それまでに間に合わないときは、担当者へ直接お伝えください。' : '担当者または運搬日が未定のため、チャットは送られません。'));
+          onClose();
+        } catch (e) {
+          setError('変更に失敗しました。' + (e && e.message ? e.message : ''));
+          setSaving(false);
+        }
+      };
+
+      return (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+          <div className="bg-white max-w-md w-full p-5 shadow-xl border border-gray-200 max-h-full overflow-y-auto">
+            <h3 className="text-sm font-medium text-gray-800 mb-1">運搬の予定を変更</h3>
+            <p className="text-xs text-gray-500 mb-3 break-words">{order.locationName}／{(order.items || []).map(i => i.itemName).join('、')}</p>
+            <div className="space-y-3">
+              {!isWarehouse && (
+                <label className="block">
+                  <span className="text-[11px] text-gray-500">届く日（鴨江事務所への到着予定）</span>
+                  <input type="date" className={inputCls} value={scheduled} onChange={e => setScheduled(e.target.value)} />
+                </label>
+              )}
+              <label className="block">
+                <span className="text-[11px] text-gray-500">運搬・配置の予定日</span>
+                <input type="date" className={inputCls} value={visit} onChange={e => setVisit(e.target.value)} />
+              </label>
+              <label className="block">
+                <span className="text-[11px] text-gray-500">運搬・配置の担当者</span>
+                <select className={inputCls} value={assignee} onChange={e => setAssignee(e.target.value)}>
+                  <option value="">未定（届く日が決まっていれば、自動で決まります）</option>
+                  {staffOptions.map(s => <option key={s.email} value={s.email}>{s.name}</option>)}
+                </select>
+              </label>
+              {siblings.length > 0 && (
+                <label className="flex items-start gap-2 text-xs text-gray-700">
+                  <input type="checkbox" className="mt-0.5" checked={withSiblings} onChange={e => setWithSiblings(e.target.checked)} />
+                  <span>同じ日・同じ担当者で運ぶ予定の、ほかの発注（{siblings.length}件）も、一緒に変える</span>
+                </label>
+              )}
+              <p className="text-[11px] text-gray-500 leading-relaxed">変更すると、次の月・火・木の15時台に、担当者へ運搬依頼のチャットが送られます。</p>
+            </div>
+            {error && <p className="text-xs text-rose-600 bg-rose-50 border border-rose-200 p-2 mt-3">{error}</p>}
+            <div className="flex justify-end gap-2 mt-4">
+              <button onClick={onClose} disabled={saving} className="px-4 py-2 text-xs tracking-widest border border-gray-300 text-gray-600 hover:bg-gray-100">やめる</button>
+              <button onClick={save} disabled={saving} className="px-4 py-2 text-xs tracking-widest bg-gray-800 text-white hover:bg-gray-700 disabled:opacity-40">{saving ? '保存中...' : '変更する'}</button>
+            </div>
+          </div>
+        </div>
+      );
+    };
+
     // 拠点（モデルハウス・見学会）ごとの、足りないものと状況の一覧（2026-10-28の要望）。
     // 不足の報告（stockLevels）と、進行中の発注（orders）から、品目ごとに、いまの段階を出す。
     // 段階：発注待ち（報告済み・まだ依頼していない）／保留中／発注済み（返信待ち）／配達待ち（届く日・担当・運搬日）／
     //       ADVが用意中（本人手配）／配置報告待ち（運搬日を過ぎた）／配置漏れ（前回置けなかった）
-    const LocationStatusBoard = ({ locations, items, stockLevels, orders, staleCheckDays, loaded = true }) => {
+    const LocationStatusBoard = ({ locations, items, stockLevels, orders, staleCheckDays, loaded = true, staffList, canEdit, user, showAlert }) => {
       // 見た目は、他のタブ（発注履歴など）と同じ：白地・細い灰色の枠・区切り線・小さなバッジ。
       // 色の意味：赤＝対応が必要／黄＝まだ届いていない／藍＝運搬待ち／灰＝待つだけ。色だけに頼らず、必ず文字を添える
       const KIND_CLS = {
@@ -2686,7 +2777,7 @@
               (o.items || []).forEach(it => {
                 if (missed.length > 0 && !missed.includes(it.itemId)) return; // 前回、配置済みの品目は除く
                 const m = itemById[it.itemId];
-                const base = { itemId: it.itemId, name: it.itemName || (m ? m.name : '（品目名が不明）'), qty: (it.requestedLots ?? 1) + (it.orderUnit || (m && (m.orderUnit || m.stockUnit)) || ''), unitNote: unitNote(m) };
+                const base = { orderId: o.id, itemId: it.itemId, name: it.itemName || (m ? m.name : '（品目名が不明）'), qty: (it.requestedLots ?? 1) + (it.orderUnit || (m && (m.orderUnit || m.stockUnit)) || ''), unitNote: unitNote(m) };
                 let r;
                 if (o.needsReview) {
                   r = { ...base, kind: 'review', detail: o.orderRole === 'ADV本人手配' ? 'ADV本人手配の依頼。状況を、管理者が確認してください' : (o.orderRole + 'へ依頼済み。到着日の返信を、管理者が確認してください') };
@@ -2724,12 +2815,24 @@
       }, [locations, items, stockLevels, orders, staleCheckDays]);
 
       const [showDetail, setShowDetail] = useState(false);
+      const [editingOrderId, setEditingOrderId] = useState(null);
       const totals = {};
       cards.forEach(c => c.list.forEach(r => { totals[r.kind] = (totals[r.kind] || 0) + 1; }));
       const busy = cards.filter(c => c.list.length > 0);
       const calm = cards.filter(c => c.list.length === 0);
       // 詳細を開いたとき、同じ説明（届く日・担当など）の品目をまとめ、説明は1回だけ出す
       const bucketByDetail = (rows) => { const out = []; rows.forEach(r => { const b = out.find(x => x.detail === r.detail); if (b) b.rows.push(r); else out.push({ detail: r.detail, rows: [r] }); }); return out; };
+      // 1品目1行。運搬の予定がある段階には「編集」ボタン（届く日・運搬日・担当者を変える）
+      const EDITABLE_KINDS = ['overdue', 'missed', 'transit', 'adv'];
+      const renderRow = (r, kind) => (
+        <div key={r.itemId} className="flex items-center justify-between gap-2 text-xs text-gray-800 leading-relaxed">
+          <span className="min-w-0 break-words">{r.name + '\u00A0×' + r.qty}{showDetail && r.unitNote && <span className="text-gray-500">{r.unitNote}</span>}</span>
+          {canEdit && r.orderId && EDITABLE_KINDS.includes(kind) && (
+            <button onClick={() => setEditingOrderId(r.orderId)} className="shrink-0 text-[11px] px-2.5 py-1 border border-gray-300 text-gray-600 hover:bg-gray-100">編集</button>
+          )}
+        </div>
+      );
+      const editingOrder = editingOrderId ? (orders || []).find(o => o.id === editingOrderId) : null;
 
       if (!loaded) {
         return (
@@ -2783,16 +2886,14 @@
                         {showDetail ? (
                           <div className="space-y-1.5">
                             {bucketByDetail(g.rows).map((b, bi) => (
-                              <div key={bi} className="text-xs text-gray-800 leading-relaxed">
-                                {b.rows.map(r => <span key={r.itemId} className="inline-block mr-3">{r.name + '\u00A0×' + r.qty}{r.unitNote && <span className="text-gray-500">{r.unitNote}</span>}</span>)}
-                                {b.detail && <div className="text-[11px] text-gray-500">{b.detail}</div>}
+                              <div key={bi}>
+                                <div className="space-y-1">{b.rows.map(r => renderRow(r, g.kind))}</div>
+                                {b.detail && <div className="text-[11px] text-gray-500 mt-0.5">{b.detail}</div>}
                               </div>
                             ))}
                           </div>
                         ) : (
-                          <div className="text-xs text-gray-800 leading-relaxed">
-                            {g.rows.map(r => <span key={r.itemId} className="inline-block mr-3">{r.name + '\u00A0×' + r.qty}</span>)}
-                          </div>
+                          <div className="space-y-1">{g.rows.map(r => renderRow(r, g.kind))}</div>
                         )}
                       </div>
                     </div>
@@ -2808,11 +2909,12 @@
               </div>
             )}
           </div>
+          {editingOrder && <DeliveryEditModal order={editingOrder} orders={orders} staffList={staffList} user={user} showAlert={showAlert} onClose={() => setEditingOrderId(null)} />}
         </section>
       );
     };
 
-    const DashboardView = ({ locations, items, stockLevels, orders, recentSessions, staleCheckDays, locationsLoaded }) => {
+    const DashboardView = ({ locations, items, stockLevels, orders, recentSessions, staleCheckDays, locationsLoaded, staffList, isRegistered, user, showAlert }) => {
       const itemById = useMemo(() => Object.fromEntries(items.map(i => [i.id, i])), [items]);
       const sortedLocations = [...locations].filter(l => l.isActive).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
       // 「そろそろ確認（黄）」は、公式な「要確認（赤）」の一歩手前として、staleCheckDaysの3日前から表示する
@@ -2940,7 +3042,7 @@
             </div>
           </div>
 
-          <LocationStatusBoard locations={locations} items={items} stockLevels={stockLevels} orders={orders} staleCheckDays={staleCheckDays} loaded={locationsLoaded} />
+          <LocationStatusBoard locations={locations} items={items} stockLevels={stockLevels} orders={orders} staleCheckDays={staleCheckDays} loaded={locationsLoaded} staffList={staffList} canEdit={isRegistered} user={user} showAlert={showAlert} />
 
           <section>
             <div className="flex items-center justify-between px-4 mb-2">
