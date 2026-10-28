@@ -1713,7 +1713,7 @@
                       </div>
                     </div>
                   ))}
-                  <p className="px-4 py-2 text-[10px] text-gray-400">「データを削除」は、その拠点の在庫の記録などを、完全に消します（元に戻せません）。発注の履歴は残ります。</p>
+                  <p className="px-4 py-2 text-[10px] text-gray-400">「データを削除」は、その拠点の在庫の記録などを、完全に消します（元に戻せません）。消さない場合も、無効な拠点の発注・履歴は、この画面以外には表示されません。</p>
                 </div>
               )}
             </div>
@@ -2638,12 +2638,13 @@
       // 色の意味：赤＝対応が必要／黄＝まだ届いていない／藍＝運搬待ち／灰＝待つだけ。色だけに頼らず、必ず文字を添える
       const KIND_CLS = {
         overdue: 'bg-rose-100 text-rose-700', missed: 'bg-rose-100 text-rose-700', review: 'bg-rose-100 text-rose-700',
-        wait: 'bg-amber-50 text-amber-700', ordered: 'bg-amber-100 text-amber-700', transit: 'bg-indigo-100 text-indigo-700',
+        wait: 'bg-orange-100 text-orange-700', ordered: 'bg-amber-100 text-amber-700', transit: 'bg-indigo-100 text-indigo-700',
         adv: 'bg-gray-100 text-gray-600', hold: 'bg-gray-100 text-gray-600',
       };
       const KIND_LABEL = { overdue: '配置報告待ち', missed: '配置漏れ', review: '返信の要確認', wait: '発注待ち', ordered: '発注済み', transit: '配達待ち', adv: 'ADVが用意中', hold: '保留中' };
       const KINDS_ORDER = ['overdue', 'missed', 'review', 'wait', 'ordered', 'transit', 'adv', 'hold'];
       const URGENT_KINDS = ['overdue', 'missed', 'review'];
+      const KIND_NOTE = { wait: '次の発注依頼（月・火・木の15時台）でまとめて依頼します', hold: '管理者が「今回は発注しない」にしています', adv: '配置したら、「配置報告」で報告' };
       const RANK = Object.fromEntries(KINDS_ORDER.map((k, i) => [k, i]));
       const cards = useMemo(() => {
         const itemById = Object.fromEntries((items || []).map(i => [i.id, i]));
@@ -2656,14 +2657,17 @@
           .filter(l => l.isActive && l.type !== 'office_reserve')
           .map(loc => {
             const rows = {};
-            // ① 不足が報告された品目（必要在庫数を下回った品目）
+            // ① 不足が報告された品目（必要在庫数を下回った品目）。進行中の発注に入っている品目は、②で出す
+            const openItemIds = new Set();
+            (orders || []).filter(o => o.locationId === loc.id && o.status !== '配達済み').forEach(o => (o.items || []).forEach(i => openItemIds.add(i.itemId)));
             levelList.filter(s => s.locationId === loc.id && s.belowReorderPoint).forEach(s => {
               const it = itemById[s.itemId];
+              if (!it || openItemIds.has(s.itemId)) return;
               rows[s.itemId] = {
-                itemId: s.itemId, name: it ? it.name : '（品目名が不明）',
+                itemId: s.itemId, name: it.name,
                 qty: (s.requestedLots || 1) + ((it && (it.orderUnit || it.stockUnit)) || ''), unitNote: unitNote(it),
                 kind: s.orderHold ? 'hold' : 'wait',
-                detail: s.orderHold ? '管理者が「今回は発注しない」にしています' : '不足の報告済み。次の発注依頼（月・火・木の15時台）でまとめて依頼します',
+                detail: '',
               };
             });
             // ② 進行中の発注（配達済み以外）。同じ品目が複数あるときは、重い段階を残す。発注の段階が、①より優先
@@ -2675,10 +2679,10 @@
                 const m = itemById[it.itemId];
                 const base = { itemId: it.itemId, name: it.itemName || (m ? m.name : '（品目名が不明）'), qty: (it.requestedLots ?? 1) + (it.orderUnit || (m && (m.orderUnit || m.stockUnit)) || ''), unitNote: unitNote(m) };
                 let r;
-                if (o.status === '依頼送信済み' && o.orderRole === 'ADV本人手配') {
-                  r = { ...base, kind: 'adv', detail: '配置したら、「配置報告」で報告' };
-                } else if (o.status === '依頼送信済み' && o.needsReview) {
-                  r = { ...base, kind: 'review', detail: o.orderRole + 'へ依頼済み。到着日の返信を、管理者が確認してください' };
+                if (o.needsReview) {
+                  r = { ...base, kind: 'review', detail: o.orderRole === 'ADV本人手配' ? 'ADV本人手配の依頼。状況を、管理者が確認してください' : (o.orderRole + 'へ依頼済み。到着日の返信を、管理者が確認してください') };
+                } else if (o.status === '依頼送信済み' && o.orderRole === 'ADV本人手配') {
+                  r = { ...base, kind: 'adv', detail: '' };
                 } else if (o.status === '依頼送信済み') {
                   r = { ...base, kind: 'ordered', detail: o.orderRole + 'へ依頼済み。到着日の返信待ち' };
                 } else if (o.status === '配達待ち') {
@@ -2719,20 +2723,21 @@
       return (
         <section>
           <SectionLabel>拠点ごとの状況（足りないもの・発注状況）</SectionLabel>
-          <p className="text-xs text-gray-500 px-4 -mt-1 mb-2 leading-relaxed">「×」の数は、補充してほしい量（不足を報告した数・発注した数）です。赤は、対応が必要なものです。件数は品目の数です。</p>
+          <p className="text-xs text-gray-500 px-4 -mt-1 mb-2 leading-relaxed">「×」の数は、補充してほしい数です（箱・袋など、発注するときの単位）。赤は、対応が必要なものです。件数は品目の数です。</p>
 
           {/* 全体の発注状況：段階ごとの品目数 */}
-          <div className="flex flex-wrap items-center gap-1.5 px-4 mb-2">
+          <div className="flex flex-wrap items-center gap-1.5 px-4 mb-1">
+            <span className="text-xs text-gray-500">全体：</span>
             {KINDS_ORDER.filter(k => totals[k]).map(k => (
               <span key={k} className={`text-xs px-2 py-1 ${KIND_CLS[k]}`}>{KIND_LABEL[k]} {totals[k]}</span>
             ))}
             {Object.keys(totals).length === 0 && <span className="text-xs text-emerald-700">足りないものは、ありません</span>}
           </div>
-          <div className="px-4 mb-2">
-            <button onClick={() => setShowDetail(v => !v)} aria-expanded={showDetail} className="py-2 text-xs tracking-widest text-gray-600 hover:text-gray-900 underline">
-              {showDetail ? '▲ 届く日・担当・運搬日の表示をとじる' : '▼ 届く日・担当・運搬日も表示する'}
-            </button>
-          </div>
+          {/* 詳細の開閉：発注履歴と同じ、行全体のボタン */}
+          <button onClick={() => setShowDetail(v => !v)} aria-expanded={showDetail} className="w-full flex items-center justify-between px-4 py-2 mb-1 text-left">
+            <span className="text-[10px] text-gray-400 tracking-widest">届く日・担当・運搬日</span>
+            <span className="text-xs text-gray-600">{showDetail ? '▲ とじる' : '▼ 表示する'}</span>
+          </button>
 
           {/* 拠点ごとに1ブロック。足りないものがある拠点を上に、段階ごとに品目をまとめて並べる */}
           <div className="bg-white border border-gray-200 mx-4 divide-y divide-gray-100">
@@ -2748,26 +2753,29 @@
                 </div>
                 <div className="text-xs text-gray-500 mt-0.5">
                   最終確認 {lastLabel}{loc.lastCheckedBy && loc.lastCheckedBy.name ? ('（' + loc.lastCheckedBy.name + '）') : ''}
-                  {stale && <span className="text-rose-600 font-medium">　確認が古い</span>}
+                  {stale && <span className="inline-block ml-2 text-rose-600 font-medium">確認が古い</span>}
                 </div>
                 <div className="mt-2 space-y-2">
                   {groups.map(g => (
-                    <div key={g.kind} className="flex items-start gap-2">
-                      <span className={`shrink-0 w-28 text-center text-xs px-1.5 py-0.5 ${KIND_CLS[g.kind]}`}>{KIND_LABEL[g.kind]} {g.rows.length}</span>
-                      {showDetail ? (
-                        <div className="min-w-0 space-y-1">
-                          {g.rows.map(r => (
-                            <div key={r.itemId} className="text-xs text-gray-800 leading-relaxed">
-                              {r.name}<span className="font-medium">　×{r.qty}</span>{r.unitNote && <span className="text-gray-500">{r.unitNote}</span>}
-                              {r.detail && <div className="text-[11px] text-gray-500">{r.detail}</div>}
-                            </div>
-                          ))}
-                        </div>
-                      ) : (
-                        <div className="min-w-0 text-xs text-gray-800 leading-relaxed">
-                          {g.rows.map(r => r.name + ' ×' + r.qty).join('、')}
-                        </div>
-                      )}
+                    <div key={g.kind} className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-2">
+                      <span className={`self-start sm:w-28 shrink-0 text-center text-xs px-1.5 py-0.5 ${KIND_CLS[g.kind]}`}>{KIND_LABEL[g.kind]} {g.rows.length}</span>
+                      <div className="min-w-0 flex-1">
+                        {showDetail && KIND_NOTE[g.kind] && <div className="text-[11px] text-gray-500 mb-1">{KIND_NOTE[g.kind]}</div>}
+                        {showDetail ? (
+                          <div className="space-y-1">
+                            {g.rows.map(r => (
+                              <div key={r.itemId} className="text-xs text-gray-800 leading-relaxed">
+                                {r.name}<span className="font-medium">　×{r.qty}</span>{r.unitNote && <span className="text-gray-500">{r.unitNote}</span>}
+                                {r.detail && <div className="text-[11px] text-gray-500">{r.detail}</div>}
+                              </div>
+                            ))}
+                          </div>
+                        ) : (
+                          <div className="text-xs text-gray-800 leading-relaxed">
+                            {g.rows.map(r => <span key={r.itemId} className="inline-block mr-3">{r.name + ' ×' + r.qty}</span>)}
+                          </div>
+                        )}
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -3857,19 +3865,22 @@
       const [staffActivityStats, setStaffActivityStats] = useState([]);
       const [config, setConfig] = useState({ staleCheckDays: 14 });
       const [domainError, setDomainError] = useState(false);
+      const [locationsLoaded, setLocationsLoaded] = useState(false); // 拠点を読み込み終えるまでは、無効な拠点を見分けられない
 
       // 無効にした拠点（もう使わない拠点）は、すべての画面・履歴・統計から隠す（2026-10-28の要望）。
       // 隠すのは表示だけで、Firestoreのデータは消さない。管理者の「設定」→「拠点」だけは、無効な拠点を
       // たたんで見られる（再び使うときの有効化と、データ削除のため）ので、全拠点（allLocations）を渡す。
       const inactiveLocationIds = useMemo(() => new Set(locations.filter(l => !l.isActive).map(l => l.id)), [locations]);
       const visibleLocations = useMemo(() => locations.filter(l => l.isActive), [locations]);
-      const visibleOrders = useMemo(() => orders.filter(o => !inactiveLocationIds.has(o.locationId)), [orders, inactiveLocationIds]);
-      const visibleSessions = useMemo(() => recentSessions.filter(s => !inactiveLocationIds.has(s.locationId)), [recentSessions, inactiveLocationIds]);
+      const visibleOrders = useMemo(() => (locationsLoaded ? orders.filter(o => !inactiveLocationIds.has(o.locationId)) : []), [orders, inactiveLocationIds, locationsLoaded]);
+      const visibleOutbox = useMemo(() => (locationsLoaded ? outbox.filter(o => !inactiveLocationIds.has(o.relatedLocationId)) : []), [outbox, inactiveLocationIds, locationsLoaded]);
+      const visibleSessions = useMemo(() => (locationsLoaded ? recentSessions.filter(s => !inactiveLocationIds.has(s.locationId)) : []), [recentSessions, inactiveLocationIds, locationsLoaded]);
       const visibleStockLevels = useMemo(() => {
         const m = {};
+        if (!locationsLoaded) return m;
         Object.keys(stockLevels).forEach(k => { if (!inactiveLocationIds.has(stockLevels[k].locationId)) m[k] = stockLevels[k]; });
         return m;
-      }, [stockLevels, inactiveLocationIds]);
+      }, [stockLevels, inactiveLocationIds, locationsLoaded]);
 
       const showAlert = (message) => setDialog({ type: 'alert', message, confirmLabel: 'OK' });
       const showConfirm = (message, onConfirm, confirmLabel) => setDialog({ type: 'confirm', message, onConfirm, confirmLabel });
@@ -3932,7 +3943,7 @@
         ensureSeedData(setSeeding).catch(() => {});
 
         const unsubs = [
-          onSnapshot(col('locations'), (snap) => setLocations(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
+          onSnapshot(col('locations'), (snap) => { setLocations(snap.docs.map(d => ({ id: d.id, ...d.data() }))); setLocationsLoaded(true); }),
           onSnapshot(col('equipmentItems'), (snap) => setItems(snap.docs.map(d => ({ id: d.id, ...d.data() })))),
           onSnapshot(col('stockLevels'), (snap) => {
             const map = {};
@@ -3978,7 +3989,7 @@
       const myStaffRecord = staffList.find(s => s.id === userDocId(user.email));
       const isRegistered = !!myStaffRecord;
       const isAdmin = myStaffRecord ? myStaffRecord.role === 'admin' : ADMIN_EMAILS.includes((user.email || '').toLowerCase());
-      const commonProps = { locations: visibleLocations, allLocations: locations, items, stockLevels: visibleStockLevels, orders: visibleOrders, outbox, staffList, recentSessions: visibleSessions, staffActivityStats, config, staleCheckDays: config.staleCheckDays ?? 14, user, isAdmin, isRegistered, showAlert, showConfirm };
+      const commonProps = { locations: visibleLocations, allLocations: locations, items, stockLevels: visibleStockLevels, orders: visibleOrders, outbox: visibleOutbox, staffList, recentSessions: visibleSessions, staffActivityStats, config, staleCheckDays: config.staleCheckDays ?? 14, user, isAdmin, isRegistered, showAlert, showConfirm };
 
       const renderView = () => {
         switch (view) {
