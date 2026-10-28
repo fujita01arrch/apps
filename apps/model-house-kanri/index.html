@@ -2667,11 +2667,54 @@
         return result.sort((a, b) => (b.urgent - a.urgent) || (b.list.length - a.list.length) || ((a.loc.order ?? 0) - (b.loc.order ?? 0)));
       }, [locations, items, stockLevels, orders, staleCheckDays]);
 
+      const [showDetail, setShowDetail] = useState(false);
+      const KIND_LABEL = { overdue: '配置報告待ち', missed: '配置漏れ', wait: '発注待ち', ordered: '発注済み', transit: '配達待ち', adv: 'ADVが用意中', hold: '保留中' };
+      const KINDS_ORDER = ['overdue', 'missed', 'wait', 'ordered', 'transit', 'adv', 'hold'];
+      const totals = {};
+      cards.forEach(c => c.list.forEach(r => { totals[r.kind] = (totals[r.kind] || 0) + 1; }));
+
       return (
         <section>
-          <SectionLabel>拠点ごとの状況（足りないもの）</SectionLabel>
+          <SectionLabel>拠点ごとの状況（足りないもの・発注状況）</SectionLabel>
           <p className="text-[10px] text-gray-300 px-4 -mt-1 mb-2">不足の報告と、進行中の発注から作っています。赤は、対応が必要なものです。</p>
-          <div className="mx-4 space-y-2">
+
+          {/* 全体の発注状況：段階ごとの件数 */}
+          <div className="flex flex-wrap gap-1.5 px-4 mb-2">
+            {KINDS_ORDER.filter(k => totals[k]).map(k => (
+              <span key={k} className={`text-[10px] px-2 py-1 ${KIND_CLS[k]}`}>{KIND_LABEL[k]} {totals[k]}件</span>
+            ))}
+            {Object.keys(totals).length === 0 && <span className="text-[11px] text-emerald-700">足りないものは、ありません</span>}
+          </div>
+
+          {/* ひと目：拠点ごとに、足りない品目を並べる */}
+          <div className="bg-white border border-gray-200 mx-4 divide-y divide-gray-100">
+            {cards.length === 0 && <p className="text-center text-xs text-gray-400 py-4">拠点がありません</p>}
+            {cards.map(({ loc, list, urgent }) => (
+              <div key={loc.id} className="px-4 py-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-sm text-gray-800 truncate">{loc.name}</span>
+                  <span className={`shrink-0 text-[10px] ${list.length === 0 ? 'text-emerald-600' : urgent > 0 ? 'text-rose-600' : 'text-amber-700'}`}>
+                    {list.length === 0 ? '足りないものなし' : urgent > 0 ? ('要対応 ' + urgent + '件') : ('進行中 ' + list.length + '件')}
+                  </span>
+                </div>
+                {list.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-1.5">
+                    {list.map(r => (
+                      <span key={r.itemId} className={`text-[10px] px-1.5 py-0.5 ${KIND_CLS[r.kind]}`}>{r.name}・{r.label}</span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+          <div className="px-4 mt-2">
+            <button onClick={() => setShowDetail(v => !v)} className="text-[11px] tracking-widest text-gray-500 hover:text-gray-800 underline">
+              {showDetail ? '▲ くわしい表示をとじる' : '▼ くわしく見る（品目ごとの届く日・担当・運搬日）'}
+            </button>
+          </div>
+
+          {showDetail && (
+          <div className="mx-4 mt-2 space-y-2">
             {cards.length === 0 && <p className="text-center text-xs text-gray-400 py-4">拠点がありません</p>}
             {cards.map(({ loc, list, urgent, stale, lastLabel }) => (
               <div key={loc.id} className="bg-white border border-gray-200">
@@ -2698,6 +2741,7 @@
               </div>
             ))}
           </div>
+          )}
         </section>
       );
     };
