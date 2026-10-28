@@ -224,6 +224,12 @@
         <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4" /><path d="M16 17l5-5-5-5" /><path d="M21 12H9" />
       </svg>
     );
+    // 更新（再読み込み）のアイコン
+    const RefreshIcon = ({ className = "w-5 h-5" }) => (
+      <svg viewBox="0 0 24 24" className={className} {...iconProps}>
+        <path d="M21 12a9 9 0 01-15.5 6.2" /><path d="M3 12a9 9 0 0115.5-6.2" /><path d="M18 3v4h-4" /><path d="M6 21v-4h4" />
+      </svg>
+    );
 
     // ============================================================
     // 共通コンポーネント：確認/アラートダイアログ
@@ -2536,6 +2542,25 @@
       );
     };
 
+    // アプリを最新の状態に読み込み直す（2026-10-28の要望）。携帯の「ホーム画面に追加」で、アプリのように使っているとき、
+    // 更新（公開）のあとも、古い画面が残り、自動で更新されないことがあるため。ブラウザに保存されたキャッシュ（あれば）を消し、
+    // URLに更新の印（_r=時刻）を付けて、サーバーから読み込み直す。ログインは、そのまま保たれる。
+    const hardRefresh = async () => {
+      try {
+        if (window.caches && caches.keys) {
+          const keys = await caches.keys();
+          await Promise.all(keys.map(k => caches.delete(k)));
+        }
+        if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+          const regs = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(regs.map(r => r.unregister()));
+        }
+      } catch (e) { /* キャッシュを消せなくても、読み込み直しは続ける */ }
+      const u = new URL(window.location.href);
+      u.searchParams.set('_r', String(Date.now()));
+      window.location.replace(u.toString());
+    };
+
     const Header = ({ view, setView, isAdmin, onLogout, userName }) => {
       const items = NAV_ITEMS.filter(i => !i.adminOnly || isAdmin);
       return (
@@ -2544,7 +2569,8 @@
             <div className="font-serif tracking-[0.1em] text-sm text-gray-800">モデルハウス備品管理</div>
             <div className="flex items-center gap-3">
               <span className="text-[10px] text-gray-400 hidden sm:inline">{userName}</span>
-              <button onClick={onLogout} className="text-gray-400 hover:text-gray-700"><LogOutIcon className="w-4 h-4" /></button>
+              <button onClick={hardRefresh} title="最新の状態に更新" className="flex items-center gap-1 text-gray-400 hover:text-gray-700"><RefreshIcon className="w-4 h-4" /><span className="text-[10px] tracking-widest">更新</span></button>
+              <button onClick={onLogout} title="ログアウト" className="text-gray-400 hover:text-gray-700"><LogOutIcon className="w-4 h-4" /></button>
             </div>
           </div>
           <nav className="max-w-4xl mx-auto px-4 flex gap-1 overflow-x-auto pb-2 -mt-1">
