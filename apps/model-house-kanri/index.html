@@ -1651,11 +1651,13 @@
       );
     };
 
-    const LocationsSettingsPanel = ({ locations, user, showAlert, showConfirm }) => {
+    const LocationsSettingsPanel = ({ locations, orders, user, showAlert, showConfirm }) => {
       const [editing, setEditing] = useState(undefined); // undefined=閉じている, null=新規, obj=編集
       const [deleting, setDeleting] = useState(null); // データ削除の対象の拠点
       const [showInactive, setShowInactive] = useState(false); // 無効な拠点は、一覧の下で、たたんでおく
 
+      // 無効にすると、画面に出なくなり、運搬の依頼やリマインドも送られなくなる。まだ届いていない発注があるときは、確認で知らせる
+      const pendingOrderCount = (loc) => (orders || []).filter(o => o.locationId === loc.id && o.status !== '配達済み').length;
       const toggleActive = async (loc) => {
         await updateDoc(docRef('locations', loc.id), { isActive: !loc.isActive, updatedAt: nowIso() });
       };
@@ -1682,7 +1684,7 @@
                 <div className="flex items-center gap-2 shrink-0">
                   <button onClick={() => setEditing(loc)} className="text-gray-400 hover:text-gray-700"><EditIcon className="w-4 h-4" /></button>
                   <button
-                    onClick={() => showConfirm(`「${loc.name}」を無効化しますか？`, () => toggleActive(loc), '無効化する')}
+                    onClick={() => showConfirm(`「${loc.name}」を無効化しますか？` + (pendingOrderCount(loc) > 0 ? `\n\n※まだ届いていない発注が${pendingOrderCount(loc)}件あります。無効にすると、画面に出なくなり、運搬の依頼やリマインドも送られなくなります。先に配置まで終えておくことをおすすめします。` : ''), () => toggleActive(loc), '無効化する')}
                     className="text-gray-400 hover:text-rose-500"
                   ><TrashIcon className="w-4 h-4" /></button>
                 </div>
@@ -2241,7 +2243,7 @@
       );
     };
 
-    const SettingsView = ({ locations, allLocations, items, staffList, config, user, isAdmin, showAlert, showConfirm }) => {
+    const SettingsView = ({ locations, allLocations, orders, items, staffList, config, user, isAdmin, showAlert, showConfirm }) => {
       const [tab, setTab] = useState('locations');
       const tabs = [
         { key: 'locations', label: '拠点' },
@@ -2259,7 +2261,7 @@
               <button key={t.key} onClick={() => setTab(t.key)} className={`text-[11px] tracking-widest px-3 py-1.5 whitespace-nowrap ${tab === t.key ? 'bg-gray-800 text-white' : 'text-gray-500 hover:bg-gray-100'}`}>{t.label}</button>
             ))}
           </div>
-          {tab === 'locations' && <LocationsSettingsPanel locations={allLocations || locations} user={user} showAlert={showAlert} showConfirm={showConfirm} />}
+          {tab === 'locations' && <LocationsSettingsPanel locations={allLocations || locations} orders={orders} user={user} showAlert={showAlert} showConfirm={showConfirm} />}
           {tab === 'items' && <EquipmentSettingsPanel items={items} showAlert={showAlert} showConfirm={showConfirm} />}
           {tab === 'guides' && <GuidesSettingsPanel showAlert={showAlert} showConfirm={showConfirm} user={user} />}
           {tab === 'staff' && <StaffSettingsPanel staffList={staffList} user={user} isAdmin={isAdmin} showAlert={showAlert} showConfirm={showConfirm} />}
@@ -2633,18 +2635,25 @@
     // 不足の報告（stockLevels）と、進行中の発注（orders）から、品目ごとに、いまの段階を出す。
     // 段階：発注待ち（報告済み・まだ依頼していない）／保留中／発注済み（返信待ち）／配達待ち（届く日・担当・運搬日）／
     //       ADVが用意中（本人手配）／配置報告待ち（運搬日を過ぎた）／配置漏れ（前回置けなかった）
-    const LocationStatusBoard = ({ locations, items, stockLevels, orders, staleCheckDays }) => {
+    const LocationStatusBoard = ({ locations, items, stockLevels, orders, staleCheckDays, loaded = true }) => {
       // 見た目は、他のタブ（発注履歴など）と同じ：白地・細い灰色の枠・区切り線・小さなバッジ。
       // 色の意味：赤＝対応が必要／黄＝まだ届いていない／藍＝運搬待ち／灰＝待つだけ。色だけに頼らず、必ず文字を添える
       const KIND_CLS = {
         overdue: 'bg-rose-100 text-rose-700', missed: 'bg-rose-100 text-rose-700', review: 'bg-rose-100 text-rose-700',
-        wait: 'bg-orange-100 text-orange-700', ordered: 'bg-amber-100 text-amber-700', transit: 'bg-indigo-100 text-indigo-700',
+        wait: 'bg-white text-amber-700 border border-amber-300', ordered: 'bg-amber-100 text-amber-700', transit: 'bg-indigo-100 text-indigo-700',
         adv: 'bg-gray-100 text-gray-600', hold: 'bg-gray-100 text-gray-600',
       };
       const KIND_LABEL = { overdue: '配置報告待ち', missed: '配置漏れ', review: '返信の要確認', wait: '発注待ち', ordered: '発注済み', transit: '配達待ち', adv: 'ADVが用意中', hold: '保留中' };
       const KINDS_ORDER = ['overdue', 'missed', 'review', 'wait', 'ordered', 'transit', 'adv', 'hold'];
       const URGENT_KINDS = ['overdue', 'missed', 'review'];
-      const KIND_NOTE = { wait: '次の発注依頼（月・火・木の15時台）でまとめて依頼します', hold: '管理者が「今回は発注しない」にしています', adv: '配置したら、「配置報告」で報告' };
+      const KIND_NOTE = {
+        overdue: '運搬予定日を過ぎています。配置したら、「配置報告」で報告してください',
+        missed: '前回、置けなかった品目です。次の運搬を調整しています',
+        review: '到着日の返信を確認できていません。管理者が確認します',
+        wait: '次の発注依頼（月・火・木の15時台）でまとめて依頼します',
+        hold: '管理者が「今回は発注しない」にしています',
+        adv: '配置したら、「配置報告」で報告',
+      };
       const RANK = Object.fromEntries(KINDS_ORDER.map((k, i) => [k, i]));
       const cards = useMemo(() => {
         const itemById = Object.fromEntries((items || []).map(i => [i.id, i]));
@@ -2695,7 +2704,7 @@
                   r = {
                     ...base, kind: isMissed ? 'missed' : (overdue ? 'overdue' : 'transit'),
                     detail: isMissed
-                      ? '前回の配置漏れ。次の運搬の調整待ち'
+                      ? ''
                       : where + '／' + who + (overdue ? '（予定日を過ぎています）' : '') + (reassigning ? '（運搬日を過ぎています。担当を調整中）' : ''),
                   };
                 } else {
@@ -2719,6 +2728,17 @@
       cards.forEach(c => c.list.forEach(r => { totals[r.kind] = (totals[r.kind] || 0) + 1; }));
       const busy = cards.filter(c => c.list.length > 0);
       const calm = cards.filter(c => c.list.length === 0);
+      // 詳細を開いたとき、同じ説明（届く日・担当など）の品目をまとめ、説明は1回だけ出す
+      const bucketByDetail = (rows) => { const out = []; rows.forEach(r => { const b = out.find(x => x.detail === r.detail); if (b) b.rows.push(r); else out.push({ detail: r.detail, rows: [r] }); }); return out; };
+
+      if (!loaded) {
+        return (
+          <section>
+            <SectionLabel>拠点ごとの状況（足りないもの・発注状況）</SectionLabel>
+            <p className="text-xs text-gray-400 px-4">読み込み中...</p>
+          </section>
+        );
+      }
 
       return (
         <section>
@@ -2735,19 +2755,18 @@
           </div>
           {/* 詳細の開閉：発注履歴と同じ、行全体のボタン */}
           <button onClick={() => setShowDetail(v => !v)} aria-expanded={showDetail} className="w-full flex items-center justify-between px-4 py-2 mb-1 text-left">
-            <span className="text-[10px] text-gray-400 tracking-widest">届く日・担当・運搬日</span>
-            <span className="text-xs text-gray-600">{showDetail ? '▲ とじる' : '▼ 表示する'}</span>
+            <span className="text-[10px] text-gray-400 tracking-widest">届く日・担当・運搬日の詳細</span>
+            <span className="text-[10px] text-gray-400">{showDetail ? '▲ とじる' : '▼ ひらく'}</span>
           </button>
 
           {/* 拠点ごとに1ブロック。足りないものがある拠点を上に、段階ごとに品目をまとめて並べる */}
           <div className="mx-4 space-y-2.5">
             {cards.length === 0 && <p className="text-center text-xs text-gray-400 py-4">拠点がありません</p>}
             {busy.map(({ loc, list, groups, urgent, stale, lastLabel }) => (
-              <div key={loc.id} className="relative px-4 py-3 bg-white border border-gray-200">
-                {urgent > 0 && <span className="absolute left-0 top-0 bottom-0 w-1 bg-rose-400" />}
+              <div key={loc.id} className={`px-4 py-3 bg-white border ${urgent > 0 ? 'border-rose-300' : 'border-gray-200'}`}>
                 <div className="flex items-start justify-between gap-2">
                   <span className="text-sm font-medium text-gray-800 min-w-0 break-words">{loc.name}</span>
-                  <span className={`shrink-0 text-xs px-2 py-0.5 ${urgent > 0 ? 'bg-rose-100 text-rose-700' : 'bg-amber-50 text-amber-700'}`}>
+                  <span className={`shrink-0 text-xs px-2 py-0.5 ${urgent > 0 ? 'bg-rose-100 text-rose-700' : 'bg-gray-100 text-gray-600'}`}>
                     {urgent > 0 ? ('要対応 ' + urgent) : ('進行中 ' + list.length)}
                   </span>
                 </div>
@@ -2760,19 +2779,19 @@
                     <div key={g.kind} className="flex flex-col sm:flex-row sm:items-start gap-1 sm:gap-2">
                       <span className={`self-start sm:w-28 shrink-0 text-center text-xs px-1.5 py-0.5 ${KIND_CLS[g.kind]}`}>{KIND_LABEL[g.kind]} {g.rows.length}</span>
                       <div className="min-w-0 flex-1">
-                        {showDetail && KIND_NOTE[g.kind] && <div className="text-[11px] text-gray-500 mb-1">{KIND_NOTE[g.kind]}</div>}
+                        {KIND_NOTE[g.kind] && <div className="text-[11px] text-gray-500 mb-1">{KIND_NOTE[g.kind]}</div>}
                         {showDetail ? (
-                          <div className="space-y-1">
-                            {g.rows.map(r => (
-                              <div key={r.itemId} className="text-xs text-gray-800 leading-relaxed">
-                                {r.name}<span className="font-medium">　×{r.qty}</span>{r.unitNote && <span className="text-gray-500">{r.unitNote}</span>}
-                                {r.detail && <div className="text-[11px] text-gray-500">{r.detail}</div>}
+                          <div className="space-y-1.5">
+                            {bucketByDetail(g.rows).map((b, bi) => (
+                              <div key={bi} className="text-xs text-gray-800 leading-relaxed">
+                                {b.rows.map(r => <span key={r.itemId} className="inline-block mr-3">{r.name + '\u00A0×' + r.qty}{r.unitNote && <span className="text-gray-500">{r.unitNote}</span>}</span>)}
+                                {b.detail && <div className="text-[11px] text-gray-500">{b.detail}</div>}
                               </div>
                             ))}
                           </div>
                         ) : (
                           <div className="text-xs text-gray-800 leading-relaxed">
-                            {g.rows.map(r => <span key={r.itemId} className="inline-block mr-3">{r.name + ' ×' + r.qty}</span>)}
+                            {g.rows.map(r => <span key={r.itemId} className="inline-block mr-3">{r.name + '\u00A0×' + r.qty}</span>)}
                           </div>
                         )}
                       </div>
@@ -2793,7 +2812,7 @@
       );
     };
 
-    const DashboardView = ({ locations, items, stockLevels, orders, recentSessions, staleCheckDays }) => {
+    const DashboardView = ({ locations, items, stockLevels, orders, recentSessions, staleCheckDays, locationsLoaded }) => {
       const itemById = useMemo(() => Object.fromEntries(items.map(i => [i.id, i])), [items]);
       const sortedLocations = [...locations].filter(l => l.isActive).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
       // 「そろそろ確認（黄）」は、公式な「要確認（赤）」の一歩手前として、staleCheckDaysの3日前から表示する
@@ -2921,7 +2940,7 @@
             </div>
           </div>
 
-          <LocationStatusBoard locations={locations} items={items} stockLevels={stockLevels} orders={orders} staleCheckDays={staleCheckDays} />
+          <LocationStatusBoard locations={locations} items={items} stockLevels={stockLevels} orders={orders} staleCheckDays={staleCheckDays} loaded={locationsLoaded} />
 
           <section>
             <div className="flex items-center justify-between px-4 mb-2">
@@ -3989,7 +4008,7 @@
       const myStaffRecord = staffList.find(s => s.id === userDocId(user.email));
       const isRegistered = !!myStaffRecord;
       const isAdmin = myStaffRecord ? myStaffRecord.role === 'admin' : ADMIN_EMAILS.includes((user.email || '').toLowerCase());
-      const commonProps = { locations: visibleLocations, allLocations: locations, items, stockLevels: visibleStockLevels, orders: visibleOrders, outbox: visibleOutbox, staffList, recentSessions: visibleSessions, staffActivityStats, config, staleCheckDays: config.staleCheckDays ?? 14, user, isAdmin, isRegistered, showAlert, showConfirm };
+      const commonProps = { locations: visibleLocations, allLocations: locations, locationsLoaded, items, stockLevels: visibleStockLevels, orders: visibleOrders, outbox: visibleOutbox, staffList, recentSessions: visibleSessions, staffActivityStats, config, staleCheckDays: config.staleCheckDays ?? 14, user, isAdmin, isRegistered, showAlert, showConfirm };
 
       const renderView = () => {
         switch (view) {
