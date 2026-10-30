@@ -1091,8 +1091,23 @@
           else if (noDate.length) byDate['none'] = noDate;
           Object.keys(byDate).forEach(d => cards.push(byDate[d]));
         });
+        // 配置漏れ（前回置けなかった品目）で、次に行く人が決まっているものは、同じ拠点に同じ人が運ぶ別のカードにまとめる
+        // （2026-10-30の要望）。運搬日が違っても、行く人が同じなら1回の訪問でまとめて置けるため。
+        // 合流できる先が無い配置漏れは、これまでどおり単独のカード。
+        const isMissedCard = (g) => g.every(o => o.missedItemIds && o.missedItemIds.length > 0);
+        const visitOf = (g) => g.map(o => o.deliveryVisitDate || '').filter(Boolean).sort()[0] || '9999-12-31';
+        const missedCards = cards.filter(g => isMissedCard(g) && emailOf(g[0]));
+        const otherCards = cards.filter(g => !(isMissedCard(g) && emailOf(g[0])));
+        const kept = [];
+        missedCards.forEach(g => {
+          const targets = otherCards.filter(c => !isMissedCard(c) && c[0].locationId === g[0].locationId && emailOf(c[0]) === emailOf(g[0]));
+          if (targets.length === 0) { kept.push(g); return; }
+          targets.sort((a, b) => visitOf(a).localeCompare(visitOf(b)));
+          targets[0].push(...g);
+        });
+        const allCards = otherCards.concat(kept);
         const firstIndex = (g) => Math.min(...g.map(o => list.indexOf(o)));
-        return cards.sort((a, b) => firstIndex(a) - firstIndex(b));
+        return allCards.sort((a, b) => firstIndex(a) - firstIndex(b));
       };
       const cards = buildCards(orders);
       const groupKey = (g) => g.map(o => o.id).join('+');
@@ -1127,7 +1142,7 @@
                 const hasMissed = g.some(o => o.missedItemIds && o.missedItemIds.length > 0);
                 const isMine = g.some(o => !!(o.deliveryAssignee && o.deliveryAssignee.email && o.deliveryAssignee.email.toLowerCase() === (user.email || '').toLowerCase()));
                 const assignee = (g.find(o => o.deliveryAssignee) || {}).deliveryAssignee;
-                const visitDate = (g.find(o => o.deliveryVisitDate) || {}).deliveryVisitDate;
+                const visitDate = [...new Set(g.map(o => o.deliveryVisitDate).filter(Boolean))].sort().join('・');
                 const arrivalDates = [...new Set(g.filter(o => o.fulfillment !== 'warehouse' && o.deliveryScheduledDate).map(o => o.deliveryScheduledDate))].sort();
                 const shownItems = g.flatMap(o => pendingItemsOf(o));
                 const warehouseOrders = g.filter(o => o.fulfillment === 'warehouse');
