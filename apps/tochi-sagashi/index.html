@@ -60,10 +60,19 @@ nav.tabs button.so.on{color:var(--navy-d);border-bottom-color:#d9a441}
 
 /* 基本情報 */
 .metabar{background:var(--pale);border-bottom:1px solid var(--line)}
-.metabar .wrap{padding-top:12px;padding-bottom:12px}
-.meta{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px 16px}
-.meta label{display:block;font-size:.75rem;color:var(--ink2);letter-spacing:.06em}
-.tools{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;margin-top:10px;font-size:.78rem;color:var(--ink2)}
+.metabar .wrap{padding-top:8px;padding-bottom:6px}
+.meta{display:grid;grid-template-columns:1.3fr 1fr 1.2fr;gap:6px 10px}
+.meta>div{min-width:0}
+.meta label{display:block;font-size:.7rem;color:var(--ink2);letter-spacing:.04em;margin-bottom:2px}
+.meta input[type=text],.meta input[type=date]{min-height:34px;padding:4px 8px;font-size:.88rem;min-width:0;max-width:100%}
+.meta input[type=date]{-webkit-appearance:none;appearance:none;display:block}
+.custrow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:6px}
+.custrow label{flex:0 0 100%;font-size:.7rem;color:var(--ink2);letter-spacing:.04em}
+.custrow select{flex:1 1 180px;min-width:0;min-height:34px;font-size:.88rem;padding:4px 8px}
+.toolsd{margin-top:6px;font-size:.78rem;color:var(--ink2)}
+.toolsd summary{cursor:pointer;padding:4px 0;list-style-position:inside}
+.toolsd summary small{font-size:.72rem}
+.tools{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;margin-top:6px;font-size:.78rem;color:var(--ink2)}
 
 /* タブ */
 nav.tabs{position:sticky;top:0;z-index:5;background:#fff;border-bottom:1px solid var(--line2)}
@@ -348,20 +357,26 @@ footer.ft small{display:block;font-family:var(--min);letter-spacing:.1em;font-si
 <div class="warnbar" id="warnTel" role="alert">電話番号・口座番号のような数字が入っています。入れないでください（氏名と条件だけ入力します）。</div>
 
 <div class="metabar noprint"><div class="wrap">
+  <div class="custrow so"><label for="custSel">お客様を選ぶ（この端末のこのブラウザに、お客様ごとに保存されます）</label><select id="custSel" aria-label="お客様を選ぶ"></select><button class="btn sub2 sm" data-act="custNew">＋ 新しいお客様</button></div>
   <div class="meta">
-    <div><label for="m-customer">お客様名（氏名のみ）</label><input type="text" id="m-customer" data-bind="meta.customer" placeholder="例：〇〇 様" maxlength="60"></div>
+    <div><label for="m-customer">お客様名（氏名のみ）</label><input type="text" id="m-customer" data-bind="meta.customer" data-after="cust" placeholder="例：〇〇 様" maxlength="60"></div>
     <div><label for="m-staff">担当者</label><input type="text" id="m-staff" data-bind="meta.staff" maxlength="40"></div>
     <div><label for="m-date">打合せ日</label><input type="date" id="m-date" data-bind="meta.date"></div>
   </div>
-  <div class="tools">
-    <span>入力は自動で、この端末のこのブラウザの中にだけ保存されます。電話番号・マイナンバー・口座情報は入力しないでください。</span>
-    <span class="so">共用の端末では、終わったら「最初からやり直す」を押します。</span>
-    <button class="btn sub2 sm so" data-act="exportData">データを書き出す</button>
-    <button class="btn sub2 sm so" data-act="importPick">データを読み込む</button>
-    <button class="btn sub2 sm so" data-act="resetAll">最初からやり直す</button>
-    <span class="so">表示の切り替えは、画面の見せ分けです（アクセス制限ではありません）。「お客様と見る」にしたあとは、右上の小さな「営業用」ボタン（確認が出ます）か、ページを開き直すと、営業用に戻ります。</span>
-    <input type="file" id="impFile" accept=".json,application/json" hidden>
-  </div>
+  <details class="toolsd">
+    <summary>保存・データ<span class="so">（書き出し・読み込み・やり直し）</span>　<small>電話番号・マイナンバー・口座情報は入れません</small></summary>
+    <div class="tools">
+      <span>入力は自動で、この端末のこのブラウザの中にだけ保存されます。電話番号・マイナンバー・口座情報は入力しないでください。</span>
+      <span class="so">お客様ごとに、この端末に残ります（上の「お客様を選ぶ」で切り替え）。端末やブラウザを変えると見えなくなるので、「全員分を書き出す」で控えを残してください。共用の端末では、書き出したあと、お客様のデータを消します。</span>
+      <button class="btn sub2 sm so" data-act="exportData">このお客様を書き出す</button>
+      <button class="btn sub2 sm so" data-act="exportAll">全員分を書き出す</button>
+      <button class="btn sub2 sm so" data-act="importPick">データを読み込む（新しいお客様として追加）</button>
+      <button class="btn sub2 sm so" data-act="resetAll">このお客様を最初からやり直す</button>
+      <button class="btn sub2 sm so" data-act="custDelete">このお客様のデータを消す</button>
+      <span class="so">表示の切り替えは、画面の見せ分けです（アクセス制限ではありません）。「お客様と見る」にしたあとは、右上の小さな「営業用」ボタン（確認が出ます）か、ページを開き直すと、営業用に戻ります。</span>
+    </div>
+  </details>
+  <input type="file" id="impFile" accept=".json,application/json" hidden>
 </div></div>
 
 <nav class="tabs noprint" id="tabs" aria-label="手順"><div class="wrap">
@@ -403,8 +418,8 @@ footer.ft small{display:block;font-family:var(--min);letter-spacing:.1em;font-si
   <p class="note">4つのタブに分けています。タブの中は、上から順に進みます（上の小さなボタンで、行き来もできます）。【準備】01　【条件づくり】02〜06　【土地を見る】07・08　【持ち帰り】09・10</p>
   <div class="card">
     <ol style="margin:0;padding-left:1.4em;line-height:2.1">
-      <li><b>01 お金の枠</b>：土地にかけられる金額の上限を、仮に決めます（あとで変えられます）</li>
-      <li><b>02 条件を出す</b>：希望をすべて出します（ランドチェックシート＝土地を見るときの共通の評価表の、11項目をまとめて選ぶこともできます）</li>
+      <li><b>01 お金の枠</b>：土地予算と、土地以外にかかる金額の目安を、仮に決めます（あとで変えられます）</li>
+      <li><b>02 条件を出す</b>：希望をすべて出します（土地を見るときによく使う11項目を、まとめて選ぶこともできます）</li>
       <li><b>03 優先順位</b>：「譲れない／重視／あれば嬉しい／譲れる」に分けます</li>
       <li><b>04 トレードオフ</b>：二択で、「どちらを優先するか」を決めます</li>
       <li><b>05 エリアの色分け</b>：地図の町を、3段階に塗り分けます。町の中の細かい条件は、メモに書きます</li>
@@ -423,14 +438,14 @@ footer.ft small{display:block;font-family:var(--min);letter-spacing:.1em;font-si
     <span>条件整理</span><i>▶</i><span>土地情報</span><i>▶</i><span>現地確認</span><i>▶</i><span>点数で判断</span><i>▶</i><span>買付</span><i>▶</i><span>契約</span><i>▶</i><span>ローン本審査</span><i>▶</i><span>決済</span>
   </div>
   <p class="note">このツールが主に扱うのは「条件整理」から「買付」までです。契約以降の流れは、09で簡単に確認します。</p>
-  <div class="warn">土地探しの最初の準備では、土地の条件だけでなく、<b>資金計画（土地にかけられる上限）</b>、<b>情報の入口（どこから土地情報を受け取るか）</b>、<b>判断の期限</b>も一緒に決めます（お金の枠は01、判断の目安は06で扱います）。</div>
+  <div class="warn">土地探しの最初の準備では、土地の条件だけでなく、<b>資金計画（土地予算）</b>、<b>情報の入口（どこから土地情報を受け取るか）</b>、<b>判断の期限</b>も一緒に決めます（お金の枠は01、判断の目安は06で扱います）。</div>
   <div class="btnrow noprint"><button class="btn" data-act="goTab" data-tab="11">01 お金の枠 へ進む</button></div>
 </section>
 
 <!-- 11 お金の枠 -->
 <section class="panel" id="p11">
-  <h2><span class="no">01</span>お金の枠（土地にかけられる上限）</h2>
-  <p class="desc">土地探しを始める前に、土地にかけられる金額の上限を決めておきます。ライフプラン（資金計画がすんでいれば、その数字）で決めた金額を入れます。上限が決まっていると、土地が出たときに、すぐ「入る・入らない」が分かります。</p>
+  <h2><span class="no">01</span>お金の枠（土地予算）</h2>
+  <p class="desc">土地探しを始める前に、土地予算と、土地以外にかかる金額の目安を決めておきます。ライフプラン（資金計画がすんでいれば、その数字）をもとに入れます。決まっていると、土地が出たときに、土地予算との差額と、その土地での総額の目安がすぐ分かります。</p>
   <div id="p11c"></div>
 </section>
 
@@ -446,7 +461,7 @@ footer.ft small{display:block;font-family:var(--min);letter-spacing:.1em;font-si
   <h2><span class="no">03</span>優先順位をつける</h2>
   <p class="desc">それぞれの条件を4つに分けます。「譲れない」は、満たさない土地は<b>候補から外す</b>条件です。</p>
   <div class="card pale note" style="margin-top:0">
-    <b>譲れない</b>（基準点4・満たさなければ見送り）／<b>重視</b>（基準点4）／<b>あれば嬉しい</b>（基準点3）／<b>譲れる</b>（基準点2）。<br>基準点は、条件の大事さの点数で、ランドチェックシートの「大事：4／普通：3／気にしない：2」と同じです。
+    <b>譲れない</b>（基準点4・満たさなければ見送り）／<b>重視</b>（基準点4）／<b>あれば嬉しい</b>（基準点3）／<b>譲れる</b>（基準点2）。<br>基準点は、条件の大事さの点数です（大事：4／普通：3／気にしない：2）。
   </div>
   <div id="p2c"></div>
 </section>
@@ -517,7 +532,7 @@ footer.ft small{display:block;font-family:var(--min);letter-spacing:.1em;font-si
 <!-- 4 採点 -->
 <section class="panel" id="p4">
   <h2><span class="no">07</span>ものさし（点数のつけ方と一覧）</h2>
-  <p class="desc">点数のつけ方と、土地の一覧を確かめます。<b>ランドチェックシート</b>と同じ方法です。基準点（03で決めた条件の大事さの点数）×感想点を足して、合計を出します。現地での入力は、「08 現地で点数をつける」で行います。</p>
+  <p class="desc">点数のつけ方と、土地の一覧を確かめます。基準点（03で決めた条件の大事さの点数）×感想点を足して、合計を出します。現地での入力は、「08 現地で点数をつける」で行います。</p>
   <div class="card pale note" style="margin-top:0">
     感想点：◎ とても良い＝3／○ 良い＝2／△ 普通＝1／× 合わない＝0。評価点＝基準点×感想点。<br>
     「譲れない」条件が×の土地は、点数に関わらず見送りです。<b>すべて「良い」なら、100点換算で約67点</b>です。合格ラインの初期値は、これを少し下回る65点にしています（打合せで変えられます）。点数は判断の目安で、買う・買わないを決めるのは、お客様です。
@@ -598,10 +613,10 @@ function fmtD(d){ return (d.getMonth()+1) + '/' + d.getDate() + '（' + '日月�
 function addDays(d, n){ var r = new Date(d); r.setDate(r.getDate() + n); return r; }
 
 /* ---- 設定 ---- */
-// 条件の4段階。基準点は、ランドチェックシートの「大事:4／普通:3／気にしない:2」に合わせています
+// 条件の4段階。基準点は「大事:4／普通:3／気にしない:2」
 var LEVELS = { must:{label:'譲れない', w:4}, high:{label:'重視', w:4}, nice:{label:'あれば嬉しい', w:3}, give:{label:'譲れる', w:2} };
 var LEVEL_ORDER = ['must','high','nice','give'];
-// 感想点：ランドチェックシートは「とても良い3／良い2／普通1」。見送りの判定用に「合わない0」を足しています
+// 感想点：「とても良い3／良い2／普通1」。見送りの判定用に「合わない0」を足しています
 var GRADES = [['◎','とても良い',3],['○','良い',2],['△','普通',1],['×','合わない',0]];
 var GP = { '◎':3, '○':2, '△':1, '×':0 };
 var DEF_A = 65, DEF_B = 50;
@@ -672,7 +687,7 @@ var REASONS = ['価格','広さ','エリア・立地','形状・間口','日当�
 var STEPS = [
   {t:'最初の準備', when:'初回面談〜1週間',
    cust:['条件を整理する（このツール）','家族で優先順位をそろえる'],
-   us:['ライフプランの総予算を土台に、土地にかけられる上限を仮置きする','情報の入口の設定（不動産会社の情報・公開前の情報・地主直売・古家付きも含める）','エリアのハザード・法規の確認'],
+   us:['ライフプランをもとに、土地予算と、土地以外にかかる金額の目安を仮置きする','情報の入口の設定（不動産会社の情報・公開前の情報・地主直売・古家付きも含める）','エリアのハザード・法規の確認'],
    pt:'ここで「合格ラインで動く」ルールと、返答の期限を決めておくと、後の迷いが減ります。'},
   {t:'土地情報が出る', when:'情報が出た当日〜翌日（目安）',
    cust:['気になるかどうか、まず返答する（決めた目安を参考に）'],
@@ -684,7 +699,7 @@ var STEPS = [
    pt:'時間帯を変えて見ると、日当たりや音の印象が変わります。家族で話し合う時間が必要なら、期限は延ばして構いません。'},
   {t:'買付の判断', when:'現地確認から数日（相談して決める）',
    cust:['合格ライン以上で、譲れない条件が満たされているか、確かめる','買付の条件を決める（希望価格・手付金・契約の希望日など）'],
-   us:['希望条件のたたき台をつくる','資金計画（土地にかけられる上限）の確認がすんでいるか、確かめる（他の住宅会社も比べられる時間を確保する）','住宅ローンの事前審査・資金準備の状況を確認する','必要なら、不動産会社に、現地確認まで待ってもらえるか相談する'],
+   us:['希望条件のたたき台をつくる','資金計画（土地予算）の確認がすんでいるか、確かめる（他の住宅会社も比べられる時間を確保する）','住宅ローンの事前審査・資金準備の状況を確認する','必要なら、不動産会社に、現地確認まで待ってもらえるか相談する'],
    pt:'「希望条件で受理されたら買いたい」と気持ちが固まった段階で出します。'},
   {t:'買付証明書の提出', when:'判断した当日〜翌日',
    cust:['内容を確認し、ご自身で署名・提出する'],
@@ -774,8 +789,40 @@ function cleanState(o){
   return d;
 }
 var saveFailed = false;
+/* ---------- お客様ごとの保存（この端末のこのブラウザの中だけ） ---------- */
+var IDX_KEY = 'tochi-sagashi-index';
+var CKEY = 'tochi-sagashi-c-';
+var IDX = { cur:'', list:[] };
+function cleanIdx(o){
+  var r = { cur:'', list:[] }, seen = {};
+  if (o && Array.isArray(o.list)) o.list.slice(0, 200).forEach(function(x){
+    if (x && typeof x === 'object' && ID_RE.test(x.id || '') && !seen[x.id]){ seen[x.id] = 1; r.list.push({ id:x.id, name:str(x.name, 60), upd:str(x.upd, 24) }); }
+  });
+  if (o && ID_RE.test(o.cur || '') && seen[o.cur]) r.cur = o.cur; else if (r.list.length) r.cur = r.list[0].id;
+  return r;
+}
+function saveIdx(){ try { localStorage.setItem(IDX_KEY, JSON.stringify(IDX)); } catch(e){ saveFailed = true; var w = $('#warnSave'); if (w) w.classList.add('on'); } }
+function idxEntry(id){ return IDX.list.filter(function(x){ return x.id === id; })[0]; }
 function load(){ try { var r = localStorage.getItem(KEY); return r ? cleanState(JSON.parse(r)) : null; } catch(e){ return null; } }
-function save(){ try { localStorage.setItem(KEY, JSON.stringify(S)); if (saveFailed){ saveFailed = false; $('#warnSave').classList.remove('on'); } } catch(e){ saveFailed = true; $('#warnSave').classList.add('on'); } }
+function save(){
+  try { localStorage.setItem(KEY, JSON.stringify(S)); if (saveFailed){ saveFailed = false; $('#warnSave').classList.remove('on'); } } catch(e){ saveFailed = true; $('#warnSave').classList.add('on'); }
+  var en = idxEntry(IDX.cur);
+  if (en){ var nm = S.meta.customer || '', up = new Date().toISOString().slice(0, 16); if (en.name !== nm || en.upd.slice(0, 13) !== up.slice(0, 13)){ en.name = nm; en.upd = up; saveIdx(); } }
+}
+function initCustomers(){
+  var idx = null;
+  try { idx = cleanIdx(JSON.parse(localStorage.getItem(IDX_KEY) || 'null')); } catch(e){ idx = null; }
+  if (!idx || !idx.list.length){
+    // 前の版の保存（1人分）を、最初のお客様として引き継ぐ（元の保存は消さない）
+    var first = null;
+    try { var old = localStorage.getItem('tochi-sagashi-v2'); if (old) first = cleanState(JSON.parse(old)); } catch(e){ first = null; }
+    var id = uid(); idx = { cur:id, list:[{ id:id, name:first ? first.meta.customer : '', upd:new Date().toISOString().slice(0, 16) }] };
+    KEY = CKEY + id; IDX = idx;
+    try { localStorage.setItem(KEY, JSON.stringify(first || defaultState())); } catch(e){}
+    saveIdx();
+  } else { IDX = idx; KEY = CKEY + idx.cur; }
+}
+initCustomers();
 var S = load() || defaultState();
 var draft = { name:'', note:'', reasons:[], cName:'', candName:'' };
 function setPath(p, v){ var a = p.split('.'); var o = S; for (var i = 0; i < a.length-1; i++) o = o[a[i]]; o[a[a.length-1]] = v; }
@@ -786,7 +833,7 @@ function landById(id){ return S.lands.filter(function(l){ return l.id === id; })
 /* ---------- 01 ---------- */
 function hasPreset(name){ return S.conds.some(function(x){ return x.preset && x.name === name; }); }
 function render1(){
-  var h = '<div class="card pale"><div class="row" style="margin:0"><span><b>ランドチェックシートの11項目</b>（エリア7・物件3・金額1）を、まとめて選べます。</span><button class="btn sub2 sm" data-act="presetSheet">11項目を選ぶ</button></div></div>';
+  var h = '<div class="card pale"><div class="row" style="margin:0"><span><b>土地を見るときによく使う11項目</b>（エリア7・物件3・金額1）を、まとめて選べます。</span><button class="btn sub2 sm" data-act="presetSheet">11項目を選ぶ</button></div></div>';
   PRESET_CATS.forEach(function(c){
     h += '<h3>' + esc(c) + '</h3><div class="chips">';
     PRESETS.filter(function(p){ return p.cat === c; }).forEach(function(p){
@@ -1102,7 +1149,7 @@ function parseLand(raw){
   if (addr){ addr = cutLabel(addr.replace(/\s{2,}.*$/, '').replace(/(?:地図|周辺|MAP).*$/, '')); put('name', addr.slice(0, 50)); }
   return { fields: r, found: found };
 }
-function assessLand(L, budget){
+function assessLand(L, budget, other){
   var d = {}, flags = [];
   var area = Number(L.area) > 0 ? Number(L.area) : null, price = Number(L.price) > 0 ? Number(L.price) : null;
   if (area) d.tsubo = area * 0.3025;
@@ -1129,7 +1176,10 @@ function assessLand(L, budget){
   flags.push(['check', '周囲に2mを超える高低差があるときは、がけ条例の確認が必要です。']);
   if (price && !hasExtra) flags.push(['check', '追加費用（造成・水道引込・解体・地盤など）は、まだ入っていません。いまの総額は、土地の価格だけです。']);
   var b = Number(budget) > 0 ? Number(budget) : null;
-  if (b && d.total){ if (d.total > b) flags.unshift(['ng', '土地にかけられる上限（' + b.toLocaleString() + '万円）を超えています（概算の総額 ' + Math.round(d.total).toLocaleString() + '万円）。']); else flags.push(['ok', '上限（' + b.toLocaleString() + '万円）の範囲内です（概算の総額 ' + Math.round(d.total).toLocaleString() + '万円）。']); }
+  var o = (other === '' || other == null || !isFinite(Number(other)) || Number(other) < 0) ? null : Number(other);
+  d.diff = (b && d.total) ? b - d.total : null;
+  d.grand = (d.total && o !== null) ? d.total + o : null;
+  if (d.diff !== null){ if (d.diff < 0) flags.unshift(['ng', '土地予算（' + b.toLocaleString() + '万円）を ' + Math.round(-d.diff).toLocaleString() + '万円 超えています（土地にかかる金額 ' + Math.round(d.total).toLocaleString() + '万円）。']); else flags.push(['ok', '土地予算（' + b.toLocaleString() + '万円）の範囲内です（あと ' + Math.round(d.diff).toLocaleString() + '万円。土地にかかる金額 ' + Math.round(d.total).toLocaleString() + '万円）。']); }
   d.flags = flags;
   return d;
 }
@@ -1153,7 +1203,7 @@ function newLand(f){
 }
 function safeUrl(u){ return /^https?:\/\/[^\s"'<>]+$/i.test(u || '') ? u : ''; }
 function landKpis(L){
-  var a = assessLand(L, S.landBudget);
+  var a = assessLand(L, S.landBudget, S.budget.other);
   var fl = a.flags.slice();
   if (!L.checked) fl.unshift(['check', '読み取った内容を、元の資料と見比べて、「確認した」を押してください（読み間違いがあることがあります）。']);
   var fmt = function(v, dg){ return (v == null || !isFinite(v)) ? '―' : Number(v).toLocaleString(undefined, { maximumFractionDigits:dg }); };
@@ -1161,7 +1211,9 @@ function landKpis(L){
     '<div class="kpi"><div class="k">坪単価</div><div class="v">' + fmt(a.unit, 1) + '<small> 万円</small></div></div>' +
     '<div class="kpi"><div class="k">建築面積の上限（建ぺい率）</div><div class="v">' + fmt(a.build, 1) + '<small> ㎡</small></div></div>' +
     '<div class="kpi"><div class="k">延べ床面積の上限（容積率）</div><div class="v">' + fmt(a.floor, 1) + '<small> ㎡</small></div></div>' +
-    '<div class="kpi"><div class="k">概算の総額（土地＋追加費用）</div><div class="v">' + fmt(a.total, 0) + '<small> 万円</small></div></div></div>' +
+    '<div class="kpi"><div class="k">土地にかかる金額（土地の価格＋追加費用）</div><div class="v">' + fmt(a.total, 0) + '<small> 万円</small></div></div>' +
+    '<div class="kpi"><div class="k">土地予算との差額（＋は残り／−は超える分）</div><div class="v">' + (a.diff == null ? '―' : (a.diff >= 0 ? '＋' : '−') + fmt(Math.abs(a.diff), 0)) + '<small> 万円</small></div></div>' +
+    '<div class="kpi"><div class="k">この土地での総額の目安（土地にかかる金額＋土地以外にかかる金額）</div><div class="v">' + fmt(a.grand, 0) + '<small> 万円</small></div></div></div>' +
     '<ul class="flags">' + fl.map(function(f){ return '<li class="' + f[0] + '">' + (f[0] === 'ng' ? '重要な確認：' : f[0] === 'warn' ? '確認したい点：' : f[0] === 'ok' ? '' : '確認：') + esc(f[1]) + '</li>'; }).join('') + '</ul>' };
 }
 function renderLandDerived(){
@@ -1182,7 +1234,7 @@ function render9(){
     '<hr style="border:0;border-top:1px solid var(--line);margin:14px 0"><b>② PDFの土地資料（マイソクなど）を選ぶ</b><p class="note" style="margin:4px 0 8px">文字が入っているPDFから読み取ります。写真だけのPDF（スキャン）は、文字を読み取れません。その場合は、手入力してください。</p>' +
     '<div class="row"><input type="file" id="landPdf" accept="application/pdf,.pdf" aria-label="PDFを選ぶ"><button class="btn sub2" data-act="landPdfRun" id="landPdfBtn">PDFを読み取る</button></div>' +
     '<div id="landMsgBox" role="status" aria-live="polite"></div></div>';
-  h += '<div class="row"><label for="landBudget" style="font-size:.85rem">土地にかけられる上限（万円）</label><input type="number" id="landBudget" min="0" step="10" style="max-width:180px" value="' + (S.landBudget === '' ? '' : S.landBudget) + '"><span class="note">資金計画で決めた、土地と追加費用の上限です（入れると、土地ごとに比べます）。</span></div>';
+  h += '<div class="row"><label for="landBudget" style="font-size:.85rem">土地予算（万円）</label><input type="number" id="landBudget" min="0" step="10" style="max-width:180px" value="' + (S.landBudget === '' ? '' : S.landBudget) + '"><label for="landOther" style="font-size:.85rem">土地以外にかかる金額の目安（万円）</label><input type="number" id="landOther" min="0" step="10" data-budget="other" style="max-width:180px" value="' + (S.budget.other === '' ? '' : S.budget.other) + '"><span class="note">01 お金の枠と同じ数字です（ここで直すと、01にも反映されます）。土地ごとに、土地予算との差額と、その土地での総額の目安を出します。</span></div>';
   h += '<h3>取り込んだ土地（' + S.lands.length + '件）</h3>';
   if (!S.lands.length) h += '<p class="empty">まだ土地がありません。上で取り込むか、「手入力で追加」を押してください。</p>';
   else h += '<div class="landlist">' + S.lands.map(function(l){ return '<button class="lc' + (l.id === S.landSel ? ' on' : '') + '" aria-pressed="' + (l.id === S.landSel) + '" data-act="landSel" data-id="' + esc(l.id) + '"><b>' + esc(l.name || '（名前なし）') + (l.checked ? '' : '<span class="badge">未確認</span>') + '</b>' + (l.price ? Number(l.price).toLocaleString() + '万円' : '価格―') + '／' + (l.area ? l.area + '㎡' : '面積―') + '<br><span class="note">' + esc(l.src || '') + '</span></button>'; }).join('') + '</div>';
@@ -1279,7 +1331,7 @@ function render4(){
   var el = $('#p4c'), cs = scoredConds();
   if (!S.conds.length || !cs.length){ el.innerHTML = '<p class="empty">先に「02 条件を出す」「03 優先順位」で条件をつくってください。</p>'; return; }
   var un = S.conds.filter(function(c){ return !c.level; }).length;
-  var h = '<div class="row"><label>理想に近い（合格ライン） <input type="number" id="lineA" aria-label="理想に近い（合格ライン）の点数" min="0" max="100" value="' + S.lineA + '" style="width:84px;display:inline-block"> 点以上</label><label>気になる点あり <input type="number" id="lineB" aria-label="気になる点ありの点数" min="0" max="100" value="' + S.lineB + '" style="width:84px;display:inline-block"> 点以上</label><span class="note">100点換算です。初期値は、おすすめの目安です（判定は、小数点以下も含めて行います）。</span><span class="note so">ランドチェックシートの60点／50点は、基準点の合計が36（11項目の例）のとき満点108点で、約56点／46点にあたります。×＝0点は、このツールで足した点です。</span></div>';
+  var h = '<div class="row"><label>理想に近い（合格ライン） <input type="number" id="lineA" aria-label="理想に近い（合格ライン）の点数" min="0" max="100" value="' + S.lineA + '" style="width:84px;display:inline-block"> 点以上</label><label>気になる点あり <input type="number" id="lineB" aria-label="気になる点ありの点数" min="0" max="100" value="' + S.lineB + '" style="width:84px;display:inline-block"> 点以上</label><span class="note">100点換算です。初期値は、おすすめの目安です（判定は、小数点以下も含めて行います）。</span><span class="note so">参考：基準点の合計が36（11項目の例）のとき満点は108点で、その60点／50点は、100点換算で約56点／46点にあたります。×＝0点は、このツールで足した点です。</span></div>';
   if (un) h += '<div class="warn">優先順位をつけていない条件が' + un + '件あります。点数には入りません（03）。</div>';
   h += '<div class="row"><input type="text" id="candName" aria-label="候補の土地の名前" maxlength="80" value="' + esc(draft.candName) + '" placeholder="候補の土地（例：〇〇町 45坪）"><button class="btn sm" data-act="addCand">候補を追加</button></div>';
   if (!S.cands.length) h += '<p class="empty">候補の土地を追加すると、点数の表が出ます（6件まで）。<span class="so">営業用の「土地情報」で取り込んだ土地は、そこから候補にできます。</span></p>';
@@ -1330,7 +1382,7 @@ function milestones(){
   var m = Math.max(0.5, Number(S.plan.months) || 3);
   var total = Math.round(m * 30.4), half = Math.round(total * 0.5), late = Math.round(total * 0.8);
   var items = [];
-  if (total > 10) items.push([7, '条件の整理を終える', '01〜05を終え、土地にかけられる上限と、情報の入口（どこから土地情報を受け取るか）も決める']);
+  if (total > 10) items.push([7, '条件の整理を終える', '01〜05を終え、土地予算と、情報の入口（どこから土地情報を受け取るか）も決める']);
   if (Math.abs(30 - half) > 3 && 30 < half) items.push([30, '1回目の振り返り', '見送りログを見て、条件の見直しが要るかを話す']);
   items.push([half, '条件を見直す日', '譲れない・重視の中で、動かせる条件がないか、一緒に相談する。エリアの色分けも見直す']);
   items.push([late, '最終の見直し', '合格ラインや探すエリアを変えるか、そのままで待つかを、一緒に決める']);
@@ -1490,7 +1542,7 @@ function buildNote(){
   WARDS.forEach(function(w){ var s = mapSvgStatic(w); if (s) h += '<div class="mapbox" style="margin:8px 0;max-width:640px">' + s + '</div>'; });
   if (S.areaNote) h += '<p style="margin:8px 0"><b>エリアのメモ</b><br>' + esc(S.areaNote).replace(/\n/g, '<br>') + '</p>';
 
-  h += '<h2 class="pgb"><span class="no">05</span>土地を見るときの「ものさし」（ランドチェックシート）</h2>';
+  h += '<h2 class="pgb"><span class="no">05</span>土地を見るときの「ものさし」</h2>';
   h += '<p class="note">物件名：<span class="blank"></span>　　見学日：<span class="blank"></span><br>見学したあとに、感想点（◎とても良い＝3／○良い＝2／△普通＝1／×合わない＝0）を書きます。基準点×感想点＝評価点。評価点を足して、合計を出します。</p>';
   if (!cs.length) h += '<p class="note">優先順位を決めると、ここに、ご自身の条件が入ります。</p>';
   else {
@@ -1595,19 +1647,13 @@ function noteLands(){
 }
 
 /* ---------- 01 お金の枠 ---------- */
-function syncLimit(){ if (S.budget.total !== '' && S.budget.other !== '' && S.budget.total > S.budget.other) S.landBudget = S.budget.total - S.budget.other; }
-function budgetKpi(){
-  var tt = S.budget.total, oo = S.budget.other, lim = (tt !== '' && oo !== '' && tt > oo) ? tt - oo : null;
-  return '<div class="kpis"><div class="kpi"><div class="k">土地にかけられる上限（土地の価格＋追加費用）</div><div class="v">' + (lim == null ? '―' : lim.toLocaleString()) + '<small> 万円</small></div></div></div>' +
-    (tt !== '' && oo !== '' && tt <= oo ? '<p class="note">総予算が、土地以外に使う金額より大きくなるように、数字を確かめましょう。</p>' : '');
-}
+// 土地予算と、土地以外にかかる金額の目安を、別々に入れる（引き算で上限は出さない。土地の要望によって総予算が変わるため）
 function renderBudget(){
   var v = function(x){ return x === '' ? '' : x; };
   $('#p11c').innerHTML = '<div class="card pale"><div class="grid2">' +
-    '<div><label for="b-total">総予算（万円）</label><input type="number" id="b-total" min="0" step="10" data-budget="total" value="' + v(S.budget.total) + '"><span class="note">借入と自己資金を合わせた、家づくり全体の予算です。</span></div>' +
-    '<div><label for="b-other">土地以外に使う金額の目安（万円）</label><input type="number" id="b-other" min="0" step="10" data-budget="other" value="' + v(S.budget.other) + '"><span class="note">建物・外構・諸費用・予備費など。建物の金額は、設計に入ってから決まるので、ここでは目安です。</span></div></div></div>' +
-    '<div id="budgetKpi">' + budgetKpi() + '</div>' +
-    '<div class="card"><h4>土地の上限に含めて考えるもの</h4><ul style="margin:4px 0;padding-left:1.3em"><li>土地の価格</li><li>造成・擁壁・水道の引込・解体・地盤などの追加費用</li><li>土地を買うときの諸費用</li></ul><h4 style="margin-top:12px">土地以外に残しておくもの</h4><ul style="margin:4px 0;padding-left:1.3em"><li>建物（本体・付帯工事）</li><li>外構</li><li>住宅ローンや登記などの諸費用</li><li>予備費</li></ul><p class="note" style="margin:6px 0 0">数字は、ライフプランで出した総予算（資金計画がすんでいれば、その数字）を入れます。上限いっぱいではなく、余裕を持たせて決めて構いません。</p></div>' +
+    '<div><label for="b-land">土地予算（万円）</label><input type="number" id="b-land" min="0" step="10" data-budget="land" value="' + v(S.landBudget) + '"><span class="note">土地の価格と、造成・水道の引込・解体・地盤などの追加費用を合わせた予算です。</span></div>' +
+    '<div><label for="b-other">土地以外にかかる金額の目安（万円）</label><input type="number" id="b-other" min="0" step="10" data-budget="other" value="' + v(S.budget.other) + '"><span class="note">建物・外構・諸費用・予備費など。建物の金額は、設計に入ってから決まるので、ここでは目安です。</span></div></div></div>' +
+    '<div class="card"><h4>土地予算に含めて考えるもの</h4><ul style="margin:4px 0;padding-left:1.3em"><li>土地の価格</li><li>造成・擁壁・水道の引込・解体・地盤などの追加費用</li><li>土地を買うときの諸費用</li></ul><h4 style="margin-top:12px">土地以外にかかるもの</h4><ul style="margin:4px 0;padding-left:1.3em"><li>建物（本体・付帯工事）</li><li>外構</li><li>住宅ローンや登記などの諸費用</li><li>予備費</li></ul><p class="note" style="margin:6px 0 0">数字は、ライフプラン（資金計画がすんでいれば、その数字）をもとに入れます。土地の希望によって、全体の金額は変わることがあります。土地の情報が出たら、土地予算との差額と、その土地での総額の目安を確かめます。</p></div>' +
     '<div class="btnrow noprint"><button class="btn" data-act="goTab" data-tab="1">02 条件を出すへ進む</button></div>';
 }
 var RENDER = { 1:render1, 2:render2, 3:render3, 4:render4, 5:render5, 6:function(){ render6(); renderMs(); renderWait(); }, 7:render7, 8:render8, 9:render9, 10:renderGuide, 11:renderBudget, 12:renderField };
@@ -1649,7 +1695,9 @@ function showTab(n){
   buildSubnav(g);
   var tb = document.querySelector('#tabs button.on'); if (tb && tb.scrollIntoView) { try { tb.scrollIntoView({ block:'nearest', inline:'center' }); } catch(e){} }
   var target = (Number(n) !== ps[0]) ? document.getElementById('p' + n) : null;
-  if (target) target.scrollIntoView(); else window.scrollTo(0, 0);
+  // タブを変えたら、ページの一番上ではなく、タブの帯の位置から表示する（お客様名などの欄を毎回スクロールしなくてよいように）
+  var mb = document.querySelector('.metabar'), navTop = mb ? mb.offsetTop + mb.offsetHeight : 0;
+  if (target) target.scrollIntoView(); else window.scrollTo(0, navTop);
 }
 function curTab(){ return CUR; }
 function rerender(){ (GPANELS[CUR] || []).forEach(function(k){ if (RENDER[k]) RENDER[k](); }); }
@@ -1791,15 +1839,31 @@ var ACT = {
   },
   exportData: function(){
     if (!confirmTel()) return;
-    var blob = new Blob([JSON.stringify(S, null, 2)], { type:'application/json' });
-    var a = document.createElement('a'); a.href = URL.createObjectURL(blob);
-    a.download = '土地探し条件整理_' + todayStr() + '.json';
-    document.body.appendChild(a); a.click(); a.remove(); setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
+    downloadJson(S, '土地探し条件整理_' + safeName(S.meta.customer) + '_' + todayStr() + '.json');
+  },
+  exportAll: function(){
+    save();
+    var all = IDX.list.map(function(x){ try { var r = localStorage.getItem(CKEY + x.id); return r ? cleanState(JSON.parse(r)) : null; } catch(e){ return null; } }).filter(Boolean);
+    if (telInObj(all) && !confirm('電話番号・口座番号のような数字が入っているお客様がいます。このまま書き出しますか？（キャンセルすると、止まります）')) return;
+    downloadJson({ tochiAll:1, exported:todayStr(), customers:all }, '土地探し条件整理_全員分_' + todayStr() + '.json');
+  },
+  custNew: function(){
+    var d = defaultState(); d.meta.staff = S.meta.staff;
+    if (addCust(d)){ var f = $('#m-customer'); if (f) f.focus(); }
+  },
+  custDelete: function(){
+    var en = idxEntry(IDX.cur), nm = (en && en.name) || '（名前なし）';
+    if (!confirm('「' + nm + '」のデータを、この端末から消します。元に戻せません。先に「このお客様を書き出す」で控えを残せます。消しますか？')) return;
+    try { localStorage.removeItem(CKEY + IDX.cur); } catch(e){}
+    IDX.list = IDX.list.filter(function(x){ return x.id !== IDX.cur; });
+    if (!IDX.list.length){ var id = uid(); IDX.list.push({ id:id, name:'', upd:nowStamp() }); IDX.cur = id; KEY = CKEY + id; S = defaultState(); save(); }
+    else { IDX.cur = IDX.list[0].id; KEY = CKEY + IDX.cur; S = load() || defaultState(); }
+    saveIdx(); afterSwitch();
   },
   importPick: function(){ $('#impFile').click(); },
   resetAll: function(){
-    if (!confirm('入力した内容をすべて消して、最初からやり直します。よろしいですか？（先に「データを書き出す」で控えを残せます）')) return;
-    S = defaultState(); draft = { name:'', note:'', reasons:[], cName:'', candName:'' }; landDraft = { url:'', text:'' }; landMsg = null; VIEW = {}; save(); syncInputs(); showTab(0);
+    if (!confirm('このお客様の入力した内容をすべて消して、最初からやり直します。よろしいですか？（先に「このお客様を書き出す」で控えを残せます）')) return;
+    S = defaultState(); save(); afterSwitch(); renderCust();
   }
 };
 document.addEventListener('click', function(e){
@@ -1832,7 +1896,41 @@ function renderCost(){
   var r = Number(S.cost.rent), m = Number(S.cost.months);
   el.innerHTML = (r > 0 && m > 0) ? '探す期間が<b>' + m + 'か月</b>のあいだ、いまの住まいの費用は、約<b>' + (r * m).toLocaleString('ja-JP') + '円</b>（月々' + r.toLocaleString('ja-JP') + '円×' + m + 'か月）です。<span class="note">家賃は、暮らしの費用でもあります。この数字は、条件を下げる理由にはなりません。</span>' : '';
 }
-var AFTER = { ms: renderMs, note: renderNoteSoon, cost: function(){ if (!(Number(S.cost.rent) > 0)) S.cost.rent = ''; if (!(Number(S.cost.months) > 0)) S.cost.months = ''; save(); renderCost(); renderNoteSoon(); } };
+function resetViews(){
+  draft = { name:'', note:'', reasons:[], cName:'', candName:'' }; landDraft = { url:'', text:'' }; landMsg = null; VIEW = {};
+  clearTimeout(fieldTimer); fieldCand = ''; fieldIdx = 0; fieldMode = 'card';
+}
+function nowStamp(){ return new Date().toISOString().slice(0, 16); }
+function renderCust(){
+  var sel = $('#custSel'); if (!sel) return;
+  sel.innerHTML = IDX.list.map(function(x){ return '<option value="' + esc(x.id) + '"' + (x.id === IDX.cur ? ' selected' : '') + '>' + esc(x.name || '（名前なし）') + (x.upd ? '（' + esc(x.upd.slice(5, 10).replace('-', '/')) + ' 更新）' : '') + '</option>'; }).join('');
+}
+function afterSwitch(){ resetViews(); syncInputs(); renderCust(); showTab(0); checkTel(); }
+function switchCust(id){
+  if (!idxEntry(id) || id === IDX.cur) return;
+  save();
+  IDX.cur = id; KEY = CKEY + id; saveIdx();
+  S = load() || defaultState(); afterSwitch();
+}
+function addCust(data){
+  if (IDX.list.length >= 200){ alert('お客様が200人に達しました。書き出してから、古いお客様のデータを消してください。'); return false; }
+  save();
+  var id = uid(); IDX.list.push({ id:id, name:data.meta.customer, upd:nowStamp() });
+  IDX.cur = id; KEY = CKEY + id; S = data; save(); saveIdx(); afterSwitch();
+  return true;
+}
+function telInObj(o){
+  var f = false;
+  (function walk(v){ if (f) return; if (typeof v === 'string'){ if (telInValue(v)) f = true; } else if (Array.isArray(v)) v.forEach(walk); else if (v && typeof v === 'object') Object.keys(v).forEach(function(k){ walk(v[k]); }); })(o);
+  return f;
+}
+function downloadJson(obj, fname){
+  var blob = new Blob([JSON.stringify(obj, null, 2)], { type:'application/json' });
+  var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = fname;
+  document.body.appendChild(a); a.click(); a.remove(); setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
+}
+function safeName(s){ return (s || 'お客様').replace(/[\\\/:*?"<>|\u0000-\u001f]/g, '').replace(/[. ]+$/, '') || 'お客様'; }
+var AFTER = { ms: renderMs, note: renderNoteSoon, cust: renderCust, cost: function(){ if (!(Number(S.cost.rent) > 0)) S.cost.rent = ''; if (!(Number(S.cost.months) > 0)) S.cost.months = ''; save(); renderCost(); renderNoteSoon(); } };
 document.addEventListener('input', function(e){
   var t = e.target;
   if (t.dataset.bind){ setPath(t.dataset.bind, t.type === 'number' ? Number(t.value) : t.value); save(); if (t.dataset.after && AFTER[t.dataset.after]) AFTER[t.dataset.after](); }
@@ -1852,7 +1950,7 @@ document.addEventListener('input', function(e){
   }
   else if (t.dataset.fmemo){ var fc = S.cands.filter(function(x){ return x.id === fieldCand; })[0]; if (fc && ID_RE.test(t.dataset.fmemo)){ fc.memo = fc.memo || {}; fc.memo[t.dataset.fmemo] = t.value.slice(0, 80); save(); } }
   else if (t.dataset.fnote){ var fc2 = S.cands.filter(function(x){ return x.id === fieldCand; })[0]; if (fc2 && (t.dataset.fnote === 'memoA' || t.dataset.fnote === 'memoB')){ fc2[t.dataset.fnote] = t.value.slice(0, 120); save(); } }
-  else if (t.dataset.budget){ var bv = Number(t.value); S.budget[t.dataset.budget] = (t.value !== '' && isFinite(bv) && bv >= 0) ? bv : ''; syncLimit(); save(); var bk = $('#budgetKpi'); if (bk) bk.innerHTML = budgetKpi(); }
+  else if (t.dataset.budget){ var bv = Number(t.value), bok = (t.value !== '' && isFinite(bv) && bv >= 0) ? bv : ''; if (t.dataset.budget === 'land') S.landBudget = numOr(t.value, 0, 1e9, ''); else S.budget[t.dataset.budget] = bok; save(); renderLandDerived(); }
   else if (t.id === 'areaNote'){ S.areaNote = t.value.slice(0, 800); save(); }
   else if (t.id === 'areaSearch'){ areaQuery = t.value; renderAreaRes(); }
   else if (t.id === 'cName'){ draft.cName = t.value; }
@@ -1868,15 +1966,24 @@ document.addEventListener('change', function(e){
     var v = numOr(t.value, 0, 100, t.id === 'lineA' ? DEF_A : DEF_B);
     if (t.id === 'lineA'){ S.lineA = v; if (S.lineB > v) S.lineB = v; } else { S.lineB = Math.min(v, S.lineA); }
     save(); render4();
+  } else if (t.id === 'custSel'){
+    switchCust(t.value);
   } else if (t.id === 'landBudget'){
     S.landBudget = numOr(t.value, 0, 1e9, ''); save(); renderLandDerived();
   } else if (t.id === 'impFile' && t.files[0]){
     var fr = new FileReader();
     fr.onload = function(){
       var o = null; try { o = JSON.parse(fr.result); } catch(err){ o = null; }
+      if (o && o.tochiAll && Array.isArray(o.customers)){
+        var cl = o.customers.filter(function(c){ return c && typeof c === 'object' && 'meta' in c && 'conds' in c; }).slice(0, 200);
+        if (!cl.length){ alert('読み込めませんでした。このツールで書き出したファイルを選んでください。'); return; }
+        if (!confirm(cl.length + '人分を、新しいお客様として追加します。いまのお客様のデータは、そのまま残ります。よろしいですか？')) return;
+        var added = 0; cl.forEach(function(c){ if (addCust(cleanState(c))) added++; });
+        alert(added + '人分を読み込みました。'); return;
+      }
       if (!o || typeof o !== 'object' || !('meta' in o) || !('conds' in o)){ alert('読み込めませんでした。このツールで書き出したファイルを選んでください。'); return; }
-      if (!confirm('いまの入力は、読み込んだデータで置き換わります。よろしいですか？')) return;
-      S = cleanState(o); save(); syncInputs(); VIEW = {}; landMsg = null; rerender(); checkTel(); alert('データを読み込みました。');
+      if (!confirm('この内容を、新しいお客様として追加します。いまのお客様のデータは、そのまま残ります。よろしいですか？')) return;
+      if (addCust(cleanState(o))) alert('データを読み込みました（新しいお客様として追加しました）。');
     };
     fr.readAsText(t.files[0]); t.value = '';
   }
@@ -1894,6 +2001,7 @@ try {
 } catch(e){}
 try { localStorage.setItem('tochi-probe', '1'); localStorage.removeItem('tochi-probe'); } catch(e){ saveFailed = true; $('#warnSave').classList.add('on'); }
 syncInputs();
+renderCust();
 checkTel();
 })();
 </script>
